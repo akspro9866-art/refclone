@@ -25,6 +25,10 @@ const box = (x, y, width, height) => ({ x, y, width, height });
 const state = (frame, bbox) => ({ frame, bbox, opacity: 1 });
 const RESOLVED_FONT = { family: 'FixtureSans', style: 'Regular', sizePx: 24 };
 const NO_FONT = { family: null, style: null, sizePx: null };
+// The planner only accepts an absolute asset path, and "absolute" is host-specific: a literal
+// "C:/..." is a *relative* path on Linux and macOS, so the same fixture would be blocked there
+// for the right reason. Resolving a synthetic root keeps the fixture absolute everywhere.
+const FIXTURE_ASSET_PATH = absolutePath(path.join(path.sep, 'synthetic', 'fixture-mark.png'));
 
 function denseStates(start, end, base) {
   const states = [];
@@ -101,7 +105,7 @@ function fixtureManifest(spec, { status = 'valid', review = 'confirmed' } = {}) 
     schemaVersion: 1, sourceHash: spec.sourceHash,
     assets: spec.shots.flatMap(item => item.requiredAssets).map(record => ({
       id: record.id, type: record.type,
-      path: status === 'valid' ? 'C:/synthetic/fixture-mark.png' : null,
+      path: status === 'valid' ? FIXTURE_ASSET_PATH : null,
       sha256: status === 'valid' ? 'b'.repeat(64) : null,
       width: 40, height: 40, fontFamily: null, fontStyle: null,
       provenance: 'Synthetic fixture asset supplied by this test; not a user asset.',
@@ -328,7 +332,7 @@ test('generic design and plan registration write into their own job directories'
     assetManifestPath: manifestPath, tokensPath: design.tokensPath, jobDirectory
   });
   assert.equal(planned.runDirectory.startsWith(absolutePath(path.join(jobDirectory, 'plan-generic'))), true);
-  assert.equal(planned.record.executable, true);
+  assert.equal(planned.record.executable, true, JSON.stringify(planned.validation.diagnostics));
   assert.equal(planned.executable, true);
   assert.equal((await readJson(path.join(path.dirname(planned.runDirectory), 'index.json'))).kind, 'generic-scene-plan');
   assert.match(await fs.readFile(planned.dryRunMarkdownPath, 'utf8'), /scene/i, 'a readable dry run accompanies the plan');

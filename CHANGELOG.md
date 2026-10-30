@@ -6,7 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- Font paths read out of the Windows registry are normalised with Windows rules on
+  every host. On macOS and Linux `C:/Windows/Fonts` is a *relative* path, so the
+  old host-side resolution prefixed the working directory and produced a font path
+  that could never exist; the recorded path is now the registry's own path.
 
 ## 0.1.0 — 2026-10-30
 

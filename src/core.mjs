@@ -26,6 +26,14 @@ export function absolutePath(filePath) {
   return path.resolve(filePath).replaceAll('\\', '/');
 }
 
+// A path recorded from another system's data is normalised with that system's rules. Resolving
+// it against this host instead would prefix the current working directory on macOS or Linux,
+// where "C:/Windows/Fonts" is a relative path rather than an absolute one. The Windows font
+// registry is the only place this is needed today.
+export function absoluteWindowsPath(filePath) {
+  return path.win32.resolve(filePath).replaceAll('\\', '/');
+}
+
 // Serialize JSON data only, without invoking getters, proxies or toJSON hooks.
 // Serialize keys ourselves: JSON.stringify reorders integer-looking object keys.
 export function canonical(value) {

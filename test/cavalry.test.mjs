@@ -8,7 +8,7 @@ import {
   CavalryAdapter, SceneLedger, ADAPTER_VERSION, MCP_TOOL_NAMES, buildCapabilityReport,
   compileOperationBatch, validateAdapterConfig
 } from '../src/cavalry.mjs';
-import { WorkflowError, hashFile } from '../src/core.mjs';
+import { WorkflowError, absolutePath, hashFile } from '../src/core.mjs';
 
 function makeTools({ runScript = true, inspect = true, runPreset = true, runScriptSchema } = {}) {
   const tools = [];
@@ -381,17 +381,24 @@ test('compileOperationBatch validates semantics and generates safe single-script
 });
 
 test('compileOperationBatch emits verified text, asset, easing and interpolation actions', () => {
+  // Cavalry loads assets by absolute path, and "absolute" is a property of the host that runs
+  // the compile. A literal C:/... is a *relative* path on Linux and macOS, so the compiler
+  // resolves it against the working directory: asserting on a hard-coded drive letter would
+  // only ever pass on Windows. Use a host-relative input and the host's own resolution.
+  const logoPath = absolutePath(path.join('assets', 'logo.png'));
+  assert.equal(path.isAbsolute(logoPath), true, 'the resolved fixture path is absolute on this host');
   const compiled = compileOperationBatch([
     { id: 'text', action: 'createText', name: 'Headline', as: 'headline', attributes: { text: 'You build it with', fontSize: 28 } },
     { id: 'kf0', action: 'keyframe', elementId: '$headline', frame: 0, attributes: { 'position.x': -320 } },
     { id: 'kf12', action: 'keyframe', elementId: '$headline', frame: 12, attributes: { 'position.x': -300 } },
     { id: 'ease', action: 'easing', elementId: '$headline', attribute: 'position.x', frame: 0, easing: 'SlowOut' },
     { id: 'linear', action: 'interpolation', elementId: '$headline', attribute: 'position.x', frames: [0, 12], type: 'linear' },
-    { id: 'image', action: 'importAsset', path: 'C:/assets/logo.png', as: 'logo', attributes: { position: { x: 0, y: -120 } } },
+    { id: 'image', action: 'importAsset', path: path.join('assets', 'logo.png'), as: 'logo', attributes: { position: { x: 0, y: -120 } } },
     { id: 'trim', action: 'timing', elementId: '$headline', inFrame: 4, outFrame: 20 }
   ]);
   assert.match(compiled.code, /api\.create\("textShape", "Headline"\)/);
-  assert.match(compiled.code, /api\.loadAsset\("C:\/assets\/logo\.png", false\)/);
+  assert.equal(compiled.code.includes(`api.loadAsset(${JSON.stringify(logoPath)}, false)`), true,
+    `the asset path reaches Cavalry resolved: ${logoPath}`);
   assert.match(compiled.code, /api\.addAssetToComp\(assetId\)/);
   assert.match(compiled.code, /api\.magicEasing\(.*"position\.x".*"SlowOut"\)/);
   assert.match(compiled.code, /api\.modifyKeyframe/);

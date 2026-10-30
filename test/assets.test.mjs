@@ -45,6 +45,21 @@ test('font registry parsing separates family from style without downloading font
     path: 'C:/Windows/Fonts/arial.ttf'
   });
   assert.equal(records.find(record => record.file === 'BOD_CBI.TTF').family, 'Bodoni MT');
+  // Registry paths describe Windows even when this job runs elsewhere. Joining them with the
+  // host's rules would prepend the working directory on Linux or macOS, where "C:/Windows/Fonts"
+  // is a relative path rather than an absolute one, and the recorded font path becomes nonsense.
+  assert.equal(records.find(record => record.file === 'BASKVILL.TTF').path, 'C:/Windows/Fonts/BASKVILL.TTF');
+  const absoluteEntry = parseFontRegistry(
+    '    Foo (TrueType)    REG_SZ    C:\\Windows\\Fonts\\foo.ttf',
+    { key: 'HKLM', directory: 'C:/Windows/Fonts' }
+  )[0];
+  assert.equal(absoluteEntry.path, 'C:/Windows/Fonts/foo.ttf', 'an absolute registry value is kept as-is');
+  for (const record of records) {
+    assert.equal(
+      record.path.includes(`${process.cwd().replaceAll('\\', '/')}/`), false,
+      `the host working directory never leaks into ${record.name}`
+    );
+  }
   assert.ok(DEFAULT_FONT_CANDIDATES.sans.some(face => face.family === 'Lato'));
   assert.ok(DEFAULT_FONT_CANDIDATES.sans.some(face => face.family === 'CanvaSans'));
   assert.deepEqual(guessFontFaceFromFile('Lato-BoldItalic.ttf'), { family: 'Lato', style: 'BoldItalic' });

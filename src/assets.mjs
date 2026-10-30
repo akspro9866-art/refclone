@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import {
-  WorkflowError, absolutePath, hashObject, hashFile, readJson, validateArtifact,
+  WorkflowError, absolutePath, absoluteWindowsPath, hashObject, hashFile, readJson, validateArtifact,
   verifyFiles, writeJsonNew, writeJsonState, withJobLock, runProcess
 } from './core.mjs';
 
@@ -83,7 +83,7 @@ export function parseFontRegistry(text, { key = 'HKLM', directory }) {
     const { family, style } = splitFontFace(face[1]);
     records.push({
       name: face[1].trim(), family, style, file, key,
-      path: absolutePath(path.isAbsolute(file) ? file : path.join(directory, file))
+      path: absoluteWindowsPath(path.win32.isAbsolute(file) ? file : path.win32.join(directory, file))
     });
   }
   return records;
