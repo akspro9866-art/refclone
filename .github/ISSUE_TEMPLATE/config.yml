@@ -1,10 +1,10 @@
 blank_issues_enabled: false
 contact_links:
-  # Replace <YOUR-OWNER> below with the account or organisation that hosts the
-  # repository after you create it (the README lists this as a one-line edit).
+  # These point at the published upstream. A fork that keeps this template has to
+  # repoint them, or the two links open issues on somebody else's repository.
   - name: Security report
-    url: https://github.com/<YOUR-OWNER>/refclone/security/advisories/new
+    url: https://github.com/akspro9866-art/refclone/security/advisories/new
     about: Private advisory, never a public issue. See SECURITY.md.
   - name: How the gates work
-    url: https://github.com/<YOUR-OWNER>/refclone/blob/main/docs/WORKFLOW.md
+    url: https://github.com/akspro9866-art/refclone/blob/main/docs/WORKFLOW.md
     about: Most "why did it stop" questions are answered there before opening an issue.

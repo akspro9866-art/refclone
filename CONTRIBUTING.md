@@ -33,7 +33,7 @@ video becomes a clone) and [docs/PIPELINE_ARCHITECTURE.md](docs/PIPELINE_ARCHITE
 ## Development loop
 
 ```bash
-git clone <your-fork> refclone && cd refclone
+git clone https://github.com/<you>/refclone.git refclone && cd refclone
 npm ci                       # three runtime dependencies
 node src/cli.mjs --help      # the qualified command surface
 npm run verify               # module parse, config parity, skill mirrors, privacy scan

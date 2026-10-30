@@ -33,7 +33,7 @@ reference.mp4 → ingest → CV draft → reviewed shot-spec → assets → desi
 - [Profiles: generic and legacy](#profiles-generic-and-legacy)
 - [Verify your checkout](#verify-your-checkout)
 - [Limitations, stated plainly](#limitations-stated-plainly)
-- [Publishing this repo as your own](#publishing-this-repo-as-your-own)
+- [Publishing your own copy](#publishing-your-own-copy)
 - [Documentation](#documentation)
 - [License and third-party parts](#license-and-third-party-parts)
 
@@ -75,11 +75,10 @@ you install them yourself.
 `refclone` is a plain Git repository — the IDE you use does not matter, and there is nothing to
 "install" into the editor.
 
-**Clone it** (replace `YOUR-OWNER` with whatever remote you create in
-[Publishing this repo as your own](#publishing-this-repo-as-your-own), or clone a published fork):
+**Clone it** (this is the published upstream; fork it first if you intend to contribute):
 
 ```sh
-git clone https://github.com/YOUR-OWNER/refclone.git
+git clone https://github.com/akspro9866-art/refclone.git
 cd refclone
 npm ci
 npm test
@@ -91,13 +90,13 @@ same two `npm` commands. If you plan to contribute, clone instead — a ZIP has 
 **Or add it to your own project** without cloning, once the package is published to npm:
 
 ```sh
-npm install --save-dev refclone-cli     # not published yet — see the publishing section
+npm install --save-dev refclone-cli     # not on npm yet — see "Publishing your own copy" below
 ```
 
 Until then, install straight from the repository:
 
 ```sh
-npm install --save-dev github:YOUR-OWNER/refclone
+npm install --save-dev github:akspro9866-art/refclone
 ```
 
 If you use the package as a dependency, invoke the CLI through the bin it declares
@@ -296,9 +295,20 @@ redistributed — reproduce it on your own machine.
 - No headless renderer, no direct project-file editing, no transactional rollback, no
   exactly-once execution. A timed-out script can leave applied edits — inspect and reconcile.
 
-## Publishing this repo as your own
+## Publishing your own copy
 
-This directory is a complete, unversioned working tree. To turn it into a public repo:
+The upstream is [github.com/akspro9866-art/refclone](https://github.com/akspro9866-art/refclone),
+so the normal route is to fork it and work on your own clone:
+
+```sh
+git clone https://github.com/<you>/refclone.git
+cd refclone
+npm ci && npm run verify && npm test
+```
+
+If instead you are standing where this repository once stood — a scrubbed working tree extracted
+from a private project, with no remote yet — then the first push is where the honesty of the
+distribution is actually tested. That is the step to take slowly:
 
 ```sh
 cd refclone
@@ -311,12 +321,15 @@ git commit -m "refclone: evidence-gated reference-video cloning for Cavalry"
 gh repo create refclone --public --source=. --push      # or add a remote manually
 ```
 
-Before the first push, replace `YOUR-OWNER` in `package.json` (`repository`, `bugs`, `homepage`)
-and in the clone URL above, and check the two things a privacy scan cannot check for you:
+Before that push, put your own account in `package.json` (`repository`, `bugs`, `homepage`) and in
+the clone URLs higher up this file, and check the two things a privacy scan cannot check for you:
 
 1. `git status --ignored` — nothing under `jobs/`, `assets/`, `integration/evidence/` or any
    `.mp4`/`.png`/`.cv` should be staged.
 2. `npm run verify` — must print four green lines, including the privacy scan.
+
+Then read `docs/CREDITS.md` and decide what attribution you are comfortable with, because the scan
+checks for private material, not for whether you have the right to publish what you measured.
 
 To publish on npm (the name `refclone` is already taken upstream; `refclone-cli` was free when this
 was written — re-check with `npm view refclone-cli`):

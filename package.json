@@ -8,12 +8,12 @@
   "author": "refclone contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR-OWNER/refclone.git"
+    "url": "git+https://github.com/akspro9866-art/refclone.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR-OWNER/refclone/issues"
+    "url": "https://github.com/akspro9866-art/refclone/issues"
   },
-  "homepage": "https://github.com/YOUR-OWNER/refclone#readme",
+  "homepage": "https://github.com/akspro9866-art/refclone#readme",
   "engines": {
     "node": ">=24"
   },
