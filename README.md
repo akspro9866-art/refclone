@@ -61,7 +61,7 @@ anybody's footage, music, fonts, or brand assets.
 | Requirement | Why | Verified with |
 |---|---|---|
 | Node.js **24+** | ESM `.mjs`, `node --test` runner | this repo is developed and CI-tested on Node 24 |
-| `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version` |
+| `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version`; per-OS install routes in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
 | The three npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`) | schema validation, PNG decode, MCP client | `npm ci` (installs 96 packages, no global installs) |
 | **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for `build`, `render`, `export` | live MCP round-trips, see `docs/MCP_CAPABILITIES.md` |
 | A `cavalry-mcp` checkout | the MCP server this project talks to | `node <CAVALRY_MCP>/dist/index.js` |

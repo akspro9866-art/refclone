@@ -14,7 +14,7 @@ that your video is bad. Most reports of "it won't run" are one of the four in th
 | `ADAPTER_CONFIG_INVALID` with "still hold the shipped `REPLACE_ME` placeholder" | you have not pointed `config.json` at your own `cavalry-mcp/dist/index.js` | edit `mcp.args`; see [`IDE_SETUP.md`](IDE_SETUP.md) Step 0 |
 | `RUN_PROFILE_MISMATCH` | `--profile generic-clone` was used with a config whose `profile` is something else (or the legacy config with the generic one) | keep `--profile` and the config's own `profile` identical; the generic route is selected by `cloneMode: "generic"` in the file |
 | `SPEC_REVIEW_PENDING` | a downstream stage was asked to run against a shot-spec nobody confirmed | pass `--analysis-review <shot-spec-review.json>`, or set `review.status: "confirmed"` inside the spec you hand to a standalone command |
-| `TOOL_MISSING` | an external executable is not on `PATH` — `ffmpeg`, `ffprobe`, or `node` for the MCP | install/expose it, or set `ffmpeg`/`ffprobe` in the config to absolute paths |
+| `TOOL_MISSING` | an external executable is not on `PATH` — `ffmpeg`, `ffprobe`, or `node` for the MCP | put it on `PATH` (see below), or set `ffmpeg`/`ffprobe` in the config to absolute paths |
 
 ## Before you debug the pipeline, debug the checkout
 
@@ -28,6 +28,27 @@ node --version     # must be 24+
 
 If `npm test` is red, nothing downstream is trustworthy and the problem is not your video. If
 `npm test` is green but `npm run test:integration` is red, the problem is in the Cavalry/MCP leg.
+
+### Getting `ffmpeg` and `ffprobe` onto `PATH`
+
+The suite generates and decodes its own short clips, so it needs both binaries even though it never
+opens Cavalry. The two `apt`/Chocolatey lines are what CI runs on each leg, so they are the verified
+routes; `winget` and Homebrew are the usual package-manager answers on a desktop, not things this
+repository exercises.
+
+```sh
+sudo apt-get update && sudo apt-get install -y ffmpeg   # Linux  (CI: ubuntu-latest)
+choco install ffmpeg -y                                 # Windows (CI: windows-latest)
+winget install Gyan.FFmpeg                              # Windows (not exercised by CI)
+brew install ffmpeg                                     # macOS   (not exercised by CI)
+```
+
+A fresh install usually will not reach a terminal that was already open, so reopen the shell before
+concluding the install failed. Then prove it:
+
+```sh
+ffmpeg -version && ffprobe -version
+```
 
 ## The live Cavalry leg (build / render / export)
 
