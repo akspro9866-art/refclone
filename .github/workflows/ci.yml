@@ -1,5 +1,10 @@
 name: CI
 
+# Windows is the supported platform, so Windows is the only leg this verifies. The engine is
+# plain Node ESM and has passed on Linux in the past, but nothing here claims or tests that any
+# more: an unverified second platform is a promise the repository cannot keep. package.json
+# carries the same decision as "os": ["win32"], so npm refuses the install elsewhere.
+
 on:
   push:
     branches: [main]
@@ -11,22 +16,13 @@ permissions:
 
 jobs:
   test:
-    name: Unit and synthetic-pipeline tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Unit and synthetic-pipeline tests (windows-latest)
+    runs-on: windows-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install FFmpeg (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install FFmpeg (Windows)
-        if: runner.os == 'Windows'
+      - name: Install FFmpeg
         shell: pwsh
         run: |
           # windows-latest ships Chocolatey but not FFmpeg, and the media stages need both
@@ -66,6 +62,9 @@ jobs:
 
   live-integration:
     name: Cavalry integration (manual, needs a real app)
+    # Runs only on dispatch, and only against a self-hosted runner that is a Windows machine
+    # with Cavalry 2.8 open and Scripts -> Stallion enabled. GitHub-hosted runners have no
+    # Cavalry, so this job can never be made green by a push; it is evidence, not a gate.
     runs-on: self-hosted
     if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 30

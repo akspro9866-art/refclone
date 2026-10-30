@@ -1,7 +1,9 @@
 # Line endings are normalised in the index and checked out as LF everywhere, so a
-# Windows contributor and the Linux CI job compare the same bytes. Two of the CI
-# guards (config-parity, skill-parity) are byte-comparisons and would otherwise be
-# able to fail on nothing but how Git materialised the file on disk.
+# working copy and the Windows CI job compare the same bytes. Two of the CI guards
+# (config-parity, skill-parity) are byte-comparisons and would otherwise be able to
+# fail on nothing but how Git materialised the file on disk - which matters most on
+# Windows, where `core.autocrlf` is commonly on and would otherwise rewrite these
+# files with CRLF at checkout.
 * text=auto eol=lf
 
 # Never run an end-of-file filter or a diff against binary evidence.

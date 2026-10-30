@@ -41,15 +41,23 @@ body:
   - type: dropdown
     id: os
     attributes:
-      label: Operating system
-      options: [Windows, macOS, Linux, Other]
+      label: Windows edition
+      description: >-
+        This project is supported and verified on Windows 10 and 11 only. If you are
+        not on one of these, say what you tried in the description - we will not be
+        able to reproduce it, and CI will not run there.
+      options:
+        - Windows 11
+        - Windows 10
+        - Windows Server / LTSC
+        - Other (unsupported)
     validations:
       required: true
   - type: textarea
     id: tools
     attributes:
       label: Tool versions
-      description: node --version, ffmpeg -version (first line), Cavalry version, cavalry-mcp version.
+      description: "node --version, the first line of ffmpeg -version, Cavalry version, cavalry-mcp version. If ffmpeg is not found, paste where.exe ffmpeg instead."
   - type: checkboxes
     id: tests
     attributes:
