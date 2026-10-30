@@ -189,7 +189,7 @@ The runner is destructive only to a **blank saved scene** and refuses anything e
 
 Run from the repository root:
 
-```sh
+```powershell
 npm run test:integration
 ```
 

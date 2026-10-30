@@ -6,13 +6,8 @@ not open, edit, save, render or compare a Cavalry scene.
 
 ## Command
 
-```bash
-node src/cli.mjs plan <shot-spec.json> \
-  --manifest <asset-manifest.json> \
-  --tokens <design-tokens.json> \
-  [--capabilities <capability-report.json>] \
-  [--fps <num[/den]>] \
-  [--job <directory>]
+```powershell
+node src/cli.mjs plan <shot-spec.json> --manifest <asset-manifest.json> --tokens <design-tokens.json> [--capabilities <capability-report.json>] [--fps <num[/den]>] [--job <directory>]
 ```
 
 The shot-spec review must be confirmed. All three inputs must share the source

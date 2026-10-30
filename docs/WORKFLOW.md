@@ -29,10 +29,12 @@ ingest →│ boundaries │ shot-spec │ assets │ plan │→ build → rend
 
 ## 0. Prepare
 
-```sh
-ffmpeg -version && ffprobe -version      # both must be on PATH
+```powershell
+ffmpeg -version
+ffprobe -version      # both must be on PATH
 node --version                            # v24+
-npm ci && npm test                        # 215 tests green before you trust anything downstream
+npm ci
+npm test                        # 215 tests green before you trust anything downstream
 ```
 
 Open `config.json` and set `mcp.args` to your own `cavalry-mcp/dist/index.js` (the shipped
@@ -45,7 +47,7 @@ enforces it. Either works, so pick one and stay with it — mixing them mid-job 
 
 ## 1. Ingest and gate 1 — shot boundaries
 
-```sh
+```powershell
 node src/cli.mjs run "<reference.mp4>" --profile generic-clone --config config.json
 ```
 
@@ -85,9 +87,8 @@ Scoring is a hypothesis. Then write `<job>/boundary-review.json`:
 exclusive: the last visible frame of a shot is `endFrameExclusive - 1`. A single-shot clip is
 legal — `cuts: []`. Template: [`examples/reviews/boundary-review.example.json`](../examples/reviews/boundary-review.example.json).
 
-```sh
-node src/cli.mjs run "<reference.mp4>" --profile generic-clone --config config.json \
-  --boundary-review "<job>/boundary-review.json"
+```powershell
+node src/cli.mjs run "<reference.mp4>" --profile generic-clone --config config.json --boundary-review "<job>/boundary-review.json"
 ```
 
 ## 2. The CV draft and gate 2 — the shot specification
@@ -134,12 +135,8 @@ Then confirm the gate. Build the review payload with the shipped helper rather t
 because `baseHash` must come from the **analysis** stage and the transformations block must be
 untouched:
 
-```sh
-node tools/make-shot-spec-review.mjs \
-  --spec "<the draft, after your edits>" \
-  --run-report "<job>/run/<run-uuid>/run-report.json" \
-  --reviewer "your name" --notes "what you checked and what you decided" \
-  --out "<job>/shot-spec-review.json"
+```powershell
+node tools/make-shot-spec-review.mjs --spec "<the draft, after your edits>" --run-report "<job>/run/<run-uuid>/run-report.json" --reviewer "your name" --notes "what you checked and what you decided" --out "<job>/shot-spec-review.json"
 ```
 
 It prints the JSON it wrote and the rerun command. Explicit flags `--base-hash` /
@@ -147,9 +144,8 @@ It prints the JSON it wrote and the rerun command. Explicit flags `--base-hash` 
 `transformations`, it exits `TRANSFORMATION_APPROVAL_REQUIRED` — a specification review cannot
 authorize a source-to-target transformation by accident.
 
-```sh
-node src/cli.mjs run "<reference.mp4>" --profile generic-clone --config config.json \
-  --analysis-review "<job>/shot-spec-review.json"
+```powershell
+node src/cli.mjs run "<reference.mp4>" --profile generic-clone --config config.json --analysis-review "<job>/shot-spec-review.json"
 ```
 
 The payload itself, if you must hand-write it
@@ -178,15 +174,15 @@ a **missing-asset report** in Markdown.
   ```jsonc
   "assets": {
     "review": { "status": "approved", "notes": "Why each identified face and file is authentic enough." },
-    "assignments": { "shot-001-title-font": "/absolute/path/to/held-font.ttf" }
+    "assignments": { "shot-001-title-font": "C:/Users/<you>/fonts/held-font.ttf" }
   }
   ```
 
   `assets.assignments` may only name files that really exist on your machine. Never point a
   requirement at a lookalike and never add a requirement the reference does not show.
-- **macOS/Linux:** installed-font discovery reads the Windows font registry, so on other platforms
-  it records that discovery was skipped. Set `assets.fontDirectories` to the folders holding the
-  faces you actually own; the engine will not guess at a font manager.
+- **Faces the registry does not know about:** installed-font discovery is a Windows registry read,
+  and that is the only automatic discovery there is. Set `assets.fontDirectories` to the folders
+  holding the faces you actually own; the engine will not guess at a font manager.
 
 Full rules, including authenticity versus integrity: [`ASSET_WORKFLOW.md`](ASSET_WORKFLOW.md).
 
@@ -198,9 +194,8 @@ hand-written vocabulary.
 `design-generic` builds tokens and a component catalog from measured roles, event kinds and colors.
 The catalog is either derived (`catalog.source: "derived"`, the default) or authored:
 
-```sh
-node src/cli.mjs design-generic "<reviewed shot-spec.json>" --catalog "<your-catalog.json>" \
-  --config config.json --job "<job directory>"
+```powershell
+node src/cli.mjs design-generic "<reviewed shot-spec.json>" --catalog "<your-catalog.json>" --config config.json --job "<job directory>"
 ```
 
 An authored catalog is reference-agnostic vocabulary and may carry `sourceHash: null`; whether its
@@ -209,9 +204,8 @@ the file you wrote.
 
 `plan-generic` compiles `scene-plan.json` plus `dry-run.md`:
 
-```sh
-node src/cli.mjs plan-generic "<reviewed shot-spec.json>" --manifest "<asset-manifest.json>" \
-  --tokens "<design-tokens.json>" --config config.json --job "<job directory>"
+```powershell
+node src/cli.mjs plan-generic "<reviewed shot-spec.json>" --manifest "<asset-manifest.json>" --tokens "<design-tokens.json>" --config config.json --job "<job directory>"
 ```
 
 A blocked plan is still written, so you can read it:
@@ -242,7 +236,7 @@ Requires Cavalry running with **Scripts → Stallion** enabled and `mcp` in `con
 your `cavalry-mcp`. `run` reaches this stage on its own once the plan is executable; the standalone
 form is for working one shot at a time:
 
-```sh
+```powershell
 node src/cli.mjs build "<scene-plan.json>" --shot "<shot-id>" --phase static --job "<job>"
 node src/cli.mjs build "<scene-plan.json>" --job "<job>"          # then animation phase
 ```
@@ -261,7 +255,7 @@ matched, measured and inspected before the full build — do not scale past a fa
 
 ## 6. Render — native PNG sequence, then FFmpeg
 
-```sh
+```powershell
 node src/cli.mjs render "<scene-plan.json>" --project "<saved-scene.cv>" --shot "<shot-id>" --job "<job>"
 ```
 
@@ -273,9 +267,8 @@ route is frames first, encode second.
 
 ## 7. QA — numbers, not vibes
 
-```sh
-node src/cli.mjs qa "<scene-plan.json>" --render "<render-manifest.json>" \
-  --reference "<reference.mp4>" --config config.json --job "<job>"
+```powershell
+node src/cli.mjs qa "<scene-plan.json>" --render "<render-manifest.json>" --reference "<reference.mp4>" --config config.json --job "<job>"
 ```
 
 Decodes the reference into cached frames, compares by frame index, and measures MAE, SSIM and
@@ -291,10 +284,8 @@ without touching unrelated elements, and rerun the affected stages. `correction.
 
 ## 8. Export — a final you can hand over
 
-```sh
-node src/cli.mjs export "<scene-plan.json>" --project "<saved-scene.cv>" \
-  --render "<render-manifest.json>" --qa "<qa-report.json>" --reference "<reference.mp4>" \
-  --config config.json --job "<job>"
+```powershell
+node src/cli.mjs export "<scene-plan.json>" --project "<saved-scene.cv>" --render "<render-manifest.json>" --qa "<qa-report.json>" --reference "<reference.mp4>" --config config.json --job "<job>"
 ```
 
 Copies the verified render, the saved scene and the evidence into a **new unique directory**,
@@ -318,7 +309,7 @@ means no work was repeated.
 
 Useful one-off inspections, which do not skip gates:
 
-```sh
+```powershell
 node src/cli.mjs ingest "<video>" --config config.json [--review <boundary-review.json>]
 node src/cli.mjs autoanalyze "<ingest-index.json>" [--max-track-frames <n>] [--report-width <px>]
 node src/cli.mjs --help

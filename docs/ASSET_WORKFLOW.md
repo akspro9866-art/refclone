@@ -10,10 +10,11 @@ resemblance alone.
 
 1. Project-supplied files under `assets.directory` (`./assets` by default). If the directory
    does not exist, discovery records that absence rather than inventing a requirement.
-2. On Windows, the installed-font registry (HKLM, plus HKCU when a user profile is
-   available), hashed only when a configured candidate face is selected. On macOS and Linux
-   this step is skipped and the manifest records `Windows font registry discovery skipped on
-   platform <x>` — list your font folders in `assets.fontDirectories` instead.
+2. The installed-font registry (HKLM, plus HKCU when a user profile is available), hashed only when
+   a configured candidate face is selected. This is a Windows registry read, and Windows is the
+   supported platform; the recorded note `Windows font registry discovery skipped on platform <x>`
+   exists so an unsupported host says so plainly instead of pretending to have found faces. Anything
+   the registry does not know about belongs in `assets.fontDirectories`.
 3. Any extra directories listed in `assets.fontDirectories`, resolved relative to the config
    file. Cavalry ships Lato, Montserrat, Canva Sans, Fira Code and Source Code Pro with
    2.8.0; pointing at that folder makes them *candidates*, never identifications. These are

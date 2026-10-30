@@ -61,9 +61,7 @@ required human review is confirmed. Every gate stays blocking; the CV pass never
    font faces from the local inventory. Leave anything you cannot read null.
 4. **Confirm the specification.** Build the review payload rather than hand-writing it:
    ```
-   node tools/make-shot-spec-review.mjs --spec <the draft you edited> \
-     --run-report <jobs/<hash>/run/<id>/run-report.json> \
-     --reviewer "<who>" --notes "<what was verified>" --out reviews/shot-spec-review.json
+   node tools/make-shot-spec-review.mjs --spec <the draft you edited> --run-report <jobs/<hash>/run/<id>/run-report.json> --reviewer "<who>" --notes "<what was verified>" --out reviews/shot-spec-review.json
    ```
    Then rerun with `--analysis-review reviews/shot-spec-review.json`. `baseHash` must come from
    the analysis stage (`artifacts.baseHash`), not from the edited draft, and a review cannot

@@ -88,8 +88,8 @@ explicit unresolved note.
 
 Regenerate and validate with:
 
-```sh
-node src/cli.mjs design "<job>/analysis/.../shot-spec.json" --manifest "<job>/assets/.../asset-manifest.json"
+```powershell
+node src\cli.mjs design "<job>\analysis\...\shot-spec.json" --manifest "<job>\assets\...\asset-manifest.json"
 npm test
 ```
 

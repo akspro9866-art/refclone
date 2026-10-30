@@ -1,5 +1,5 @@
 {
-  "_place": "Cursor: project -> .cursor/mcp.json (or user -> ~/.cursor/mcp.json). Claude Code: project -> .mcp.json, or `claude mcp add --transport stdio cavalry -- node <CAVALRY_MCP>/dist/index.js`. Gemini CLI: .gemini/settings.json. Delete the _place key before saving.",
+  "_place": "Cursor: project -> .cursor\\mcp.json (or user -> %USERPROFILE%\\.cursor\\mcp.json). Claude Code: project -> .mcp.json, or `claude mcp add --transport stdio cavalry -- node <CAVALRY_MCP>/dist/index.js`. Gemini CLI: .gemini\\settings.json. Delete the _place key before saving.",
   "mcpServers": {
     "cavalry": {
       "command": "node",

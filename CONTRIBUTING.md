@@ -3,6 +3,10 @@
 Thanks for being here. This project is small, strict about evidence, and better
 with your reference video in its test matrix.
 
+It is a **Windows** project — Windows 10 or 11, Cavalry 2.8 on that machine, and an MCP-capable
+agent (Qoder, Antigravity or ZCode) driving it. `package.json` declares `"os": ["win32"]`, so
+`npm ci` refuses elsewhere rather than half-installing, and CI only verifies the Windows leg.
+
 ## Ground rules
 
 1. **Deterministic code measures; interpretation happens at the gates.** New
@@ -32,8 +36,9 @@ video becomes a clone) and [docs/PIPELINE_ARCHITECTURE.md](docs/PIPELINE_ARCHITE
 
 ## Development loop
 
-```bash
-git clone https://github.com/<you>/refclone.git refclone && cd refclone
+```powershell
+git clone https://github.com/<you>/refclone.git refclone
+cd refclone
 npm ci                       # three runtime dependencies
 node src/cli.mjs --help      # the qualified command surface
 npm run verify               # module parse, config parity, skill mirrors, privacy scan
@@ -46,7 +51,9 @@ npm run verify:docs          # the test counts quoted in the docs still match th
 file-level entry: one extra line in the summary is expected, not a hidden test.
 
 Tests build synthetic videos with FFmpeg instead of shipping footage, so they
-need `ffmpeg` and `ffprobe` on `PATH`. If they are missing you will see
+need `ffmpeg` and `ffprobe` on `PATH` — `choco install ffmpeg -y`, the same route
+the CI job uses, and [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) if the
+install does not seem to take. If they are missing you will see
 `TOOL_MISSING`-style failures rather than assertion failures.
 
 The suite stays cheap because every clip it generates is tiny. Two groups:
@@ -96,9 +103,14 @@ or network folder, where rename-over-open-file semantics are not dependable.
 - Add a line to `CHANGELOG.md` under *Unreleased* — and if you changed how many
   tests there are, `npm run verify:docs` will tell you which pages quote the old
   number.
-- CI must be green on both `ubuntu-latest` and `windows-latest`: `npm ci`,
-  `npm test`, and the four guards in `.github/scripts/` (module syntax, config
-  parity, skill mirrors, privacy scan) plus the documentation test-count check.
+- CI must be green on `windows-latest`: `npm ci`, `npm test`, and the four guards in
+  `.github/scripts/` (module syntax, config parity, skill mirrors, privacy scan) plus the
+  documentation test-count check. Windows is the only leg on purpose — it is the platform the
+  project supports, so a second, unverified leg would only add a promise nobody is checking. The
+  consequence to know: nothing here proves the engine still works elsewhere, so if you send a
+  change that assumes Windows APIs, drive-letter paths or Windows file-sharing behaviour, CI will
+  not tell you. Be explicit about that in the PR description if your change touches paths, state
+  files or process launching.
 
 ## Reporting a fidelity problem
 

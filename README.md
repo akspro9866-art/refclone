@@ -46,7 +46,8 @@ reference.mp4 → ingest → CV draft → reviewed shot-spec → assets → desi
 **It is** a gated, resumable pipeline with deterministic measurement code, JSON-schema-checked
 artifacts, and an adapter that only uses the three Cavalry MCP tools that actually exist. It is
 built to be driven by an agentic IDE — Qoder, Google Antigravity, Z.ai ZCode, Claude Code, Codex,
-Cursor, Zed, or anything else that speaks MCP and can run shell commands.
+Cursor, Zed, or anything else that speaks MCP and can run shell commands — on **Windows 10 or 11**,
+which is the platform Cavalry, the installed-font registry and this project's CI all live on.
 
 **It is not** a one-click "AI copies any video" button. It does not have an OCR engine, does not
 download fonts, does not substitute lookalike assets, does not auto-approve a review, and cannot
@@ -60,13 +61,22 @@ anybody's footage, music, fonts, or brand assets.
 
 ## Requirements
 
+**This is a Windows project.** Windows 10 or 11 is the platform it is developed, tested and
+supported on, and the only one CI verifies. Cavalry itself is installed on your machine, the
+installed-font discovery reads the Windows registry, and every command in these docs is written
+for Windows PowerShell. `package.json` declares `"os": ["win32"]`, so `npm ci` on another platform
+stops with `EBADPLATFORM` — a `notsup Unsupported platform` line naming the wanted and the actual
+OS — rather than letting you discover it half-way through a job. That refusal was checked here by
+flipping the declaration to `"darwin"` and watching `npm ci` reject it on this Windows machine.
+
 | Requirement | Why | Verified with |
 |---|---|---|
-| Node.js **24+** | ESM `.mjs`, `node --test` runner | this repo is developed and CI-tested on Node 24 |
-| `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version`; per-OS install routes in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
+| **Windows 10 or 11** | the supported and CI-verified platform; `npm` enforces it | CI on `windows-latest`; elsewhere `npm ci` stops with `EBADPLATFORM` |
+| Node.js **24+** | ESM `.mjs`, `node --test` runner | `node --version` |
+| `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version`; install routes in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
 | The three npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`) | schema validation, PNG decode, MCP client | `npm ci` (installs 96 packages, no global installs) |
 | **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for `build`, `render`, `export` | live MCP round-trips, see `docs/MCP_CAPABILITIES.md` |
-| A `cavalry-mcp` checkout | the MCP server this project talks to | `node <CAVALRY_MCP>/dist/index.js` |
+| A `cavalry-mcp` checkout | the MCP server this project talks to | `node C:\path\to\cavalry-mcp\dist\index.js` |
 
 Cavalry is proprietary software and is **not** part of this repository. The MCP server and the
 Stallion bridge are third-party MIT projects described in [`docs/CREDITS.md`](docs/CREDITS.md);
@@ -74,12 +84,14 @@ you install them yourself.
 
 ## Download and install
 
-`refclone` is a plain Git repository — the IDE you use does not matter, and there is nothing to
-"install" into the editor.
+`refclone` is a plain Git repository — the IDE you use does not matter as long as it registers MCP
+servers, and there is nothing to "install" into the editor. All commands below are PowerShell
+(Windows PowerShell 5.1 or PowerShell 7 both work); they are one per line so you can paste them
+into any Windows shell.
 
 **Clone it** (this is the published upstream; fork it first if you intend to contribute):
 
-```sh
+```powershell
 git clone https://github.com/akspro9866-art/refclone.git
 cd refclone
 npm ci
@@ -91,26 +103,27 @@ same two `npm` commands. If you plan to contribute, clone instead — a ZIP has 
 
 **Or add it to your own project** without cloning, once the package is published to npm:
 
-```sh
+```powershell
 npm install --save-dev refclone-cli     # not on npm yet — see "Publishing your own copy" below
 ```
 
 Until then, install straight from the repository:
 
-```sh
+```powershell
 npm install --save-dev github:akspro9866-art/refclone
 ```
 
 If you use the package as a dependency, invoke the CLI through the bin it declares
-(`refclone run …`) or through `node node_modules/refclone-cli/src/cli.mjs …`; the stage commands
+(`refclone run …`) or through `node node_modules\refclone-cli\src\cli.mjs …`; the stage commands
 in this README use the cloned-repo form.
 
-Then point the engine at your MCP server. Open `config.json` and replace the placeholder:
+Then point the engine at your MCP server. Open `config.json` and replace the placeholder — a
+Windows path written with forward slashes, because JSON treats a backslash as an escape:
 
 ```jsonc
 "mcp": {
   "command": "node",
-  "args": ["/your/path/cavalry-mcp/dist/index.js"]   // was "REPLACE_ME/cavalry-mcp/dist/index.js"
+  "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"]   // was "REPLACE_ME/cavalry-mcp/dist/index.js"
 }
 ```
 
@@ -119,18 +132,22 @@ it will not silently spawn something else.
 
 ## Set up your IDE or agent
 
-Everything below is covered in detail, with the official documentation links, in
-**[`docs/IDE_SETUP.md`](docs/IDE_SETUP.md)**. The short version:
+Everything below is covered in detail, with the official documentation links and the Windows file
+locations, in **[`docs/IDE_SETUP.md`](docs/IDE_SETUP.md)**. The short version — `%USERPROFILE%` is
+`C:\Users\<you>`:
 
 | Tool | MCP config | Agent instructions this repo ships |
 |---|---|---|
-| **Qoder** | IDE Settings → MCP → My Servers → **+ Add** (`mcpServers`); CLI: `.qoder/settings.json` | `AGENTS.md`, `.qoder/skills/*/SKILL.md` |
-| **Google Antigravity** | Settings → Customizations → Add MCP; `~/.gemini/config/mcp_config.json` or `<workspace>/.agents/mcp_config.json` (`mcpServers`) | `AGENTS.md`, `.agents/skills/*/SKILL.md`, `.agents/rules/refclone.md` |
-| **Z.ai ZCode** | Settings → MCP Servers → New; `~/.zcode/cli/config.json` or `<project>/.zcode/config.json` (**`mcp.servers`** — different nesting) | `AGENTS.md`, plus a pointer rule so the agent finds `.agents/skills/` |
-| **Claude Code** | `.mcp.json` or `claude mcp add` | `AGENTS.md`, `.claude/skills` (copy from `.agents/skills`) |
-| **Codex CLI** | `[mcp_servers.cavalry]` in `~/.codex/config.toml` | `AGENTS.md` |
-| **Cursor** | `.cursor/mcp.json` | `AGENTS.md`, `.cursor/rules/*.mdc` |
+| **Qoder** | IDE Settings → MCP → My Servers → **+ Add** (`mcpServers`); CLI: `.qoder\settings.json` or `%USERPROFILE%\.qoder\settings.json` | `AGENTS.md`, `.qoder/skills/*/SKILL.md` |
+| **Google Antigravity** | Settings → Customizations → Add MCP; `%USERPROFILE%\.gemini\config\mcp_config.json` or `<workspace>\.agents\mcp_config.json` (`mcpServers`) | `AGENTS.md`, `.agents/skills/*/SKILL.md`, `.agents/rules/refclone.md` |
+| **Z.ai ZCode** | Settings → MCP Servers → New; `%USERPROFILE%\.zcode\cli\config.json` or `<project>\.zcode\config.json` (**`mcp.servers`** — different nesting) | `AGENTS.md`, plus a pointer rule so the agent finds `.agents/skills/` |
+| **Claude Code** | `.mcp.json` or `claude mcp add` | `AGENTS.md`, `.claude\skills` (copy from `.agents\skills`) |
+| **Codex CLI** | `[mcp_servers.cavalry]` in `%USERPROFILE%\.codex\config.toml` | `AGENTS.md` |
+| **Cursor** | `.cursor\mcp.json` | `AGENTS.md`, `.cursor\rules\*.mdc` |
 | **Zed** | `context_servers.cavalry` in `settings.json` (flat, not `mcpServers`) | `AGENTS.md` |
+
+The first three are the route this project is used and documented through; the rest are listed
+because the files they read ship here too, not because each one is exercised by CI.
 
 Copy the ready-made snippet for your tool from [`examples/mcp/`](examples/mcp) — each file says
 where it belongs, and its `_place` keys are notes for you to delete, not config.
@@ -142,32 +159,33 @@ instructions. A CI check enforces that the mirrors never drift.
 
 Then paste something like this to your agent:
 
-> Using this repository, clone `~/Downloads/my-reference.mp4` through the generic profile. Follow
-> `AGENTS.md` and the `generic-clone` skill. Stop and show me the evidence at every review gate —
-> do not confirm a gate yourself, and leave anything you cannot read as null.
+> Using this repository, clone `C:\Users\me\Downloads\my-reference.mp4` through the generic profile.
+> Follow `AGENTS.md` and the `generic-clone` skill. Stop and show me the evidence at every review
+> gate — do not confirm a gate yourself, and leave anything you cannot read as null.
 
 ## First clone, in five commands
 
-```sh
+```powershell
 # 1. ingest + candidate shot boundaries, then stop at gate 1
-node src/cli.mjs run "path/to/reference.mp4" --profile generic-clone --config config.json
+node src/cli.mjs run "C:\Videos\reference.mp4" --profile generic-clone --config config.json
 
 # 2. confirm the cuts (write the review JSON the run printed, then rerun with it)
-node src/cli.mjs run "path/to/reference.mp4" --profile generic-clone --config config.json \
-  --boundary-review jobs/<hash>/boundary-review.json
+node src/cli.mjs run "C:\Videos\reference.mp4" --profile generic-clone --config config.json --boundary-review jobs\<hash>\boundary-review.json
 
 # 3. read the CV draft report, transcribe copy/fonts/roles into the draft, then confirm gate 2
-node tools/make-shot-spec-review.mjs --spec <draft.json> --base-hash <baseHash> \
-  --source-hash <sourceHash> --reviewer "you" --notes "what you checked" --out shot-spec-review.json
-node src/cli.mjs run "path/to/reference.mp4" --profile generic-clone --config config.json \
-  --analysis-review shot-spec-review.json
+node tools/make-shot-spec-review.mjs --spec draft.json --base-hash <baseHash> --source-hash <sourceHash> --reviewer "you" --notes "what you checked" --out shot-spec-review.json
+node src/cli.mjs run "C:\Videos\reference.mp4" --profile generic-clone --config config.json --analysis-review shot-spec-review.json
 
 # 4. Cavalry running with Stallion enabled — build, render, QA, export
-node src/cli.mjs run "path/to/reference.mp4" --profile generic-clone --config config.json
+node src/cli.mjs run "C:\Videos\reference.mp4" --profile generic-clone --config config.json
 
-# 5. look at the evidence
-open jobs/<hash>/qa/*/qa-report.json          # or the HTML comparison images next to it
+# 5. look at the evidence (Invoke-Item hands a file to its default handler, a folder to Explorer)
+Invoke-Item jobs\<hash>\qa\<run>\qa-report.md
+Invoke-Item jobs\<hash>\qa\<run>\comparisons
 ```
+
+Long as those lines are, they are deliberately not wrapped: a backslash at the end of a line
+continues a command in bash, and does nothing of the use you want in cmd or PowerShell.
 
 Steps 2–4 are the *same* command repeated. `run` is resume-first: it reuses every cached stage,
 stops at the first gate that still needs a human, and prints the exact rerun command with all the
@@ -197,10 +215,12 @@ see — real copy, semantic roles, font faces you can actually identify from the
 Leave everything else `null`. Then submit the draft back with `review.status: "confirmed"` and the
 `baseHash` from the **analysis** stage:
 
-```sh
-node tools/make-shot-spec-review.mjs --spec <your-edited-spec.json> \
-  --run-report jobs/<hash>/run/*/run-report.json --out shot-spec-review.json --reviewer you --notes "…"
+```powershell
+node tools/make-shot-spec-review.mjs --spec your-edited-spec.json --run-report jobs\<hash>\run\<run-uuid>\run-report.json --out shot-spec-review.json --reviewer you --notes "what you checked"
 ```
+
+Neither shell expands a `*` inside an argument the way bash does, so use the concrete run path that
+`run` printed rather than a wildcard.
 
 The helper refuses to authorize source-to-target transformations, and a review carrying the wrong
 `baseHash` is rejected — that is what stops a spec from being confirmed against stale measurements.
@@ -264,7 +284,7 @@ configs, the generic modules, the skills, the README, or any report you would ha
 
 ## Verify your checkout
 
-```sh
+```powershell
 npm run verify     # syntax check every module + config parity + skill mirrors + privacy scan
 npm test           # 215 tests, no Cavalry needed (the runner reports 216 entries because it also lists test/fixtures.mjs, a helper module)
 npm run verify:docs  # re-runs the suite and checks that every test count quoted in these docs is current
@@ -278,13 +298,20 @@ redistributed — reproduce it on your own machine.
 
 ## Limitations, stated plainly
 
+- **Windows is the only platform this verifies.** The engine is plain Node ESM and its media
+  stages go through FFmpeg, so other systems may well run it — but CI does not run them, no claim
+  is made about them, and `package.json` declares `"os": ["win32"]`, which makes `npm ci` refuse
+  elsewhere with `EBADPLATFORM` instead of half-installing. If you need it elsewhere, that is a
+  fork decision with real work in it: installed-font discovery, path semantics and file-sharing
+  behaviour all differ per OS.
 - **No OCR.** No recognizer is installed and nothing is downloaded, so on-screen copy always comes
   from a human transcription decision. The CV pass proposes geometry, not words.
 - **Fonts are not identified from pixels.** `font.family` stays `null` until you resolve it against
   fonts you already have. The pipeline will never invent a substitute.
-- **Installed-font discovery is Windows-only.** `src/assets.mjs` reads the Windows font registry;
-  on macOS/Linux it records that discovery was skipped and relies on `assets.fontDirectories`.
-  This is real, documented, and not silently worked around.
+- **Installed-font discovery is a Windows registry read.** `src/assets.mjs` queries HKLM/HKCU under
+  `SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts`; directories you list in
+  `assets.fontDirectories` are still scanned. This is the platform the tool is built for, and the
+  skip path for other systems is documented rather than silently worked around.
 - **Easing is not recovered.** A measured hard cut is recorded as `"None"` — an implementation
   record, not a claim about the original curve. Null easings stay null.
 - **Rotation and variable-frame-rate inputs are refused** (`ROTATION_UNSUPPORTED`,
@@ -302,23 +329,25 @@ redistributed — reproduce it on your own machine.
 The upstream is [github.com/akspro9866-art/refclone](https://github.com/akspro9866-art/refclone),
 so the normal route is to fork it and work on your own clone:
 
-```sh
+```powershell
 git clone https://github.com/<you>/refclone.git
 cd refclone
-npm ci && npm run verify && npm test
+npm ci
+npm run verify
+npm test
 ```
 
 If instead you are standing where this repository once stood — a scrubbed working tree extracted
 from a private project, with no remote yet — then the first push is where the honesty of the
 distribution is actually tested. That is the step to take slowly:
 
-```sh
+```powershell
 cd refclone
 git init -b main
-git add AGENTS.md CHANGELOG.md CONTRIBUTING.md LICENSE README.md SECURITY.md \
-        .agents .github .gitattributes .gitignore .qoder \
-        config.json config.generic-template.json \
-        docs examples integration package.json package-lock.json schemas src test tools
+git add AGENTS.md CHANGELOG.md CONTRIBUTING.md LICENSE README.md SECURITY.md
+git add .agents .github .gitattributes .gitignore .qoder
+git add config.json config.generic-template.json
+git add docs examples integration package.json package-lock.json schemas src test tools
 git commit -m "refclone: evidence-gated reference-video cloning for Cavalry"
 gh repo create refclone --public --source=. --push      # or add a remote manually
 ```
@@ -336,7 +365,7 @@ checks for private material, not for whether you have the right to publish what 
 To publish on npm (the name `refclone` is already taken upstream; `refclone-cli` was free when this
 was written — re-check with `npm view refclone-cli`):
 
-```sh
+```powershell
 npm login --access public
 npm publish --access public     # prepublishOnly runs the verify + test gate automatically
 ```

@@ -1,5 +1,5 @@
 {
-  "_place": "Z.ai ZCode: workspace -> .zcode/config.json (or user -> ~/.zcode/cli/config.json). Also Settings -> MCP Servers -> New. Reference: https://zcode.z.ai/en/docs/mcp-services",
+  "_place": "Z.ai ZCode: workspace -> .zcode\\config.json (or user -> %USERPROFILE%\\.zcode\\cli\\config.json). Also Settings -> MCP Servers -> New. Reference: https://zcode.z.ai/en/docs/mcp-services",
   "_note": "ZCode nests servers under mcp.servers, not mcpServers.",
   "mcp": {
     "servers": {

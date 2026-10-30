@@ -1,6 +1,6 @@
 {
   // Zed: add this key to your settings.json (Command Palette -> "edit settings"),
-  // or to a project's .zed/settings.json. Zed nests MCP under context_servers,
+  // or to a project's .zed\settings.json. Zed nests MCP under context_servers,
   // not mcpServers. Remove this comment block before saving as strict JSON.
   "context_servers": {
     "cavalry": {

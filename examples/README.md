@@ -8,8 +8,10 @@ Two kinds of templates live here, and neither one is a fixture you can run as-is
   `--boundary-review` / `--analysis-review`.
 - `mcp/` — one MCP registration snippet per agent tool, for the Cavalry MCP
   server. Replace `<CAVALRY_MCP>` with the absolute path of your `cavalry-mcp`
-  checkout (the file it launches is `<CAVALRY_MCP>/dist/index.js`). Keep forward
-  slashes even on Windows; backslashes in JSON must be escaped as `\\`.
+  checkout (the file it launches is `<CAVALRY_MCP>\dist\index.js`, e.g.
+  `C:\Users\<you>\tools\cavalry-mcp`). Keep forward slashes inside the snippets;
+  backslashes in JSON and TOML must be escaped as `\\`, and Windows accepts the
+  forward-slash form. `%USERPROFILE%` is `C:\Users\<you>`.
   Each snippet carries a `_place` note describing where it goes — **delete the
   underscore keys** (and the `//` comments in the `.jsonc`/`.toml` samples)
   before saving, because most agents parse those files strictly.

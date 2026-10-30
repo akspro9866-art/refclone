@@ -9,6 +9,14 @@ Qoder reads this file and `.qoder/skills/*/SKILL.md`. Antigravity, ZCode, Codex,
 Zed and other agents that read `AGENTS.md` get the same contract; see
 [docs/IDE_SETUP.md](docs/IDE_SETUP.md) for where each tool puts rules and skills.
 
+**The platform is Windows 10/11** — that is where Cavalry, the installed-font
+registry and this repository's CI live, and `package.json` restricts install to
+`win32`. So when you emit a command, write it for PowerShell or `cmd.exe`: one
+command per line, no trailing-backslash continuation, no `&&` chaining (Windows
+PowerShell 5.1 cannot parse it), and `Invoke-Item` rather than `open`. Paths in
+JSON and TOML use forward slashes (`C:/Users/<you>/...`) because a backslash is
+an escape character there; paths you hand to a Windows shell use backslashes.
+
 ## Non-negotiables
 
 - Preserve exact visible copy. Never invent, paraphrase or "tidy" text, glyphs,
@@ -39,7 +47,7 @@ stop, inspect, reconcile, then retry.
 Work the stages in order. A stage is complete only when its command ran, its
 artifacts validate against `schemas/`, and any required review is confirmed.
 
-```bash
+```powershell
 node src/cli.mjs run "<reference-video>" --profile generic-clone --config config.json
 ```
 
@@ -79,8 +87,9 @@ For the full per-gate runbook use the `generic-clone` skill
 
 ## Verification before you claim anything
 
-```bash
-cd <repo> && npm test        # must pass before claiming an implementation step
+```powershell
+cd <repo>
+npm test        # must pass before claiming an implementation step
 node src/cli.mjs --help      # the qualified command surface
 ```
 

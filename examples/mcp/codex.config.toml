@@ -1,5 +1,5 @@
-# Codex CLI: append this section to ~/.codex/config.toml. Codex uses TOML section
-# names, not a JSON mcpServers object.
+# Codex CLI: append this section to %USERPROFILE%\.codex\config.toml. Codex uses
+# TOML section names, not a JSON mcpServers object.
 # Reference: https://learn.chatgpt.com/docs/config-file/config-reference
 
 [mcp_servers.cavalry]

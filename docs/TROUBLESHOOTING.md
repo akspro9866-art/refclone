@@ -18,12 +18,13 @@ that your video is bad. Most reports of "it won't run" are one of the four in th
 
 ## Before you debug the pipeline, debug the checkout
 
-```sh
+```powershell
 npm ci
 npm run verify     # syntax-check + config parity + skill parity + privacy scan
 npm test           # 215 tests; exercises FFmpeg, never Cavalry
-ffmpeg -version && ffprobe -version
 node --version     # must be 24+
+ffmpeg -version
+ffprobe -version
 ```
 
 If `npm test` is red, nothing downstream is trustworthy and the problem is not your video. If
@@ -32,23 +33,28 @@ If `npm test` is red, nothing downstream is trustworthy and the problem is not y
 ### Getting `ffmpeg` and `ffprobe` onto `PATH`
 
 The suite generates and decodes its own short clips, so it needs both binaries even though it never
-opens Cavalry. The two `apt`/Chocolatey lines are what CI runs on each leg, so they are the verified
-routes; `winget` and Homebrew are the usual package-manager answers on a desktop, not things this
-repository exercises.
+opens Cavalry. Two Windows routes — the first is the one CI uses, so it is the verified one:
 
-```sh
-sudo apt-get update && sudo apt-get install -y ffmpeg   # Linux  (CI: ubuntu-latest)
-choco install ffmpeg -y                                 # Windows (CI: windows-latest)
-winget install Gyan.FFmpeg                              # Windows (not exercised by CI)
-brew install ffmpeg                                     # macOS   (not exercised by CI)
+```powershell
+choco install ffmpeg -y
+winget install Gyan.FFmpeg     # the usual desktop route; CI does not exercise it
 ```
 
-A fresh install usually will not reach a terminal that was already open, so reopen the shell before
-concluding the install failed. Then prove it:
+A fresh install does not reach a PowerShell window that was already open, so reopen the window
+before concluding the install failed. Then prove it, one command per line (`&&` is a bash-ism that
+Windows PowerShell 5.1 does not parse):
 
-```sh
-ffmpeg -version && ffprobe -version
+```powershell
+ffmpeg -version
+ffprobe -version
 ```
+
+If both answer in your window but a stage still says `TOOL_MISSING`, the agent is running in a
+different shell than the one you checked: `where.exe ffmpeg` inside that agent's terminal is the
+shortest way to see what it can actually reach. The other fix is to stop relying on `PATH` and name
+the binaries outright — `config.json` has `ffmpeg` and `ffprobe` keys, each defaulting to the bare
+command name, and either one accepts the absolute path `where.exe` printed (escaped as `C:\\...` if
+you are writing it into JSON).
 
 ## The live Cavalry leg (build / render / export)
 

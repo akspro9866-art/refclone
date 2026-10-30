@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **Windows is now the only supported platform**, and the repository says so
+  everywhere instead of implying a portability it has never tested. `package.json`
+  carries `"os": ["win32"]`, so `npm ci` refuses to install elsewhere (verified: flipping the
+  declaration to `"darwin"` makes `npm ci` exit `EBADPLATFORM` on this machine, and the shipped
+  `"win32"` value installs the same 96 packages here); the CI matrix
+  dropped `ubuntu-latest` and runs one `windows-latest` leg. Every command, path and
+  config location in the docs is the Windows one (PowerShell or `cmd.exe`, `%USERPROFILE%`
+  for home, forward slashes only inside JSON and TOML), and the agent set the project is
+  written for is Qoder, Antigravity, ZCode and Cavalry, with the remaining tools kept as
+  secondary snippets. This is a narrowing, not a bug fix: nothing proved the engine still
+  works on macOS or Linux, and the honest answer to that question is now in the README
+  rather than hidden in a green CI job that no longer runs there.
+
 ### Fixed
 
 - Font paths read out of the Windows registry are normalised with Windows rules on
