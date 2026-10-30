@@ -1,5 +1,7 @@
 # refclone
 
+![CI](https://github.com/akspro9866-art/refclone/actions/workflows/ci.yml/badge.svg)
+
 **Clone any reference video into an editable [Cavalry](https://cavalrycamera.com/) scene — measured, reviewed, and verifiable.**
 
 Hand `refclone` a `.mp4` of a motion-graphics edit you admire. It extracts the shot
