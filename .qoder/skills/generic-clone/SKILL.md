@@ -133,3 +133,44 @@ because a decoded frame carries no element alpha channel.
   file-integrity checks, important shots and transitions were inspected, the QA report is
   saved, the editable project and manifests are available, and remaining mismatches are
   documented.
+
+## Wired procedural pipeline (5-stage closed loop)
+
+`src/procedural-pipeline.mjs` orchestrates the full loop and emits two schema-validated
+artifacts. The call graph is fixed:
+
+1. **Stage 1 → 2 (tracking):** `extractTrackingFromObservations` consumes autoanalyze
+   frame observations (`{frame, measurement.foreground.bbox}`) and calls `trackShot` from
+   `src/tracking.mjs` to produce motion beats, inflection frames and normalized
+   trajectories per element.
+2. **Stage 2 → 3 (promotion):** `runProceduralPromotion` converts tracking output via
+   `toPromotionInput` and calls `analyzeScenePromotion` from `src/promotion.mjs`. The
+   solver promotes cubic-bezier (RMSE ≤ `bezierRmseMax`), damped spring (R² ≥
+   `springRSquaredMin`) and duplicator groups (Pearson shape correlation ≥
+   `duplicatorCorrelationMin`, N ≥ `duplicatorMinElements`). Fallbacks stay as raw
+   keyframes and are counted in `summary.keyframeFallbacks`. The artifact validates
+   against `schemas/procedural-promotion.schema.json` with `schemaVersion: 1`.
+3. **Stage 3 → 4 (compilation):** `compileProceduralScript` calls `compileShotScript`
+   from `src/mg-compiler.mjs` with `groupName: "procedural-${shotId}"`. The compiler
+   wraps the generated `_mg` DSL in an atomic Undo group and binds spring / bezier /
+   duplicator presets from the frozen `VERIFIED_PRESETS` catalog. Only the three real
+   Cavalry MCP tools (`cavalry_run_script`, `cavalry_inspect`, `cavalry_run_preset`) are
+   ever referenced — the `_mg` text is the argument to `cavalry_run_script`, not a
+   fourth tool.
+4. **Stage 5 (perceptual diff gate):** `runPerceptualDiffGate` calls
+   `analyzeElementPerceptual` / `analyzeShotPerceptual` / `generateRefinementReport`
+   from `src/perceptual.mjs`. Correction deltas (`position`, `scale`, `timing`,
+   `opacity`) are fed back into the next iteration of Stages 3–4 until the gate passes
+   or `maxRefinementIterations` is reached. The artifact validates against
+   `schemas/perceptual-diff.schema.json` with `schemaVersion: 1`; non-finite metrics
+   (e.g. `Infinity` timing when no rendered trajectory exists) are coerced to a
+   configured ceiling plus one so the artifact stays canonicalizable.
+
+Every threshold is read from `config.json` sections `proceduralPromotion` and
+`perceptualDiff`. `config.generic-template.json` mirrors those sections byte-for-byte so
+`npm run verify` (config-parity) stays green. Do not hardcode thresholds in new call
+sites; extend `loadProceduralConfig` instead.
+
+The end-to-end integration test in `test/procedural-pipeline.test.mjs` runs all five
+stages on synthetic observations and PNG frame comparisons and asserts that both
+artifacts pass `validateArtifact` before the pipeline returns.

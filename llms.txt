@@ -1,0 +1,304 @@
+# refclone — Architectural Index for LLMs and Knowledge Cards
+
+> Evidence-gated reference-video cloning pipeline for Cavalry 2.8.0
+> Windows-only · Node.js 24+ · ESM modules · MCP bridge
+
+## Repository Identity
+
+- **Name**: refclone-cli
+- **Version**: 0.1.0
+- **Platform**: Windows 10/11 only (`"os": ["win32"]`)
+- **Runtime**: Node.js >= 24
+- **Module System**: ESM (`.mjs`)
+- **License**: MIT
+- **Repository**: https://github.com/akspro9866-art/refclone
+
+## 5-Stage Closed-Loop Procedural Promotion Pipeline
+
+The pipeline transforms reference videos into editable Cavalry scenes through procedural promotion rather than frame-baked keyframes.
+
+### Stage 1: Temporal Beat & Cut Segmentation
+- **Module**: `src/media.mjs`, `src/autoanalyze.mjs`
+- **Purpose**: Normalize input to CFR, compute optical flow deltas, segment motion into semantic beats
+- **Output**: `shot-boundaries` artifact with candidate cuts and reviewed shots
+- **Key Functions**: `ingestMedia()`, `detectShotBoundaries()`, `sampleKeyframes()`
+
+### Stage 2: Decoupled Static Layout & Kinematic Tracking
+- **Module**: `src/tracking.mjs`, `src/analysis.mjs`
+- **Purpose**: Extract static layer hierarchy at rest frames; extract normalized trajectories (x, y, scale_x, scale_y, rotation, opacity)
+- **Output**: Tracking analysis with static layout and motion trajectories
+- **Key Functions**: `extractStaticLayout()`, `extractTrajectories()`, `segmentMotionBeats()`, `trackElement()`, `trackShot()`
+
+### Stage 3: Procedural Promotion Solver
+- **Module**: `src/promotion.mjs`
+- **Purpose**: Fit trajectories to procedural behaviors instead of raw keyframes
+- **Promotions**:
+  - **Cubic-Bezier**: Smooth monotonic transitions (RMSE <= 0.015)
+  - **Damped Spring**: Oscillating trajectories (R² >= 0.92)
+  - **Duplicator/Stagger**: N>=2 correlated elements with temporal/spatial offsets
+- **Output**: `procedural-promotion` artifact with element promotions and duplicator groups
+- **Key Functions**: `normalizeTrajectory()`, `fitCubicBezier()`, `fitDampedSpring()`, `detectDuplicatorPattern()`, `analyzeTrajectory()`, `analyzeScenePromotion()`
+
+### Stage 4: _mg DSL Compilation & Atomic Undo
+- **Module**: `src/mg-compiler.mjs`
+- **Purpose**: Compile promoted graph into Cavalry `_mg` DSL expressions bound to verified presets
+- **Features**:
+  - 120 verified presets (spring, bezier, duplicator categories)
+  - Atomic Undo grouping for single-operation revert
+  - Preset auto-binding based on promotion parameters
+- **Output**: Executable `_mg` DSL script with undo groups
+- **Key Functions**: `compilePromotionScript()`, `findMatchingPreset()`, `wrapAtomicUndo()`, `compileShotScript()`
+
+### Stage 5: Closed-Loop Perceptual Diff Gate
+- **Module**: `src/perceptual.mjs`
+- **Purpose**: Compare rendered frames against reference on 4 metrics
+- **Metrics**:
+  - Bounding-Box IoU (target >= 0.90)
+  - Normalized Centroid Offset (target <= 0.02)
+  - Peak Velocity Timing Delta (target <= 1 frame)
+  - Structural Similarity SSIM (target >= 0.88)
+- **Output**: `perceptual-diff` artifact with correction deltas for iterative refinement
+- **Key Functions**: `computeIoU()`, `computeSSIM()`, `compareFrames()`, `analyzeElementPerceptual()`, `analyzeShotPerceptual()`, `generateRefinementReport()`
+
+## Module Map
+
+### Core Infrastructure
+| Module | Responsibility |
+|--------|----------------|
+| `src/core.mjs` | Structured errors, canonical JSON/hash, atomic artifacts, job locks, subprocess control |
+| `src/cli.mjs` | Command-line interface, argument parsing, help system |
+| `src/run.mjs` | Pipeline orchestration, stage DAG, resume-first execution |
+
+### Media & Analysis
+| Module | Responsibility |
+|--------|----------------|
+| `src/media.mjs` | FFprobe metadata, FFmpeg scene detection, keyframe sampling, audio analysis |
+| `src/analysis.mjs` | Raster measurements, evidence-backed review import, draft specification |
+| `src/autoanalyze.mjs` | Automated CV first-pass, shot-spec proposal generation |
+
+### Tracking & Promotion (5-Stage Pipeline)
+| Module | Responsibility |
+|--------|----------------|
+| `src/tracking.mjs` | **Stage 2**: Kinematic tracking, trajectory extraction, motion beat segmentation |
+| `src/promotion.mjs` | **Stage 3**: Procedural promotion solver (bezier, spring, duplicator) |
+| `src/mg-compiler.mjs` | **Stage 4**: _mg DSL compilation, preset binding, atomic undo |
+| `src/perceptual.mjs` | **Stage 5**: Perceptual diff gate, SSIM, IoU, correction deltas |
+| `src/procedural-pipeline.mjs` | **Orchestrator**: Wires Stages 1→5 into a single closed-loop call graph |
+
+### Wired procedural call graph
+
+`src/procedural-pipeline.mjs` is the single entry point that chains the five stages. The
+flow is fixed and every artifact is schema-validated before it leaves the orchestrator:
+
+```
+media/autoanalyze observations
+        │
+        ▼
+extractTrackingFromObservations()  ── calls trackShot() from src/tracking.mjs
+        │                            (motion beats, inflection frames, trajectories)
+        ▼
+runProceduralPromotion()           ── calls toPromotionInput() + analyzeScenePromotion()
+        │                            from src/promotion.mjs; validates against
+        │                            schemas/procedural-promotion.schema.json
+        ▼
+compileProceduralScript()          ── calls compileShotScript() from src/mg-compiler.mjs
+        │                            (atomic _mg.undoGroup("procedural-<shotId>"),
+        │                             preset bindings from frozen VERIFIED_PRESETS)
+        ▼
+runPerceptualDiffGate()            ── calls analyzeElementPerceptual() /
+        │                            analyzeShotPerceptual() / generateRefinementReport()
+        │                            from src/perceptual.mjs; validates against
+        │                            schemas/perceptual-diff.schema.json
+        ▼
+correctionDeltas (position, scale, timing, opacity) feed the next Stage 3→4 iteration
+until the gate passes or maxRefinementIterations is reached.
+```
+
+`runProceduralPipeline({ shotId, observations, metadata, capabilities, config,
+frameComparisons })` executes the full loop and returns
+`{ stages: { tracking, promotion, compilation, perceptual }, summary, config }`.
+`generateProceduralReport(pipelineResult)` renders a human-readable markdown summary.
+
+All thresholds live in `config.json` under `proceduralPromotion` and `perceptualDiff`;
+`config.generic-template.json` mirrors them byte-for-byte so `npm run verify`
+(config-parity) stays green. `loadProceduralConfig(config)` is the only sanctioned way to
+read them — never hardcode a threshold at a new call site.
+
+### Design & Planning
+| Module | Responsibility |
+|--------|----------------|
+| `src/design.mjs` | Design tokens, component verification, preset validation |
+| `src/generic-design.mjs` | Reference-agnostic design token generation |
+| `src/planner.mjs` | Scene plan compilation (legacy saas profile) |
+| `src/generic-planner.mjs` | Scene plan compilation (generic profile) |
+| `src/catalog.mjs` | Component catalog, preset matching, derived catalogs |
+
+### Assets & Build
+| Module | Responsibility |
+|--------|----------------|
+| `src/assets.mjs` | Asset manifest, font registry, file hashing, validation |
+| `src/build.mjs` | Scene construction, checkpointed batches, Cavalry operations |
+| `src/cavalry.mjs` | MCP adapter, tool discovery, script execution, layer management |
+
+### Render & QA
+| Module | Responsibility |
+|--------|----------------|
+| `src/render.mjs` | Frame rendering, FFmpeg encoding, render manifest |
+| `src/qa.mjs` | Quality assurance, frame comparison, discrepancy detection |
+| `src/export.mjs` | Final export, project save, validation |
+
+### Resolution
+| Module | Responsibility |
+|--------|----------------|
+| `src/resolve.mjs` | Path resolution, configuration loading, profile selection |
+
+## Schema Contracts
+
+All artifacts validate against JSON Schema (draft-07) in `schemas/`:
+
+| Schema | Purpose |
+|--------|---------|
+| `common.schema.json` | Shared definitions (fps, identifiers, paths, hashes) |
+| `media-metadata.schema.json` | FFprobe metadata, frame timeline, VFR detection |
+| `shot-boundaries.schema.json` | Scene detection candidates, reviewed shots |
+| `keyframes.schema.json` | Sampled frames, contact sheets, roles |
+| `audio-analysis.schema.json` | PCM energy windows, silence detection |
+| `shot-spec.schema.json` | Element specifications, events, transformations |
+| `asset-manifest.schema.json` | Asset records, fonts, provenance, licenses |
+| `design-tokens.schema.json` | Named tokens, components, presets |
+| `component-catalog.schema.json` | Reference-agnostic component definitions |
+| `scene-plan.schema.json` | Operations, keyframes, events, validation |
+| `procedural-promotion.schema.json` | **Stage 3 output**: Promotions, duplicator groups |
+| `perceptual-diff.schema.json` | **Stage 5 output**: Metrics, correction deltas |
+| `render-manifest.schema.json` | Rendered frames, video validation |
+| `qa-report.schema.json` | Discrepancies, thresholds, alignment |
+| `final-export.schema.json` | Export validation, project state |
+| `job-state.schema.json` | Pipeline state, stage status, checkpoints |
+
+## CLI Entry Points
+
+```powershell
+# Full pipeline run (generic profile)
+node src/cli.mjs run "<reference-video>" --profile generic-clone --config config.json
+
+# Individual stages
+node src/cli.mjs ingest "<video>"
+node src/cli.mjs autoanalyze --job <job-id>
+node src/cli.mjs design --job <job-id>
+node src/cli.mjs plan --job <job-id>
+node src/cli.mjs build --job <job-id>
+node src/cli.mjs render --job <job-id>
+node src/cli.mjs qa --job <job-id>
+node src/cli.mjs export --job <job-id>
+
+# Help
+node src/cli.mjs --help
+node src/cli.mjs <command> --help
+```
+
+## MCP Surface
+
+Three verified tools from the configured Cavalry MCP server:
+
+| Tool | Purpose |
+|------|---------|
+| `cavalry_run_script` | Execute JavaScript in Cavalry's scripting environment |
+| `cavalry_inspect` | Read-only scene inspection (selection, roots, layers) |
+| `cavalry_run_preset` | Apply verified presets by name |
+
+**Do not invent**: `cavalry_exec`, `cavalry_render_frames`, or other tool names.
+
+## Test Commands
+
+```powershell
+# Run all tests (335 tests)
+npm test
+
+# Run verification scripts
+npm run verify
+
+# Run integration tests (requires Cavalry)
+npm run test:integration
+
+# Check test counts in docs
+npm run verify:docs
+```
+
+## Configuration
+
+- `config.json` — Active configuration (profile, review gates, tool paths)
+- `config.generic-template.json` — Template for generic-clone profile
+- `.qoder/skills/*/SKILL.md` — Qoder skill definitions
+- `.agents/skills/*/SKILL.md` — Agent skill mirrors
+- `.agents/rules/refclone.md` — Agent rules and constraints
+
+## Key Constants & Thresholds
+
+### Promotion Thresholds (Stage 3)
+- `BEZIER_RMSE_THRESHOLD`: 0.015
+- `SPRING_R2_THRESHOLD`: 0.92
+- `DUPLICATOR_MIN_ELEMENTS`: 2
+- `DUPLICATOR_TRAJECTORY_CORRELATION`: 0.85
+
+### Perceptual Thresholds (Stage 5)
+- `IOU_TARGET`: 0.90
+- `CENTROID_OFFSET_TARGET`: 0.02
+- `TIMING_DELTA_TARGET`: 1 frame
+- `SSIM_TARGET`: 0.88
+
+### Verified Presets (Stage 4)
+- **Spring**: `spring-oscillator`, `spring-bounce`, `spring-snappy`
+- **Bezier**: `bezier-smooth`, `bezier-snap`, `bezier-glide`
+- **Duplicator**: `duplicator-stagger`, `duplicator-cascade`, `duplicator-wave`
+
+## Gate Sequence
+
+Work stages in order. A stage is complete only when:
+1. Its command ran successfully
+2. Its artifacts validate against `schemas/`
+3. Any required review is confirmed
+
+```
+ingest → autoanalyze → [review: boundaries] → [review: shot-spec] →
+assets → [review: assets] → design → plan → [review: plan] →
+build → render → qa → [review: qa] → export
+```
+
+## Non-Negotiables
+
+- Preserve exact visible copy — never invent or paraphrase
+- Reproduce measured boxes, colors, frame timings before polishing motion
+- Use authentic assets and verified fonts — never download or substitute
+- Never claim a render matches without comparison evidence
+- Never bypass a failed gate — blocked is a correct outcome
+- Do not overwrite previous renders, projects, or measured sources
+
+## Documentation
+
+- `README.md` — User-facing documentation
+- `AGENTS.md` — Agent rules and constraints
+- `docs/PIPELINE_ARCHITECTURE.md` — Module boundaries and artifact DAG
+- `docs/GENERIC_CLONE_ARCHITECTURE.md` — Generic profile architecture
+- `docs/MCP_CAPABILITIES.md` — MCP tool documentation
+- `docs/CAVALRY_ADAPTER.md` — Cavalry integration details
+- `docs/SCENE_PLANNING.md` — Scene plan compilation
+- `docs/DESIGN_SYSTEM.md` — Design tokens and components
+- `docs/ASSET_WORKFLOW.md` — Asset management
+- `docs/WORKFLOW.md` — End-to-end workflow
+- `docs/TROUBLESHOOTING.md` — Common issues and fixes
+
+## Version History
+
+- **PROMOTION_VERSION**: 1.0.0
+- **TRACKING_VERSION**: 1.0.0
+- **PERCEPTUAL_VERSION**: 1.0.0
+- **MG_COMPILER_VERSION**: 1.0.0
+- **PLANNER_VERSION**: 1.2.0
+- **GENERIC_PLANNER_VERSION**: 1.0.0
+- **ANALYSIS_VERSION**: 1.0.4
+- **ADAPTER_VERSION**: 1.0.0
+
+---
+
+*Generated for Qoder Knowledge Cards and external tool integration.*
+*Last updated: 2026-10-30*

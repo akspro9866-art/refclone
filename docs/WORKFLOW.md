@@ -34,7 +34,7 @@ ffmpeg -version
 ffprobe -version      # both must be on PATH
 node --version                            # v24+
 npm ci
-npm test                        # 215 tests green before you trust anything downstream
+npm test                        # 335 tests green before you trust anything downstream
 ```
 
 Open `config.json` and set `mcp.args` to your own `cavalry-mcp/dist/index.js` (the shipped

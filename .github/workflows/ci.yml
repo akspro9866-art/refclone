@@ -60,6 +60,18 @@ jobs:
       - name: Every test count in the docs is current
         run: node .github/scripts/test-count.mjs
 
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-windows
+          path: |
+            *.log
+            test-output/
+            jobs/
+          retention-days: 7
+          if-no-files-found: ignore
+
   live-integration:
     name: Cavalry integration (manual, needs a real app)
     # Runs only on dispatch, and only against a self-hosted runner that is a Windows machine
@@ -74,3 +86,13 @@ jobs:
         run: npm ci
       - name: Integration run (requires Cavalry with Scripts > Stallion enabled)
         run: npm run test:integration
+      - name: Upload integration artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: |
+            *.log
+            integration-output/
+          retention-days: 30
+          if-no-files-found: ignore

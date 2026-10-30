@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./cli": "./src/cli.mjs",
+    "./package.json": "./package.json"
+  },
   "license": "MIT",
   "description": "Windows-only evidence-gated pipeline that clones any reference video into an editable Cavalry scene through MCP, driven by an AI coding agent (Qoder, Antigravity, ZCode and friends).",
   "author": "refclone contributors",

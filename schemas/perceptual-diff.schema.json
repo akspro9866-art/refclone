@@ -1,0 +1,145 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/perceptual-diff.schema.json",
+  "title": "Closed-loop perceptual diff gate output",
+  "description": "Stage 5 output: perceptual comparison metrics (IoU, centroid offset, SSIM, timing delta) with structured correction deltas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "shotId", "overallPass", "metrics", "thresholds", "summary"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+    "overallPass": { "type": "boolean" },
+    "elements": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/elementPerceptual" }
+    },
+    "metrics": { "$ref": "#/definitions/shotMetrics" },
+    "thresholds": { "$ref": "#/definitions/thresholds" },
+    "summary": { "$ref": "#/definitions/summary" },
+    "refinementNeeded": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/refinementItem" }
+    }
+  },
+  "definitions": {
+    "elementPerceptual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elementId", "version", "overallPass", "metrics", "thresholds", "correctionDeltas", "needsRefinement"],
+      "properties": {
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "version": { "type": "string", "minLength": 1 },
+        "overallPass": { "type": "boolean" },
+        "metrics": { "$ref": "#/definitions/elementMetrics" },
+        "thresholds": { "$ref": "#/definitions/thresholds" },
+        "frameMetrics": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/frameMetrics" }
+        },
+        "correctionDeltas": { "$ref": "#/definitions/correctionDeltas" },
+        "needsRefinement": { "type": "boolean" }
+      }
+    },
+    "elementMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["averageIoU", "averageCentroidOffset", "averageSSIM", "timingDelta", "frameCount"],
+      "properties": {
+        "averageIoU": { "type": "number", "minimum": 0, "maximum": 1 },
+        "averageCentroidOffset": { "type": "number", "minimum": 0 },
+        "averageSSIM": { "type": "number", "minimum": 0, "maximum": 1 },
+        "timingDelta": { "type": "number", "minimum": 0 },
+        "frameCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "shotMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "averageIoU": { "type": "number", "minimum": 0, "maximum": 1 },
+        "averageCentroidOffset": { "type": "number", "minimum": 0 },
+        "averageSSIM": { "type": "number", "minimum": 0, "maximum": 1 },
+        "timingDelta": { "type": "number", "minimum": 0 }
+      }
+    },
+    "frameMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "iou", "centroidOffset", "ssim"],
+      "properties": {
+        "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "iou": { "type": "number", "minimum": 0, "maximum": 1 },
+        "centroidOffset": { "type": "number", "minimum": 0 },
+        "ssim": { "type": "number", "minimum": 0, "maximum": 1 },
+        "iouPass": { "type": "boolean" },
+        "centroidPass": { "type": "boolean" },
+        "ssimPass": { "type": "boolean" }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["iou", "centroidOffset", "ssim", "timingDelta"],
+      "properties": {
+        "iou": { "type": "number", "minimum": 0, "maximum": 1 },
+        "centroidOffset": { "type": "number", "minimum": 0 },
+        "ssim": { "type": "number", "minimum": 0, "maximum": 1 },
+        "timingDelta": { "type": "number", "minimum": 0 }
+      }
+    },
+    "correctionDeltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "scale", "timing", "opacity"],
+      "properties": {
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "scale": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "timing": { "type": "number" },
+        "opacity": { "type": "number" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalElements", "passingElements", "failingElements", "averageIoU", "averageSSIM"],
+      "properties": {
+        "totalElements": { "type": "integer", "minimum": 0 },
+        "passingElements": { "type": "integer", "minimum": 0 },
+        "failingElements": { "type": "integer", "minimum": 0 },
+        "averageIoU": { "type": "number", "minimum": 0, "maximum": 1 },
+        "averageSSIM": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "refinementItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elementId", "deltas", "failedMetrics"],
+      "properties": {
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "deltas": { "$ref": "#/definitions/correctionDeltas" },
+        "failedMetrics": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["averageIoU", "averageCentroidOffset", "averageSSIM", "timingDelta"] }
+        }
+      }
+    }
+  }
+}

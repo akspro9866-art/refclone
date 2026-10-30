@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/procedural-promotion.schema.json",
+  "title": "Procedural promotion analysis",
+  "description": "Stage 3 output: trajectory analysis with procedural behavior promotions (spring, bezier, duplicator) instead of raw keyframes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "fps", "elements", "duplicatorGroups", "summary", "thresholds"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "fps": { "$ref": "common.schema.json#/definitions/fps" },
+    "elements": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/elementPromotion" }
+    },
+    "duplicatorGroups": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/duplicatorGroup" }
+    },
+    "duplicatorDetection": { "$ref": "#/definitions/duplicatorDetection" },
+    "summary": { "$ref": "#/definitions/summary" },
+    "thresholds": { "$ref": "#/definitions/thresholds" }
+  },
+  "definitions": {
+    "elementPromotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elementId", "fps", "overallPromotion", "promotions", "promotionTypes", "metrics"],
+      "properties": {
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "fps": { "$ref": "common.schema.json#/definitions/fps" },
+        "overallPromotion": {
+          "type": "string",
+          "enum": ["static", "cubic_bezier", "damped_spring", "mixed", "keyframes"]
+        },
+        "promotions": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/propertyPromotion" }
+        },
+        "promotionTypes": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["static", "none", "cubic_bezier", "damped_spring", "keyframes"] }
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["propertyCount", "springCount", "bezierCount", "keyframeCount"],
+          "properties": {
+            "propertyCount": { "type": "integer", "minimum": 0 },
+            "springCount": { "type": "integer", "minimum": 0 },
+            "bezierCount": { "type": "integer", "minimum": 0 },
+            "keyframeCount": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "propertyPromotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elementId", "property", "promotion"],
+      "properties": {
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "property": { "type": "string", "minLength": 1 },
+        "attributePath": { "type": ["string", "null"] },
+        "promotion": {
+          "type": "string",
+          "enum": ["none", "static", "cubic_bezier", "damped_spring", "keyframes"]
+        },
+        "reason": { "type": "string" },
+        "value": { "type": "number" },
+        "parameters": { "$ref": "#/definitions/promotionParameters" },
+        "metrics": { "$ref": "#/definitions/promotionMetrics" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "keyframes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["frame", "value"],
+            "properties": {
+              "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+              "value": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "promotionParameters": {
+      "type": "object",
+      "properties": {
+        "y1": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y2": { "type": "number", "minimum": 0, "maximum": 1 },
+        "zeta": { "type": "number", "minimum": 0, "maximum": 1 },
+        "omega0": { "type": "number", "exclusiveMinimum": 0 },
+        "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "endFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "startValue": { "type": "number" },
+        "endValue": { "type": "number" },
+        "targetValue": { "type": "number" },
+        "initialValue": { "type": "number" }
+      }
+    },
+    "promotionMetrics": {
+      "type": "object",
+      "properties": {
+        "rmse": { "type": "number", "minimum": 0 },
+        "r2": { "type": "number" },
+        "threshold": { "type": "number" },
+        "signChanges": { "type": "integer", "minimum": 0 },
+        "pointCount": { "type": "integer", "minimum": 0 },
+        "frameRange": { "type": "number", "minimum": 0 },
+        "valueRange": { "type": "number", "minimum": 0 },
+        "isMonotonic": { "type": "boolean" }
+      }
+    },
+    "duplicatorGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elementIds", "lagFrames", "spatialOffset", "correlation", "baseElementId"],
+      "properties": {
+        "elementIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "baseElementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "lagFrames": { "type": "integer" },
+        "spatialOffset": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "correlation": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "duplicatorDetection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detected", "groups"],
+      "properties": {
+        "detected": { "type": "boolean" },
+        "groups": { "type": "array", "items": { "$ref": "#/definitions/duplicatorGroup" } },
+        "totalElements": { "type": "integer", "minimum": 0 },
+        "groupedElements": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalElements", "springPromotions", "bezierPromotions", "keyframeFallbacks", "duplicatorGroups"],
+      "properties": {
+        "totalElements": { "type": "integer", "minimum": 0 },
+        "springPromotions": { "type": "integer", "minimum": 0 },
+        "bezierPromotions": { "type": "integer", "minimum": 0 },
+        "keyframeFallbacks": { "type": "integer", "minimum": 0 },
+        "duplicatorGroups": { "type": "integer", "minimum": 0 },
+        "duplicatorElements": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bezierRMSE", "springR2", "duplicatorMinElements", "duplicatorCorrelation"],
+      "properties": {
+        "bezierRMSE": { "type": "number", "exclusiveMinimum": 0 },
+        "springR2": { "type": "number", "minimum": 0, "maximum": 1 },
+        "duplicatorMinElements": { "type": "integer", "minimum": 2 },
+        "duplicatorCorrelation": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

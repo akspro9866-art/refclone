@@ -74,5 +74,24 @@
     "maxIterations": 3,
     "minimumConfidence": 0.9,
     "automatic": false
+  },
+  "proceduralPromotion": {
+    "bezierRmseMax": 0.015,
+    "springRSquaredMin": 0.92,
+    "duplicatorMinElements": 2,
+    "duplicatorCorrelationMin": 0.85,
+    "duplicatorTimingToleranceFrames": 2,
+    "presets": {
+      "spring": ["spring-oscillator", "spring-bounce", "spring-snappy"],
+      "bezier": ["bezier-smooth", "bezier-snap", "bezier-glide"],
+      "duplicator": ["duplicator-stagger", "duplicator-cascade", "duplicator-wave"]
+    }
+  },
+  "perceptualDiff": {
+    "iouMin": 0.90,
+    "centroidOffsetMax": 0.02,
+    "timingDeltaMaxFrames": 1,
+    "ssimMin": 0.88,
+    "maxRefinementIterations": 5
   }
 }

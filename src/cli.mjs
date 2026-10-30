@@ -15,6 +15,10 @@ import { runQa } from './qa.mjs';
 import { exportFinal } from './export.mjs';
 import { runPipeline } from './run.mjs';
 import { readJson, WorkflowError } from './core.mjs';
+import {
+  runProceduralPipeline, runClosedLoopProceduralPipeline,
+  applyCorrectionDeltas, generateProceduralReport
+} from './procedural-pipeline.mjs';
 
 const HELP = `refclone - reference-faithful video cloning (qualified commands only)
 
@@ -33,6 +37,7 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs render <scene-plan.json> --project <saved-scene> [--shot <shot-id>] [--job <directory>]
   node src/cli.mjs qa <scene-plan.json> --render <render-manifest.json> [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs export <scene-plan.json> --project <saved-scene> --render <render-manifest.json> --qa <qa-report.json> [--build <build-report.json>] [--reference <video>] [--config <json>] [--job <directory>]
+  node src/cli.mjs procedural <observations.json> --shot <shot-id> [--metadata <media-metadata.json>] [--config <json>] [--max-iterations <n>] [--report <path>]
   node src/cli.mjs --help
 
 Run is the one-command, resume-first pipeline. It reuses a complete verified
@@ -100,12 +105,21 @@ it with the manifest frame, then writes a schema-valid final-export manifest. A
 previous final is never overwritten; QA status is carried forward, not recomputed.
 Existing files/checkpoints are retained. Cache reuse requires matching hashes.
 No Cavalry scene is edited by these commands. Unreviewed boundaries remain pending.
+Procedural runs the 5-stage closed-loop pipeline (tracking -> promotion -> _mg
+compilation -> perceptual diff) over an observations.json produced by analyze or
+autoanalyze. It emits schema-validated procedural-promotion and perceptual-diff
+artifacts. With --max-iterations <n> (n >= 1) the loop applies Stage 5 correction
+deltas back onto the promotion parameters and re-compiles the _mg script for up
+to n rounds until the perceptual gate passes. --report <path> writes the markdown
+summary to that file. This command never opens a Cavalry scene; the compiled _mg
+script is returned for a later build/render gate to execute through
+cavalry_run_script.
 `;
 
 export async function main(args) {
   if (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]))) return { help: HELP };
   const [command, reference, ...rest] = args;
-  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
+  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
   if (!reference || reference.startsWith('--')) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
   const flags = {};
   const allowed = command === 'run' ? ['--config', '--jobs', '--job', '--profile', '--boundary-review', '--analysis-review']
@@ -121,6 +135,7 @@ export async function main(args) {
     : command === 'render' ? ['--project', '--shot', '--job']
     : command === 'qa' ? ['--render', '--reference', '--config', '--job']
     : command === 'export' ? ['--project', '--render', '--qa', '--build', '--reference', '--config', '--job']
+    : command === 'procedural' ? ['--shot', '--metadata', '--config', '--max-iterations', '--report']
     : ['--manifest', '--job'];
   for (let i = 0; i < rest.length; i += 2) {
     const key = rest[i];
@@ -454,6 +469,58 @@ export async function main(args) {
         ok: manifest.checks.ok
       },
       versions: manifest.versions, limitations: manifest.limitations
+    };
+  }
+  if (command === 'procedural') {
+    if (!flags['--shot']) throw new WorkflowError('CLI_USAGE', 'procedural requires --shot <shot-id>');
+    const observations = await readJson(path.resolve(reference));
+    // observations.json carries { frames: [...] }; accept either that or a bare array.
+    const frames = Array.isArray(observations) ? observations : (observations.frames ?? []);
+    const metadata = flags['--metadata']
+      ? await readJson(path.resolve(flags['--metadata']))
+      : { video: { width: observations.width ?? 1920, height: observations.height ?? 1080, fps: observations.fps ?? { num: 24, den: 1 } } };
+    const { config } = await loadConfig(flags['--config']);
+    const maxIterations = flags['--max-iterations'] !== undefined ? Number(flags['--max-iterations']) : 0;
+    if (!Number.isInteger(maxIterations) || maxIterations < 0) throw new WorkflowError('CLI_USAGE', '--max-iterations must be a non-negative integer');
+
+    const runOptions = {
+      shotId: flags['--shot'],
+      observations: frames,
+      metadata,
+      capabilities: {},
+      config
+    };
+
+    const result = maxIterations > 0
+      ? await runClosedLoopProceduralPipeline({ ...runOptions, frameComparisons: [], maxIterations })
+      : await runProceduralPipeline(runOptions);
+
+    let reportPath = null;
+    if (flags['--report']) {
+      const fs = await import('node:fs/promises');
+      reportPath = path.resolve(flags['--report']);
+      await fs.mkdir(path.dirname(reportPath), { recursive: true });
+      await fs.writeFile(reportPath, generateProceduralReport(result), 'utf8');
+    }
+
+    return {
+      status: result.converged === undefined ? 'procedural_complete' : (result.converged ? 'converged' : 'refinement_exhausted'),
+      shotId: result.shotId,
+      version: result.version,
+      iterationsRun: result.iterationsRun ?? 0,
+      maxIterations: result.maxIterations ?? 0,
+      converged: result.converged ?? null,
+      summary: result.summary,
+      promotionSummary: result.stages.promotion.summary,
+      scriptReady: result.stages.compilation.ready,
+      scriptHash: result.stages.compilation.scriptHash,
+      perceptualPass: result.stages.perceptual?.overallPass ?? null,
+      reportPath,
+      limitations: [
+        'procedural emits promotion and perceptual artifacts only; it never opens a Cavalry scene.',
+        'The compiled _mg script must be executed through cavalry_run_script at a later build gate.',
+        'Without rendered frame comparisons the perceptual gate is skipped and converged reports null.'
+      ]
     };
   }
   const { config, configPath } = await loadConfig(flags['--config']);
