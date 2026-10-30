@@ -45,7 +45,9 @@ function runSuite() {
 }
 
 const tap = await runSuite();
-const reported = /^# tests (\d+)$/m.exec(tap);
+// Tolerate CRLF: this reads a child process's stdout, and a carriage return before the line
+// break would otherwise make the runner total unreadable on the Windows leg of CI.
+const reported = /^# tests (\d+)\r?$/m.exec(tap);
 assert.ok(reported, 'could not find the runner total in TAP output');
 const entries = Number(reported[1]);
 

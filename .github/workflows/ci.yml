@@ -25,6 +25,18 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # windows-latest ships Chocolatey but not FFmpeg, and the media stages need both
+          # ffmpeg and ffprobe on PATH. Fail here rather than inside twenty later tests.
+          choco install ffmpeg --no-progress -y
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\ProgramData\chocolatey\bin'
+          (Get-Command ffmpeg, ffprobe).Source
+          ffmpeg -version | Select-Object -First 1
+          ffprobe -version | Select-Object -First 1
+
       - name: Use Node.js 24
         uses: actions/setup-node@v4
         with:
