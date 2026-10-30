@@ -304,7 +304,8 @@ This directory is a complete, unversioned working tree. To turn it into a public
 cd refclone
 git init -b main
 git add AGENTS.md CHANGELOG.md CONTRIBUTING.md LICENSE README.md SECURITY.md \
-        .agents .github .gitignore .qoder config.json config.generic-template.json \
+        .agents .github .gitattributes .gitignore .qoder \
+        config.json config.generic-template.json \
         docs examples integration package.json package-lock.json schemas src test tools
 git commit -m "refclone: evidence-gated reference-video cloning for Cavalry"
 gh repo create refclone --public --source=. --push      # or add a remote manually
