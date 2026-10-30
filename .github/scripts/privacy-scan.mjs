@@ -11,7 +11,11 @@ import path from 'node:path';
 
 const PERSONAL = [
   { name: 'a personal username', pattern: /\bkhada\b/i },
-  { name: 'a personal home path', pattern: /C:\/Users\//i },
+  // A home path is only a leak when it names somebody. The docs teach Windows paths, and
+  // `C:/Users/<you>/...` is this repository's placeholder for "your own profile folder";
+  // the angle brackets say it is fictional. Any real profile name is still a finding - and
+  // the username rule above catches the one that matters even if someone hides it in here.
+  { name: 'a personal home path', pattern: /C:\/Users\/(?!<)[^\s"'`\\/]+/i },
   { name: 'a personal drive layout', pattern: /D:\/Cavalry/i },
   { name: 'a private download folder', pattern: /Downloads\/facebook/i },
   { name: 'the original reference file name', pattern: /saas\s?demo\.(mp4|mov|m4v)/i },
