@@ -1,0 +1,32 @@
+name: Feature or capability request
+description: A stage that could measure, gate or recover better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to clone, and where the pipeline stopped you
+      description: The gate that blocked, the diagnostic code, and why blocking was the wrong answer here.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Which module and which artifact field changes. Note that a new heuristic must stay labelled as a proposal, never a silent default.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: How we would know it works
+      description: A synthetic test, a measurable QA comparison, or a reference video you can describe.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope acknowledgements
+      options:
+        - label: "I understand unresolved values stay null/blocked instead of being guessed"
+          validations:
+            required: true
+        - label: "I am not asking the project to bundle fonts, footage or the Cavalry app"

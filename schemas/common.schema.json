@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/common.schema.json",
+  "title": "Shared refclone definitions",
+  "description": "Reusable structural contracts. File existence, hash equality, frame ordering, references and cross-field bounds are validated in code. JSON does not represent NaN or infinity.",
+  "definitions": {
+    "sourceHash": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "description": "SHA-256 as exactly 64 hexadecimal characters."
+    },
+    "fps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["num", "den"],
+      "properties": {
+        "num": { "type": "integer", "minimum": 1 },
+        "den": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Normalized source-raster box, top-left origin and y-down. Positions may be off-screen and nonnegative dimensions may exceed 1. Crop/off-screen states require explicit review in semantic code, never silent clipping.",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "method", "frames", "confidence", "notes"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["measured", "tool_estimate", "human_confirmed", "unresolved"]
+        },
+        "method": { "type": "string", "minLength": 1 },
+        "frames": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/frameIndex" },
+          "uniqueItems": true
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "notes": { "type": "string" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "notes"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pending", "confirmed"] },
+        "notes": { "type": "string" }
+      }
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frameIndex": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:[A-Za-z]:[\\\\/]|/|\\\\\\\\)",
+      "description": "Absolute Windows drive/UNC or POSIX path. File existence and workspace/output permissions are checked separately."
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/definitions/absolutePath" },
+        "sha256": { "$ref": "#/definitions/sourceHash" }
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "identifierList": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/identifier" },
+      "uniqueItems": true
+    },
+    "stageStatus": {
+      "type": "string",
+      "enum": ["pending", "running", "blocked", "failed", "complete"]
+    },
+    "qaStatus": {
+      "type": "string",
+      "enum": ["pass", "fail", "needs_review"]
+    },
+    "error": {
+      "type": "object",
+      "description": "Producer-specific structured error record. Keys intentionally remain open to preserve tool diagnostics; credentials must never be persisted.",
+      "additionalProperties": true
+    }
+  }
+}

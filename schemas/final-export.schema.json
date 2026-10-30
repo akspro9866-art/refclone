@@ -1,0 +1,196 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/final-export.schema.json",
+  "title": "Final export manifest with copied deliverables, hashes and scene-reopen evidence",
+  "description": "An export is a new versioned copy, never an overwrite. File hashes, decoded frame counts, scene readback and frame reproduction are recorded separately from QA status; this artifact does not claim a visual match.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "exportVersion", "status", "createdAt", "sourceHash",
+    "reference", "plan", "project", "render", "qa", "video", "evidence",
+    "checks", "versions", "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "exportVersion": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["verified", "needs_review", "failed"] },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": ["string", "null"], "minLength": 1 },
+        "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+      }
+    },
+    "plan": { "$ref": "common.schema.json#/definitions/file" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "copyPath", "copySha256"],
+      "properties": {
+        "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "copyPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "copySha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestPath", "manifestSha256", "frameCount", "verified"],
+      "properties": {
+        "manifestPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "manifestSha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "frameCount": { "type": "integer", "minimum": 1 },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reportPath", "reportSha256", "status", "shots", "discrepancyCount", "discrepancyIds"],
+      "properties": {
+        "reportPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "reportSha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "status": { "$ref": "common.schema.json#/definitions/qaStatus" },
+        "shots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["shotId", "status", "metrics", "notes"],
+            "properties": {
+              "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+              "status": { "$ref": "common.schema.json#/definitions/qaStatus" },
+              "metrics": {
+                "type": "object",
+                "propertyNames": { "type": "string", "minLength": 1 },
+                "additionalProperties": { "type": ["number", "null"] }
+              },
+              "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+            }
+          }
+        },
+        "discrepancyCount": { "type": "integer", "minimum": 0 },
+        "discrepancyIds": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/definitions/identifier" }
+        }
+      }
+    },
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "sourceSha256", "path", "sha256", "bytes"],
+      "properties": {
+        "sourcePath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "sourceSha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "bytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Copied evidence files keyed by target name. Each value is a verified file record.",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "common.schema.json#/definitions/file" }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filesVerified", "videoDecoded", "sceneReopen", "frameReproduction", "ok"],
+      "properties": {
+        "filesVerified": { "type": "boolean" },
+        "videoDecoded": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["ok", "codec", "width", "height", "decodedFrames"],
+          "properties": {
+            "ok": { "type": "boolean" },
+            "codec": { "type": ["string", "null"] },
+            "width": { "type": "number" },
+            "height": { "type": "number" },
+            "decodedFrames": { "type": "number" }
+          }
+        },
+        "sceneReopen": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["ok", "openedAt", "compositionOk", "scenePathOk", "verification", "mcpServer"],
+          "properties": {
+            "ok": { "type": "boolean" },
+            "openedAt": { "type": "boolean" },
+            "compositionOk": { "type": "boolean" },
+            "scenePathOk": { "type": "boolean" },
+            "verification": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["ok", "layerCount", "expectedCount", "missing", "duplicated", "timingMismatches", "unknownLayers", "auxiliaryLayerCount"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "layerCount": { "type": "integer", "minimum": 0 },
+                "expectedCount": { "type": "integer", "minimum": 0 },
+                "missing": { "$ref": "common.schema.json#/definitions/stringList" },
+                "duplicated": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+                "timingMismatches": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+                "unknownLayers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+                "auxiliaryLayerCount": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "mcpServer": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["name", "version"],
+              "properties": {
+                "name": { "type": ["string", "null"] },
+                "version": { "type": ["string", "null"] }
+              }
+            }
+          }
+        },
+        "frameReproduction": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["frame", "path", "sha256", "manifestPath", "manifestSha256", "identical", "comparison", "tolerance", "ok"],
+          "properties": {
+            "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+            "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+            "manifestPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+            "manifestSha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+            "identical": { "type": "boolean" },
+            "comparison": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["mae", "maxChannelDelta"],
+              "properties": {
+                "mae": { "type": ["number", "null"] },
+                "maxChannelDelta": { "type": ["number", "null"] }
+              }
+            },
+            "tolerance": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["mae", "maxChannelDelta"],
+              "properties": {
+                "mae": { "type": "number" },
+                "maxChannelDelta": { "type": "number" }
+              }
+            },
+            "ok": { "type": "boolean" }
+          }
+        },
+        "ok": { "type": "boolean" }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "limitations": { "$ref": "common.schema.json#/definitions/stringList" }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "name": "refclone-cli",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "description": "Evidence-gated pipeline that clones any reference video into an editable Cavalry scene through MCP, driven by any AI coding agent (Qoder, Antigravity, ZCode, Claude Code, Cursor and friends).",
+  "author": "refclone contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR-OWNER/refclone.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR-OWNER/refclone/issues"
+  },
+  "homepage": "https://github.com/YOUR-OWNER/refclone#readme",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "refclone": "src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "verify": "node .github/scripts/syntax-check.mjs && node .github/scripts/config-parity.mjs && node .github/scripts/skill-parity.mjs && node .github/scripts/privacy-scan.mjs",
+    "verify:docs": "node .github/scripts/test-count.mjs",
+    "test:integration": "node integration/cavalry.integration.mjs",
+    "prepublishOnly": "npm run verify && npm test"
+  },
+  "files": [
+    "src",
+    "schemas",
+    "tools",
+    "integration",
+    "docs",
+    "examples",
+    ".github/scripts",
+    ".qoder/skills",
+    ".agents/skills",
+    ".agents/rules",
+    "config.json",
+    "config.generic-template.json",
+    "AGENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "cavalry",
+    "motion-graphics",
+    "video-reproduction",
+    "reference-clone",
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "agentic-ide",
+    "ffmpeg",
+    "computer-vision",
+    "animation",
+    "visual-qa"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "ajv": "8.20.0",
+    "pngjs": "7.0.0"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/design-tokens.schema.json",
+  "title": "Evidence-backed design tokens and required presets",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "tokens", "unknowns", "components", "presets"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "tokens": {
+      "type": "object",
+      "description": "Named token map; values intentionally retain their own JSON representation rather than an invented universal token type.",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "evidence"],
+        "properties": {
+          "value": { "description": "Any JSON value; use explicit null for unresolved values and record the uncertainty in evidence." },
+          "evidence": { "$ref": "common.schema.json#/definitions/evidence" }
+        }
+      }
+    },
+    "unknowns": { "$ref": "common.schema.json#/definitions/stringList" },
+    "components": {
+      "type": "array",
+      "description": "Reference-required component catalog only. supported means the required operations are documented by Cavalry, not that they were runtime-verified; supportStatus carries that distinction.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "requiredInputs", "supported"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "type": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "sourceShots": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "sourceElements": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "requiredInputs": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "supported": { "type": "boolean" },
+          "supportStatus": { "type": "string", "enum": ["runtime_verified", "documented", "blocked", "unverified"] },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "presets": {
+      "type": "array",
+      "description": "Reference-required presets only. Validation records describe actual checks; schema acceptance alone does not establish support or verified fidelity.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "initialState", "finalState", "durationFrames", "delayFrames", "easing", "direction", "requiredInputs", "validation"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "description": { "type": "string" },
+          "sourceShots": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "evidence": { "$ref": "common.schema.json#/definitions/evidence" },
+          "parameters": {
+            "type": "object",
+            "description": "Optional measured/parameterized values that callers must supply or choose; never a substitute for unresolved evidence.",
+            "additionalProperties": true
+          },
+          "initialState": {
+            "type": "object",
+            "description": "Property-value map specific to this preset; parameter names and value representations are intentionally open.",
+            "additionalProperties": true
+          },
+          "finalState": {
+            "type": "object",
+            "description": "Property-value map specific to this preset; parameter names and value representations are intentionally open.",
+            "additionalProperties": true
+          },
+          "durationFrames": { "type": "integer", "minimum": 0 },
+          "delayFrames": { "type": "integer", "minimum": 0 },
+          "easing": { "type": ["string", "null"], "description": "Evidence-backed easing label, or null when unresolved. Null is not permission to select a default." },
+          "direction": { "type": ["string", "null"], "description": "Observed direction, or null when unknown/not applicable." },
+          "requiredInputs": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "validation": { "$ref": "common.schema.json#/definitions/stringList" },
+          "supported": { "type": "boolean" },
+          "supportStatus": { "type": "string", "enum": ["runtime_verified", "documented", "blocked", "unverified"] },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}

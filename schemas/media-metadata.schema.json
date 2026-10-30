@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/media-metadata.schema.json",
+  "title": "Reference media metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "source", "video", "audio", "tools", "frameTimeline"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "sizeBytes"],
+      "properties": {
+        "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "sizeBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codec", "container", "width", "height", "durationSeconds", "fps", "rFrameRate", "avgFrameRate", "timeBase", "frameCount", "rotationDegrees", "vfr"],
+      "properties": {
+        "codec": { "type": ["string", "null"] },
+        "container": { "type": ["string", "null"] },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "durationSeconds": { "type": ["number", "null"], "minimum": 0 },
+        "fps": {
+          "description": "Null when unavailable; never invent a fallback rate. Downstream planning requires a verified positive rational rate.",
+          "anyOf": [
+            { "$ref": "common.schema.json#/definitions/fps" },
+            { "type": "null" }
+          ]
+        },
+        "rFrameRate": { "type": ["string", "null"], "description": "Unmodified ffprobe rate string, or null when absent." },
+        "avgFrameRate": { "type": ["string", "null"], "description": "Unmodified ffprobe rate string, or null when absent." },
+        "timeBase": { "type": ["string", "null"], "description": "Unmodified ffprobe time-base string, or null when absent." },
+        "frameCount": { "type": ["integer", "null"], "minimum": 0 },
+        "rotationDegrees": { "type": ["number", "null"] },
+        "vfr": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["detected", "reason"],
+          "properties": {
+            "detected": { "type": ["boolean", "null"], "description": "Null means insufficient timestamp evidence, not constant frame rate." },
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "streams"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "streams": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Original ffprobe audio-stream record. Tool-defined fields are intentionally preserved without a guessed fixed contract.",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ffmpeg", "ffprobe"],
+      "properties": {
+        "ffmpeg": { "type": "string", "minLength": 1 },
+        "ffprobe": { "type": "string", "minLength": 1 }
+      }
+    },
+    "frameTimeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "ptsSeconds", "durationSeconds"],
+        "properties": {
+          "index": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "ptsSeconds": { "type": ["number", "null"], "description": "Measured presentation timestamp, including negative timestamps when present; null if unavailable, never synthesized from a guessed fps." },
+          "durationSeconds": { "type": ["number", "null"], "minimum": 0 }
+        }
+      }
+    }
+  }
+}

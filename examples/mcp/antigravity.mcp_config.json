@@ -1,0 +1,10 @@
+{
+  "_place": "Google Antigravity: workspace -> .agents/mcp_config.json (or global -> ~/.gemini/config/mcp_config.json). Also reachable from Settings -> Customizations -> MCP Server.",
+  "mcpServers": {
+    "cavalry": {
+      "command": "node",
+      "args": ["<CAVALRY_MCP>/dist/index.js"],
+      "env": {}
+    }
+  }
+}

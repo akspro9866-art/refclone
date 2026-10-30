@@ -1,0 +1,60 @@
+name: Fidelity or pipeline bug
+description: A stage produced wrong, blocked or non-reproducible output
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not upload footage, frames or brand assets you do not own.
+        The job directory name is the first 16 hex characters of the reference
+        video's SHA-256 - that is enough for us to reason about caching.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Which stage, which command, which status. Paste the JSON error `code`, do not screenshot it.
+      value: |
+        Stage:
+        Command:
+        Status / error code:
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What the evidence says it should have been
+      description: The measured value, the blocking diagnostic, the frame you inspected.
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifact pointers
+      description: jobs/<hash>/<stage>/<key>/index.json paths, blocking diagnostic codes, QA report path. No frame images unless you own them.
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: 0.1.0 or git SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: Tool versions
+      description: node --version, ffmpeg -version (first line), Cavalry version, cavalry-mcp version.
+  - type: checkboxes
+    id: tests
+    attributes:
+      label: Reproducibility
+      options:
+        - label: "`npm test` passes on this checkout"
+        - label: "I reproduced this with the same reference video twice"
+        - label: "I reproduced this with a different reference video"

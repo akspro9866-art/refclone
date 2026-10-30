@@ -1,0 +1,164 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/auto-analysis.schema.json",
+  "title": "Computer-vision first pass over a reference video",
+  "description": "Raster measurements and proposals only. Every entry is a tool estimate awaiting review: element types, roles and motion labels are hypotheses, copy is never invented, and typography is never inferred from ink shapes. This artifact is not a shot specification and cannot be compiled; the reviewed shot-spec remains the source of truth.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "methodVersion", "sampling", "frames", "shots", "limitations"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "methodVersion": { "type": "string", "minLength": 1 },
+    "tools": {
+      "type": "object",
+      "description": "Decoder and analysis tool identity used for this pass, so a cached draft can be attributed.",
+      "additionalProperties": { "type": "string" }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxTrackFramesPerShot", "requestedFrames", "decodedFrames", "stride", "dense"],
+      "properties": {
+        "maxTrackFramesPerShot": { "type": "integer", "minimum": 1 },
+        "requestedFrames": { "type": "integer", "minimum": 0 },
+        "decodedFrames": { "type": "integer", "minimum": 0 },
+        "stride": { "type": "integer", "minimum": 1 },
+        "dense": { "type": "boolean", "description": "True only when every tracked shot was decoded on consecutive frames; a strided pass cannot support a motion path." }
+      }
+    },
+    "ocr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["used", "provider", "notes"],
+      "description": "Explicit record of whether any text recognizer ran. Absence is the default and must stay visible.",
+      "properties": {
+        "used": { "type": "boolean" },
+        "provider": { "type": ["string", "null"] },
+        "notes": { "type": "string" }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame", "path", "sha256", "width", "height"],
+        "properties": {
+          "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "timeSeconds": { "type": "number", "minimum": 0 },
+          "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+          "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "startFrame", "endFrameExclusive", "background", "tracks", "transition"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "endFrameExclusive": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "background": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["color", "pixels", "fraction", "stableFrames"],
+            "properties": {
+              "color": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+              "pixels": { "type": "integer", "minimum": 0 },
+              "fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+              "stableFrames": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "transition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "confidence", "notes"],
+            "properties": {
+              "type": { "type": "string", "enum": ["none", "cut", "unresolved"], "description": "'none' only for the first shot of the reference; 'cut' requires dense adjacent-frame evidence; anything the sampling cannot support stays 'unresolved'." },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "notes": { "type": "string" }
+            }
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "hypothesis", "components", "firstFrame", "lastFrame", "states", "motion", "unresolved"],
+              "properties": {
+                "id": { "$ref": "common.schema.json#/definitions/identifier" },
+                "hypothesis": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["type", "role", "confidence", "basis"],
+                  "properties": {
+                    "type": { "type": "string", "enum": ["rect", "text", "image"] },
+                    "role": { "type": "string", "minLength": 1 },
+                    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "basis": { "type": "string", "minLength": 1 }
+                  }
+                },
+                "components": { "type": "integer", "minimum": 1 },
+                "firstFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+                "lastFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+                "states": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["frame", "bbox", "pixelBounds", "meanColor", "pixels", "changed"],
+                    "properties": {
+                      "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+                      "bbox": { "$ref": "common.schema.json#/definitions/bbox" },
+                      "pixelBounds": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["left", "top", "rightExclusive", "bottomExclusive"],
+                        "properties": {
+                          "left": { "type": "integer", "minimum": 0 },
+                          "top": { "type": "integer", "minimum": 0 },
+                          "rightExclusive": { "type": "integer", "minimum": 1 },
+                          "bottomExclusive": { "type": "integer", "minimum": 1 }
+                        }
+                      },
+                      "meanColor": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+                      "pixels": { "type": "integer", "minimum": 1 },
+                      "changed": { "type": "boolean", "description": "True when this state differs from the previous tracked state beyond the measurement tolerance." }
+                    }
+                  }
+                },
+                "motion": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["kind", "property", "from", "to", "direction", "frames", "dense"],
+                  "properties": {
+                    "kind": { "type": "string", "enum": ["static", "appear", "disappear", "translate-x", "translate-y", "scale-x", "scale-y", "unresolved"] },
+                    "property": { "type": ["string", "null"] },
+                    "from": { "description": "Measured start value in the source representation; any JSON value, null when unknown." },
+                    "to": { "description": "Measured end value in the source representation; any JSON value, null when unknown." },
+                    "direction": { "type": ["string", "null"] },
+                    "frames": {
+                      "type": "array",
+                      "uniqueItems": true,
+                      "items": { "$ref": "common.schema.json#/definitions/frameIndex" }
+                    },
+                    "dense": { "type": "boolean", "description": "True only when the motion frames are consecutive; otherwise the path between measurements is unobserved." }
+                  }
+                },
+                "unresolved": { "$ref": "common.schema.json#/definitions/stringList" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "limitations": { "$ref": "common.schema.json#/definitions/stringList" }
+  }
+}

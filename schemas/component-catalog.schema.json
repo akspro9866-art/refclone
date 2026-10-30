@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/component-catalog.schema.json",
+  "title": "Data-driven component and preset catalog",
+  "description": "Reference-agnostic mapping from shot-spec elements/events to design components and motion presets. A derived catalog is generated from observed element types and event types; a hand-authored catalog may add role-specific matches. Matching, fallback ordering and id uniqueness are checked in code. This catalog defines vocabulary only; it never asserts runtime verification or fidelity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "components", "presets"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "source": {
+      "type": "string",
+      "enum": ["derived", "authored"],
+      "description": "derived = synthesized from a shot-spec; authored = hand-supplied catalog file."
+    },
+    "sourceHash": {
+      "anyOf": [{ "$ref": "common.schema.json#/definitions/sourceHash" }, { "type": "null" }],
+      "description": "Source identity for a derived catalog; null for an authored template that is reference-agnostic."
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/component" }
+    },
+    "presets": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/preset" }
+    }
+  },
+  "definitions": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "match", "operations", "requiredInputs", "fallback"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "enum": ["rect", "text", "image", "transition"] },
+        "description": { "type": "string" },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "description": "Element predicate. type must equal the element type; role is an exact match and rolePattern is a regular expression tested against the element role. Omit both to match any element of this type.",
+          "properties": {
+            "type": { "type": "string", "enum": ["rect", "text", "image", "transition"] },
+            "role": { "type": "string", "minLength": 1 },
+            "rolePattern": { "type": "string", "minLength": 1 }
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["createPrimitive", "ensurePrimitive", "setAttributes", "createText", "importAsset", "keyframe", "easing", "interpolation", "timing", "setLayerTiming"]
+          }
+        },
+        "requiredInputs": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "fallback": {
+          "type": "boolean",
+          "description": "True when this component is the per-type default used when no explicit match fits. Exactly one fallback per element type is enforced in code."
+        }
+      }
+    },
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "eventTypes", "easing", "direction", "durationFrames", "delayFrames", "initialState", "finalState", "requiredInputs", "validation"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "description": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": ["appearance", "translate", "scale", "layout", "transition", "generic"],
+          "description": "Motion family used to pick a template shape; never implies a verified curve."
+        },
+        "eventTypes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Shot-spec event.type labels this preset answers. Matching is exact and case-insensitive."
+        },
+        "easing": {
+          "type": ["string", "null"],
+          "description": "Evidence-backed easing label or null when unresolved. Null is not permission to choose a default."
+        },
+        "direction": { "type": ["string", "null"] },
+        "durationFrames": { "type": "integer", "minimum": 0 },
+        "delayFrames": { "type": "integer", "minimum": 0 },
+        "initialState": { "type": "object", "additionalProperties": true },
+        "finalState": { "type": "object", "additionalProperties": true },
+        "requiredInputs": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "validation": { "$ref": "common.schema.json#/definitions/stringList" }
+      }
+    }
+  }
+}

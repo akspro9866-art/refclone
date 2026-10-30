@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/keyframes.schema.json",
+  "title": "Sampled source keyframes and contact sheet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "frames", "contactSheet", "sampling"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "frame", "timeSeconds", "path", "sha256", "width", "height", "shotIds", "roles"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "timeSeconds": { "type": "number", "description": "Measured source presentation timestamp, not a timestamp derived from rounded fps." },
+          "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+          "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "shotIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "roles": {
+            "type": "array",
+            "description": "Sampling roles such as start, end, interior or transition; role labels are not a closed vocabulary.",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "contactSheet": { "$ref": "common.schema.json#/definitions/file" },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intervalFrames", "boundaryRadius", "maxFrames"],
+      "properties": {
+        "intervalFrames": { "type": "integer", "minimum": 1 },
+        "boundaryRadius": { "type": "integer", "minimum": 0 },
+        "maxFrames": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

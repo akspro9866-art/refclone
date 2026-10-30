@@ -1,0 +1,27 @@
+node_modules/
+npm-debug.log*
+
+# Local job evidence: measured frames, plans, renders, QA reports.
+# These are large, derived from your own reference video and can contain
+# copyrighted material, so they are never committed.
+jobs/
+.test-work/
+assets/
+
+# Same rule for the live Cavalry adapter run: its saved project, PNG sequence and
+# encoded clip are evidence from your machine, not source.
+integration/evidence/
+*.cv
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.png
+!docs/**/*.png
+
+# Machine-local secrets and overrides
+.env
+.env.*
+config.local.json
+*.tmp

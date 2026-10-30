@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/render-manifest.schema.json",
+  "title": "Native render frame and encoded video manifest",
+  "description": "A request is not completion. Code must verify every expected frame, decode files, check hashes and use unique output locations before reporting verified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "projectPath", "projectSha256", "fps", "width", "height", "frames", "video", "status", "errors"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "projectPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+    "projectSha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "fps": { "$ref": "common.schema.json#/definitions/fps" },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame", "timeSeconds", "path", "sha256", "shotId"],
+        "properties": {
+          "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "timeSeconds": { "type": "number" },
+          "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+          "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+          "shotId": { "$ref": "common.schema.json#/definitions/identifier" }
+        }
+      }
+    },
+    "video": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "validated"],
+          "properties": {
+            "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+            "validated": { "type": "boolean" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "status": { "type": "string", "enum": ["requested", "partial", "verified", "failed"] },
+    "errors": { "type": "array", "items": { "$ref": "common.schema.json#/definitions/error" } }
+  }
+}

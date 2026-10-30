@@ -1,0 +1,8 @@
+# Codex CLI: append this section to ~/.codex/config.toml. Codex uses TOML section
+# names, not a JSON mcpServers object.
+# Reference: https://learn.chatgpt.com/docs/config-file/config-reference
+
+[mcp_servers.cavalry]
+command = "node"
+args = ["<CAVALRY_MCP>/dist/index.js"]
+env = {}

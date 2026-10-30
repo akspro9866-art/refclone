@@ -1,0 +1,20 @@
+# Line endings are normalised in the index and checked out as LF everywhere, so a
+# Windows contributor and the Linux CI job compare the same bytes. Two of the CI
+# guards (config-parity, skill-parity) are byte-comparisons and would otherwise be
+# able to fail on nothing but how Git materialised the file on disk.
+* text=auto eol=lf
+
+# Never run an end-of-file filter or a diff against binary evidence.
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.mov binary
+*.cv binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Lock files and vendored data are not reviewed line by line.
+package-lock.json -diff linguist-generated

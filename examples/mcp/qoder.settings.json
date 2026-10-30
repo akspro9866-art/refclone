@@ -1,0 +1,10 @@
+{
+  "_place": "Qoder: project -> .qoder/settings.json (or user -> ~/.qoder/settings.json, .qoder/settings.local.json). IDE: Qoder Settings -> MCP -> My Servers -> + Add, then paste this object's mcpServers entry.",
+  "mcpServers": {
+    "cavalry": {
+      "command": "node",
+      "args": ["<CAVALRY_MCP>/dist/index.js"],
+      "env": {}
+    }
+  }
+}

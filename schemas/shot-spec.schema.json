@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/shot-spec.schema.json",
+  "title": "Evidence-backed shot specification",
+  "description": "Reviewed source observations, not inferred application capabilities. Range ordering, references, off-screen review and source-to-target approval semantics are checked in code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "resolution", "fps", "totalFrames", "review", "shots", "transformations"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "fps": { "$ref": "common.schema.json#/definitions/fps" },
+    "totalFrames": { "type": "integer", "minimum": 0 },
+    "review": { "$ref": "common.schema.json#/definitions/review" },
+    "shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "startFrame", "endFrameExclusive", "startSeconds", "endSeconds", "durationSeconds", "elements", "events", "transition", "requiredAssets", "unresolved"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "endFrameExclusive": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "startSeconds": { "type": "number", "minimum": 0 },
+          "endSeconds": { "type": "number", "minimum": 0 },
+          "durationSeconds": { "type": "number", "minimum": 0 },
+          "elements": { "type": "array", "items": { "$ref": "#/definitions/element" } },
+          "requiredAssets": { "type": "array", "items": { "$ref": "#/definitions/assetRequirement" } },
+          "events": { "type": "array", "items": { "$ref": "#/definitions/event" } },
+          "transition": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "durationFrames", "evidence"],
+            "properties": {
+              "type": { "type": "string", "minLength": 1 },
+              "durationFrames": { "type": "integer", "minimum": 0 },
+              "evidence": { "$ref": "common.schema.json#/definitions/evidence" }
+            }
+          },
+          "unresolved": { "$ref": "common.schema.json#/definitions/stringList" }
+        }
+      }
+    },
+    "transformations": {
+      "type": "array",
+      "description": "Empty unless source-to-target changes have been explicitly approved. No schema default mutates the artifact.",
+      "items": { "$ref": "#/definitions/transformation" }
+    }
+  },
+  "definitions": {
+    "element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "role", "copy", "bbox", "color", "font", "assetId", "evidence", "states", "unresolved"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "enum": ["text", "rect", "image"] },
+        "role": { "type": "string", "minLength": 1 },
+        "copy": { "type": ["string", "null"], "description": "Exact visible text, or null when unknown/not applicable. Never silently fill missing copy." },
+        "bbox": { "$ref": "common.schema.json#/definitions/bbox" },
+        "color": { "type": ["string", "null"] },
+        "font": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "style", "sizePx"],
+          "properties": {
+            "family": { "type": ["string", "null"] },
+            "style": { "type": ["string", "null"] },
+            "sizePx": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+            "letterSpacing": { "type": ["number", "null"], "description": "Absolute unit offset between glyphs. Null is unresolved; a value supplied by the resolver is a tool_estimate approximation, never a measured fact." },
+            "lineSpacing": { "type": ["number", "null"], "exclusiveMinimum": 0, "description": "Line pitch for multi-line text elements. Null is unresolved." }
+          }
+        },
+        "assetId": { "type": ["string", "null"], "minLength": 1 },
+        "evidence": { "$ref": "common.schema.json#/definitions/evidence" },
+        "visibleToFrame": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Last frame the element remains visible when it is static after its final recorded state. States stay the measurement; this only carries visibility forward."
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["frame", "bbox", "opacity"],
+            "properties": {
+              "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+              "bbox": { "$ref": "common.schema.json#/definitions/bbox" },
+              "opacity": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        },
+        "unresolved": { "$ref": "common.schema.json#/definitions/stringList" }
+      }
+    },
+    "assetRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A shot-level requirement handed to the asset stage. Missing or unresolved requirements stay visible; they are never silently satisfied by a substitute.",
+      "required": ["id", "type", "status", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["available", "missing", "unresolved"] },
+        "elementId": { "type": ["string", "null"], "minLength": 1 },
+        "notes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A semantic source event, not an executable animation command. Type is an observed label, property names the observed change, and frames are absolute source indices.",
+      "required": ["id", "elementId", "type", "frames", "property", "from", "to", "evidence"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "minLength": 1 },
+        "frames": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/definitions/frameIndex" }
+        },
+        "property": { "type": "string", "minLength": 1 },
+        "from": { "description": "Observed starting property value in its source representation; any JSON value, explicitly null when unknown." },
+        "to": { "description": "Observed ending property value in its source representation; any JSON value, explicitly null when unknown." },
+        "evidence": { "$ref": "common.schema.json#/definitions/evidence" }
+      }
+    },
+    "transformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Auditable approved change. Null shotId means project scope; null elementId means whole-shot/project scope. Preserve original values and the approval explanation.",
+      "required": ["id", "shotId", "elementId", "property", "sourceValue", "targetValue", "reason", "review", "evidence"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "shotId": { "type": ["string", "null"], "minLength": 1 },
+        "elementId": { "type": ["string", "null"], "minLength": 1 },
+        "property": { "type": "string", "minLength": 1 },
+        "sourceValue": { "description": "Original source property value; intentionally accepts any JSON representation, with null for unknown/not applicable." },
+        "targetValue": { "description": "Approved target property value; intentionally accepts any JSON representation, including explicit null for removal/not applicable." },
+        "reason": { "type": "string", "minLength": 1 },
+        "review": {
+          "allOf": [
+            { "$ref": "common.schema.json#/definitions/review" },
+            {
+              "type": "object",
+              "required": ["status"],
+              "properties": { "status": { "const": "confirmed" } }
+            }
+          ]
+        },
+        "evidence": { "$ref": "common.schema.json#/definitions/evidence" }
+      }
+    }
+  }
+}

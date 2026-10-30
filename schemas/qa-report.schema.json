@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/qa-report.schema.json",
+  "title": "Timestamp-aligned QA evidence and discrepancies",
+  "description": "Exact copy, assets and timing are distinct from image metrics. No schema field represents a universal visual-quality score.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "status", "referenceHash", "renderHash", "thresholds", "alignment", "shots", "discrepancies", "limitations"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "status": { "$ref": "common.schema.json#/definitions/qaStatus" },
+    "referenceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "renderHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "thresholds": {
+      "type": "object",
+      "description": "Comparator-specific calibrated threshold map. Keys and JSON value representations are intentionally open; calibration and metric semantics are checked in code.",
+      "additionalProperties": true
+    },
+    "alignment": {
+      "type": "object",
+      "description": "Explicit source-to-render timestamp/frame mapping and review metadata. Comparator-specific keys and mapping representations are intentionally open; VFR alignment must be reviewed.",
+      "additionalProperties": true
+    },
+    "shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["shotId", "status", "metrics", "notes"],
+        "properties": {
+          "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+          "status": { "$ref": "common.schema.json#/definitions/qaStatus" },
+          "metrics": {
+            "type": "object",
+            "description": "Named numeric measurement map. Null means not measured; values have metric-specific units and must not be combined into an uncalibrated universal score.",
+            "propertyNames": { "type": "string", "minLength": 1 },
+            "additionalProperties": { "type": ["number", "null"] }
+          },
+          "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+        }
+      }
+    },
+    "discrepancies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "shotId", "elementId", "category", "timeSeconds", "frame", "evidence", "confidence", "priority", "suggestion", "actionable"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+          "elementId": { "type": ["string", "null"], "minLength": 1 },
+          "category": { "type": "string", "minLength": 1 },
+          "timeSeconds": { "type": "number" },
+          "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "evidence": {
+            "type": "object",
+            "description": "Comparator-specific evidence, including measurements and source/render references. Keys intentionally remain open; evidence sufficiency, alignment and correction eligibility are checked in code.",
+            "additionalProperties": true
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "priority": { "type": "number", "minimum": 0, "description": "Nonnegative ordering value; prioritization policy and correction eligibility are validated in code." },
+          "suggestion": { "type": "string" },
+          "actionable": { "type": "boolean" }
+        }
+      }
+    },
+    "limitations": { "$ref": "common.schema.json#/definitions/stringList" }
+  }
+}

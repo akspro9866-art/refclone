@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/job-state.schema.json",
+  "title": "Persistent resumable job state",
+  "description": "Persist validated outputs and explicit failures, never credentials. Stage completion, dependency freshness and scene reconciliation are validated in code; schema acceptance does not establish completion.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "jobId", "status", "sourcePath", "configHash", "toolVersions", "stages", "scene", "corrections", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "jobId": { "$ref": "common.schema.json#/definitions/identifier" },
+    "status": { "$ref": "common.schema.json#/definitions/stageStatus" },
+    "sourcePath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+    "configHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "toolVersions": {
+      "type": "object",
+      "description": "Tool-name to version map; null explicitly records an unavailable version.",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "type": ["string", "null"] }
+    },
+    "stages": {
+      "type": "object",
+      "description": "Stage-name map. A stage cannot be complete until its outputs have been independently validated.",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "inputHash", "outputs", "error"],
+        "properties": {
+          "status": { "$ref": "common.schema.json#/definitions/stageStatus" },
+          "inputHash": {
+            "anyOf": [
+              { "$ref": "common.schema.json#/definitions/sourceHash" },
+              { "type": "null" }
+            ]
+          },
+          "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/definitions/file" } },
+          "error": {
+            "anyOf": [
+              { "$ref": "common.schema.json#/definitions/error" },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectPath", "elements", "lastCheckpoint"],
+      "properties": {
+        "projectPath": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/definitions/absolutePath" },
+            { "type": "null" }
+          ]
+        },
+        "elements": {
+          "type": "object",
+          "description": "Stable semantic element-ID map. Values are saved application IDs or adapter-specific identity/readback records, whose keys are intentionally open.",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string", "minLength": 1 },
+              { "type": "object", "additionalProperties": true }
+            ]
+          }
+        },
+        "lastCheckpoint": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/definitions/absolutePath" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "corrections": {
+      "type": "array",
+      "description": "Append-only correction history. Stage-specific records retain patch parameters, preconditions, evidence and outcomes; the correction module validates its semantics.",
+      "items": {
+        "type": "object",
+        "description": "Correction parameter/result record; keys intentionally remain open rather than asserting an unimplemented correction API.",
+        "additionalProperties": true
+      }
+    },
+    "updatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "description": "ISO 8601 timestamp with an explicit timezone. Calendar validity is checked in code; no external format plugin is required."
+    }
+  }
+}

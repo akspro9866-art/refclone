@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit and synthetic-pipeline tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Syntax check every module
+        run: node .github/scripts/syntax-check.mjs
+
+      - name: Shipped configs stay in sync
+        run: node .github/scripts/config-parity.mjs
+
+      - name: Skill mirrors stay in sync
+        run: node .github/scripts/skill-parity.mjs
+
+      - name: No personal paths or private reference material
+        run: node .github/scripts/privacy-scan.mjs
+
+      - name: npm test
+        run: npm test
+
+      - name: Every test count in the docs is current
+        run: node .github/scripts/test-count.mjs
+
+  live-integration:
+    name: Cavalry integration (manual, needs a real app)
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: npm ci
+        run: npm ci
+      - name: Integration run (requires Cavalry with Scripts > Stallion enabled)
+        run: npm run test:integration

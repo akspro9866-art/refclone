@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Human gate 2: the reviewed shot specification.",
+    "This file is what importSpecificationReview() accepts. It binds a full shot-spec",
+    "object to the exact measurement it approves, so it cannot be reused for another",
+    "reference or after the measurements change.",
+    "Do not hand-write it: build it with",
+    "  node tools/make-shot-spec-review.mjs --spec <edited-shot-spec.json> \\",
+    "    --run-report <jobs/<hash>/run/<id>/run-report.json> \\",
+    "    --reviewer '<who>' --notes '<what you verified>' --out reviews/shot-spec-review.json",
+    "which hashes the un-edited CV draft and refuses a spec whose transformations differ.",
+    "sourceHash = sha256 of the reference video; baseHash = the analysis base hash printed",
+    "in the blocked run's nextActions (run-report.json -> artifacts.baseHash).",
+    "reviewer and notes must be non-empty, and spec must be the whole shot-spec object."
+  ],
+  "sourceHash": "<64-char sha256 of the reference video>",
+  "baseHash": "<64-char analysis base hash from the blocked run>",
+  "reviewer": "<who inspected the measured frames>",
+  "notes": "<what was confirmed, what stays unresolved, e.g. copy transcribed from frames 0-58; serif face still a hypothesis>",
+  "spec": {
+    "_comment": "the complete shot-spec object, with spec.review.status set to confirmed",
+    "schemaVersion": 1
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "profile": "generic-clone",
+  "cloneMode": "generic",
+  "reference": null,
+  "jobsDirectory": "./jobs",
+  "ffmpeg": "ffmpeg",
+  "ffprobe": "ffprobe",
+  "mcp": {
+    "command": "node",
+    "args": ["REPLACE_ME/cavalry-mcp/dist/index.js"],
+    "timeoutMs": 60000,
+    "concurrency": 1,
+    "env": {
+      "CAVALRY_RESULT_TIMEOUT_MS": "45000",
+      "CAVALRY_HTTP_TIMEOUT_MS": "45000"
+    }
+  },
+  "ingestion": {
+    "sceneThreshold": 0.08,
+    "minShotFrames": 3,
+    "sampleIntervalFrames": 12,
+    "boundaryRadius": 2,
+    "maxFrames": 96,
+    "maxDurationSeconds": 300,
+    "processTimeoutMs": 120000
+  },
+  "autoAnalysis": {
+    "maxTrackFramesPerShot": 240,
+    "maxReportFramesPerShot": 8,
+    "reportFrameWidth": 640,
+    "colorDistance": 60,
+    "gapPx": 6,
+    "minRegionPixels": 24,
+    "tolerancePx": 0.5,
+    "matchDistancePx": 24,
+    "processTimeoutMs": 120000,
+    "ocr": { "enabled": false, "provider": null }
+  },
+  "catalog": {
+    "source": "derived",
+    "catalogPath": null
+  },
+  "review": {
+    "requiredBeforeBuild": true,
+    "allowUnresolvedFonts": false,
+    "allowMissingAssets": false,
+    "allowUnconfirmedBoundaries": false
+  },
+  "assets": {
+    "directory": "./assets",
+    "maxFiles": 500,
+    "fontDirectories": [],
+    "searchNotes": null,
+    "additionalRequirements": [],
+    "assignments": {},
+    "review": {
+      "status": "pending",
+      "notes": "Agent-generated manifest only; asset authenticity, font identity and build readiness require explicit review."
+    }
+  },
+  "render": {
+    "mode": "native-png-sequence",
+    "scalePercent": 100,
+    "crf": 18,
+    "overwrite": false,
+    "timeoutMs": 120000
+  },
+  "qa": {
+    "thresholdsCalibrated": false,
+    "requireManualReview": true
+  },
+  "correction": {
+    "maxIterations": 3,
+    "minimumConfidence": 0.9,
+    "automatic": false
+  }
+}

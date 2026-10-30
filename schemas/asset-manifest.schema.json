@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/asset-manifest.schema.json",
+  "title": "Asset provenance and availability manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "assets", "missing", "review"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "path", "sha256", "width", "height", "fontFamily", "fontStyle", "provenance", "licenseStatus", "origin", "intendedUse", "dependencies", "status"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "type": { "type": "string", "minLength": 1 },
+          "path": {
+            "anyOf": [
+              { "$ref": "common.schema.json#/definitions/absolutePath" },
+              { "type": "null" }
+            ]
+          },
+          "sha256": {
+            "anyOf": [
+              { "$ref": "common.schema.json#/definitions/sourceHash" },
+              { "type": "null" }
+            ]
+          },
+          "width": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "height": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "fontFamily": { "type": ["string", "null"] },
+          "fontStyle": { "type": ["string", "null"] },
+          "provenance": {
+            "type": "string",
+            "description": "Source attribution and lineage, including extraction/recreation and replacement notes. Versioned manifests preserve history; an extracted raster must not be represented as an original vector."
+          },
+          "licenseStatus": { "type": "string", "minLength": 1, "description": "Explicit known license status or unresolved; presence does not establish permission." },
+          "origin": { "type": "string", "enum": ["supplied", "extracted", "recreated", "installed", "missing"] },
+          "intendedUse": { "type": "string" },
+          "dependencies": { "$ref": "common.schema.json#/definitions/identifierList" },
+          "status": { "type": "string", "enum": ["valid", "missing", "unresolved"] }
+        }
+      }
+    },
+    "missing": {
+      "type": "array",
+      "description": "Missing asset IDs or explicit unmet requirement descriptions; never substitute silently.",
+      "items": { "type": "string" }
+    },
+    "review": { "$ref": "common.schema.json#/definitions/review" }
+  }
+}

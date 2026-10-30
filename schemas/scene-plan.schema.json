@@ -1,0 +1,391 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/scene-plan.schema.json",
+  "title": "Deterministic scene operation plan",
+  "description": "Structural plan only. Capability support, dependency ordering, timing, preconditions, identifier references, conflicts, bounds and rational frame mapping must be checked before execution. Schema acceptance is not permission to execute a scene.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "planner", "project", "inputHashes", "timing", "execution", "assetReview", "assets", "shots", "elements", "relationships", "events", "keyframes", "operations", "dependencies", "unresolved", "validation"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "planner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "adapterVersion", "capabilitySource", "coordinateSpace", "determinism"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "adapterVersion": { "type": "string", "minLength": 1 },
+        "capabilitySource": { "type": "string", "enum": ["adapter_catalog", "capability_report"] },
+        "coordinateSpace": { "type": "string", "const": "cavalry-center-origin" },
+        "determinism": { "type": "string", "const": "stable_order_and_ids" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "fps", "totalFrames", "frameRange"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "$ref": "common.schema.json#/definitions/fps" },
+        "totalFrames": { "type": "integer", "minimum": 1 },
+        "frameRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["startFrame", "endFrame"],
+          "properties": {
+            "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+            "endFrame": { "$ref": "common.schema.json#/definitions/frameIndex" }
+          }
+        }
+      }
+    },
+    "inputHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shotSpec", "assets", "tokens", "capabilities"],
+      "properties": {
+        "shotSpec": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "assets": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "tokens": { "$ref": "common.schema.json#/definitions/sourceHash" },
+        "capabilities": { "$ref": "common.schema.json#/definitions/sourceHash" }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceFps", "targetFps", "mapping", "secondsRule", "maxSourceFrameMappingErrorFrames", "maxSourceFrameMappingErrorSeconds"],
+      "properties": {
+        "sourceFps": { "$ref": "common.schema.json#/definitions/fps" },
+        "targetFps": { "$ref": "common.schema.json#/definitions/fps" },
+        "mapping": { "type": "string", "enum": ["identity", "rational_nearest_half_up"] },
+        "secondsRule": { "type": "string", "minLength": 1 },
+        "maxSourceFrameMappingErrorFrames": { "type": "number", "minimum": 0 },
+        "maxSourceFrameMappingErrorSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiresCheckpoint", "requiresBlankScene", "globalPreconditions", "notes"],
+      "properties": {
+        "requiresCheckpoint": { "type": "boolean" },
+        "requiresBlankScene": { "type": "boolean" },
+        "globalPreconditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "width", "height", "fps", "inFrame", "outFrame"],
+            "properties": {
+              "type": { "type": "string", "const": "compSettings" },
+              "width": { "type": "integer", "minimum": 1 },
+              "height": { "type": "integer", "minimum": 1 },
+              "fps": { "type": "number", "exclusiveMinimum": 0 },
+              "inFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+              "outFrame": { "$ref": "common.schema.json#/definitions/frameIndex" }
+            }
+          }
+        },
+        "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+      }
+    },
+    "assetReview": { "$ref": "common.schema.json#/definitions/review" },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/asset" }
+    },
+    "shots": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/shot" }
+    },
+    "elements": {
+      "type": "array",
+      "description": "Component instances. Parameters are values, not executable operation code.",
+      "items": { "$ref": "#/definitions/element" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/relationship" }
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/event" }
+    },
+    "keyframes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/keyframe" }
+    },
+    "operations": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/operation" }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/dependency" }
+    },
+    "unresolved": { "$ref": "common.schema.json#/definitions/stringList" },
+    "validation": { "$ref": "#/definitions/validation" }
+  },
+  "definitions": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "status", "manifestStatus", "origin", "path", "sha256", "fontFamily", "fontStyle", "requiredByShotIds", "requiredByElementIds", "intendedUse", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["available", "missing", "unresolved"] },
+        "manifestStatus": { "type": "string", "enum": ["valid", "missing", "unresolved"] },
+        "origin": { "type": "string", "enum": ["supplied", "extracted", "recreated", "installed", "missing"] },
+        "path": { "anyOf": [{ "$ref": "common.schema.json#/definitions/absolutePath" }, { "type": "null" }] },
+        "sha256": { "anyOf": [{ "$ref": "common.schema.json#/definitions/sourceHash" }, { "type": "null" }] },
+        "fontFamily": { "type": ["string", "null"] },
+        "fontStyle": { "type": ["string", "null"] },
+        "requiredByShotIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "requiredByElementIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "intendedUse": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "shot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "startFrame", "endFrameExclusive", "sourceStartFrame", "sourceEndFrameExclusive", "startSeconds", "endSeconds", "durationSeconds", "elementIds", "eventIds", "keyframeIds", "operationIds", "requiredAssetIds", "transitionOverlapFrames", "transition", "unresolved"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "status": { "type": "string", "enum": ["ready", "blocked", "invalid"] },
+        "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "endFrameExclusive": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "sourceStartFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "sourceEndFrameExclusive": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "startSeconds": { "type": "number", "minimum": 0 },
+        "endSeconds": { "type": "number", "minimum": 0 },
+        "durationSeconds": { "type": "number", "minimum": 0 },
+        "elementIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "eventIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "keyframeIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "operationIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "requiredAssetIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "transitionOverlapFrames": { "type": "integer", "minimum": 0 },
+        "transition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "sourceDurationFrames", "durationFrames", "overlapFrames", "componentId", "presetId", "supportStatus", "notes"],
+          "properties": {
+            "type": { "type": "string", "minLength": 1 },
+            "sourceDurationFrames": { "type": "integer", "minimum": 0 },
+            "durationFrames": { "type": "integer", "minimum": 0 },
+            "overlapFrames": { "type": "integer", "minimum": 0 },
+            "componentId": { "type": ["string", "null"], "minLength": 1 },
+            "presetId": { "type": ["string", "null"], "minLength": 1 },
+            "supportStatus": { "type": "string", "enum": ["ready", "documented", "blocked", "unsupported"] },
+            "notes": { "type": "string" }
+          }
+        },
+        "unresolved": { "$ref": "common.schema.json#/definitions/stringList" }
+      }
+    },
+    "element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shotId", "componentId", "componentType", "sourceElementId", "baseFrame", "status", "blockers", "parameters", "requiredAssetIds", "requiredOperations", "dependsOn"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "componentId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "componentType": { "type": "string", "enum": ["rect", "text", "image", "transition"] },
+        "sourceElementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "baseFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "status": { "type": "string", "enum": ["ready", "blocked"] },
+        "blockers": { "$ref": "common.schema.json#/definitions/stringList" },
+        "parameters": {
+          "type": "object",
+          "description": "Component parameter map in Cavalry center-origin coordinates where placement applies. Null means unresolved, not a default.",
+          "additionalProperties": true
+        },
+        "requiredAssetIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "requiredOperations": { "$ref": "common.schema.json#/definitions/stringList" },
+        "dependsOn": { "$ref": "common.schema.json#/definitions/identifierList" }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shotId", "type", "elementIds", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "enum": ["line-order", "stacking-order"] },
+        "elementIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/definitions/identifier" }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shotId", "sourceEventId", "elementIds", "type", "property", "sourceFrames", "targetFrames", "from", "to", "presetId", "easing", "supportStatus", "dependsOn", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "sourceEventId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "elementIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "type": { "type": "string", "minLength": 1 },
+        "property": { "type": "string", "minLength": 1 },
+        "sourceFrames": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/definitions/frameIndex" }
+        },
+        "targetFrames": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/definitions/frameIndex" }
+        },
+        "from": { "description": "Observed starting value in source representation; any JSON value, explicitly null when unknown." },
+        "to": { "description": "Observed ending value in source representation; any JSON value, explicitly null when unknown." },
+        "presetId": { "type": ["string", "null"], "minLength": 1 },
+        "easing": { "type": ["string", "null"], "description": "Evidence-backed easing label, or null when unresolved. Null is not permission to choose a default." },
+        "supportStatus": { "type": "string", "enum": ["ready", "blocked", "unsupported"] },
+        "dependsOn": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "notes": { "type": "string" }
+      }
+    },
+    "keyframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shotId", "sourceEventId", "elementId", "property", "attributePath", "sourceFrame", "targetFrame", "sourceValue", "value", "unit", "interpolation", "easing", "supportStatus", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "sourceEventId": { "type": ["string", "null"], "minLength": 1 },
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "property": { "type": "string", "minLength": 1 },
+        "attributePath": { "type": ["string", "null"], "minLength": 1 },
+        "sourceFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "targetFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "sourceValue": { "type": ["number", "null"] },
+        "value": { "type": ["number", "null"] },
+        "unit": { "type": ["string", "null"] },
+        "interpolation": { "type": "string", "enum": ["unspecified", "hold", "linear"] },
+        "easing": { "type": ["string", "null"] },
+        "supportStatus": { "type": "string", "enum": ["ready", "blocked", "unsupported"] },
+        "notes": { "type": "string" }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shotId", "elementId", "phase", "action", "params", "dependsOn", "preconditions", "supportStatus", "runtimeVerified", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "shotId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "elementId": { "$ref": "common.schema.json#/definitions/identifier" },
+        "phase": { "type": "string", "enum": ["static", "animation"] },
+        "action": { "type": "string", "enum": ["createPrimitive", "ensurePrimitive", "set", "createText", "importAsset", "keyframe", "easing", "interpolation", "timing"] },
+        "params": {
+          "type": "object",
+          "description": "Action-specific parameter map. Parameters must be validated against verified capabilities by the compiler/adapter, not treated as arbitrary executable code.",
+          "additionalProperties": true
+        },
+        "dependsOn": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Action-specific precondition parameter record. Keys intentionally remain open; compiler and adapter must reject unsupported conditions.",
+            "additionalProperties": true
+          }
+        },
+        "supportStatus": { "type": "string", "enum": ["runtime_verified", "documented", "unverified", "unsupported"] },
+        "runtimeVerified": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "from", "to", "notes"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/definitions/identifier" },
+        "type": { "type": "string", "enum": ["operation", "element", "asset"] },
+        "from": { "$ref": "common.schema.json#/definitions/identifier" },
+        "to": { "$ref": "common.schema.json#/definitions/identifier" },
+        "notes": { "type": "string" }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid", "status", "executable", "counts", "rules", "diagnostics"],
+      "properties": {
+        "valid": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["valid", "blocked", "invalid"] },
+        "executable": { "type": "boolean" },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["shots", "elements", "assets", "events", "keyframes", "operations", "staticOperations", "animationOperations", "blockedElements", "unsupportedEvents", "errors", "open"],
+          "properties": {
+            "shots": { "type": "integer", "minimum": 0 },
+            "elements": { "type": "integer", "minimum": 0 },
+            "assets": { "type": "integer", "minimum": 0 },
+            "events": { "type": "integer", "minimum": 0 },
+            "keyframes": { "type": "integer", "minimum": 0 },
+            "operations": { "type": "integer", "minimum": 0 },
+            "staticOperations": { "type": "integer", "minimum": 0 },
+            "animationOperations": { "type": "integer", "minimum": 0 },
+            "blockedElements": { "type": "integer", "minimum": 0 },
+            "unsupportedEvents": { "type": "integer", "minimum": 0 },
+            "errors": { "type": "integer", "minimum": 0 },
+            "open": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "description", "status"],
+            "properties": {
+              "id": { "$ref": "common.schema.json#/definitions/identifier" },
+              "description": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "enum": ["pass", "open", "fail"] }
+            }
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "severity", "blocking", "message"],
+            "properties": {
+              "code": { "type": "string", "minLength": 1 },
+              "severity": { "type": "string", "enum": ["error", "open", "info"] },
+              "blocking": { "type": "boolean" },
+              "message": { "type": "string", "minLength": 1 },
+              "shotId": { "type": "string", "minLength": 1 },
+              "elementId": { "type": "string", "minLength": 1 },
+              "componentId": { "type": "string", "minLength": 1 },
+              "requirementId": { "type": "string", "minLength": 1 },
+              "presetId": { "type": "string", "minLength": 1 },
+              "operationId": { "type": "string", "minLength": 1 },
+              "elementIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+              "frames": { "type": "array", "items": { "$ref": "common.schema.json#/definitions/frameIndex" } },
+              "details": { "type": "object", "additionalProperties": true }
+            }
+          }
+        }
+      }
+    }
+  }
+}

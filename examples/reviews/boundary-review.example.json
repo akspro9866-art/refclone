@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "Human gate 1: confirmed shot boundaries.",
+    "Copy this file, replace the three placeholders, pass it with --boundary-review.",
+    "sourceHash comes from the blocked run report or from the ingest JSON output.",
+    "cuts are SOURCE FRAME INDICES (integers) at which a new shot starts, taken from",
+    "decoded adjacent frames in jobs/<hash>/ingest/*/contact-sheet.html - not from the",
+    "detector scores. An interval-only reference with a single shot uses an empty array.",
+    "Every field is required; reviewer and notes must be non-empty."
+  ],
+  "sourceHash": "<64-char sha256 of the reference video>",
+  "reviewer": "<who looked at the frames>",
+  "notes": "<what was inspected and why each cut is real, e.g. background and content change exactly at source frame 8>",
+  "cuts": [8]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/shot-boundaries.schema.json",
+  "title": "Detected and reviewed shot boundaries",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "fps", "durationSeconds", "totalFrames", "detector", "candidates", "review", "shots"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "fps": { "$ref": "common.schema.json#/definitions/fps" },
+    "durationSeconds": { "type": "number", "minimum": 0 },
+    "totalFrames": { "type": "integer", "minimum": 0 },
+    "detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "threshold", "minShotFrames"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minShotFrames": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "description": "Original source candidates remain unchanged when a reviewer supplies shot boundaries. Scores are scene-change heuristics, not calibrated confidence.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame", "timeSeconds", "score"],
+        "properties": {
+          "frame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "timeSeconds": { "type": "number" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "review": { "$ref": "common.schema.json#/definitions/review" },
+    "shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "startFrame", "endFrameExclusive", "startSeconds", "endSeconds"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/definitions/identifier" },
+          "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "endFrameExclusive": { "$ref": "common.schema.json#/definitions/frameIndex" },
+          "startSeconds": { "type": "number" },
+          "endSeconds": { "type": "number" }
+        }
+      }
+    }
+  }
+}
