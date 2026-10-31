@@ -3,9 +3,10 @@
 Thanks for being here. This project is small, strict about evidence, and better
 with your reference video in its test matrix.
 
-It is a **Windows** project — Windows 10 or 11, Cavalry 2.8 on that machine, and an MCP-capable
-agent (Qoder, Antigravity or ZCode) driving it. `package.json` declares `"os": ["win32"]`, so
-`npm ci` refuses elsewhere rather than half-installing, and CI only verifies the Windows leg.
+It is a **Windows-hosted** project — Windows 10 or 11, Cavalry 2.8 on that machine, and an
+MCP-capable agent (Qoder, Antigravity or ZCode) driving it. The Node pipeline and synthetic suite
+also run on Ubuntu, and CI verifies both legs; `package.json` allows `win32` and `linux` (macOS is
+refused) so `npm ci` works where CI runs.
 
 ## Ground rules
 
@@ -103,14 +104,12 @@ or network folder, where rename-over-open-file semantics are not dependable.
 - Add a line to `CHANGELOG.md` under *Unreleased* — and if you changed how many
   tests there are, `npm run verify:docs` will tell you which pages quote the old
   number.
-- CI must be green on `windows-latest`: `npm ci`, `npm test`, and the four guards in
-  `.github/scripts/` (module syntax, config parity, skill mirrors, privacy scan) plus the
-  documentation test-count check. Windows is the only leg on purpose — it is the platform the
-  project supports, so a second, unverified leg would only add a promise nobody is checking. The
-  consequence to know: nothing here proves the engine still works elsewhere, so if you send a
-  change that assumes Windows APIs, drive-letter paths or Windows file-sharing behaviour, CI will
-  not tell you. Be explicit about that in the PR description if your change touches paths, state
-  files or process launching.
+- CI must be green on the `windows-latest` and `ubuntu-latest` legs: `npm ci`, `npm test`, and the
+  four guards in `.github/scripts/` (module syntax, config parity, skill mirrors, privacy scan)
+  plus the documentation test-count check. The Ubuntu leg runs the same pure-Node suite without
+  Cavalry, so a test that assumes Windows APIs, drive-letter paths or Windows file-sharing
+  behaviour fails there. The manual live-integration job remains Windows-only because Cavalry is
+  a Windows application.
 
 ## Reporting a fidelity problem
 

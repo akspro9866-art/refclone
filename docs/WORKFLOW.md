@@ -34,7 +34,7 @@ ffmpeg -version
 ffprobe -version      # both must be on PATH
 node --version                            # v24+
 npm ci
-npm test                        # 215 tests green before you trust anything downstream
+npm test                        # 258 tests green before you trust anything downstream
 ```
 
 Open `config.json` and set `mcp.args` to your own `cavalry-mcp/dist/index.js` (the shipped
@@ -296,6 +296,46 @@ A previous final is never overwritten.
 
 Under a generic config the standalone forms must name the video with `--reference` — the shipped
 template declares no `reference` of its own.
+
+## The procedural route, and when it applies
+
+For references that are mostly shape and type motion, `procedural` is a shorter path: Stage 1
+segments beats (PySceneDetect when installed, a local frame-delta fallback otherwise), Stage 2A
+traces isolated crops to SVG with metadata stripped, Stage 2B normalises tracks and optionally
+smooths them, Stage 3 fits one cubic per track per beat and collapses shared staggers, Stage 4
+emits **one batched `_mg` script**, and Stage 5 renders only beat-inflection frames and gates them
+with local odiff. It does not replace the review gates for copy, fonts or assets — those remain
+human decisions, and the procedural route never claims they happened.
+
+```powershell
+node src/cli.mjs procedural --dry-run                                  # shipped ten-layer fixture
+node src/cli.mjs procedural --input scene.json --output work\promo      # measured scene, artifacts kept
+node src/cli.mjs procedural --input reference.mp4 --tracks tracks.json --smooth
+node src/cli.mjs procedural --live --input scene.json --reference work\frames
+node src/cli.mjs procedural --live --input reference.mp4 --tracks tracks.json --auto-reference
+```
+
+`--smooth` applies Savitzky–Golay smoothing to measured tracks (off by default; the shipped fixture
+is already clean). A scene JSON may list `crops` (paths relative to that file) for Stage 2A to trace
+and attach to the matching track id; an unmatched crop is reported in `limitations`. `--live` binds
+Stage 5 to the configured cavalry-mcp session: one `cavalry_run_script` execution, sparse-frame
+renders only, local odiff, and at most one `_mg.patch` script per pass. Each pass patches up to
+`--max-layers-per-beat` (default 4) layers that are actively moving in the beat — selected by odiff
+mismatch-box overlap when layer boxes are known, by displacement amplitude otherwise — and splits
+the measured drift across them inside that one batched script; layers on the same expected position
+fall back to the primary target and stagger followers get relative deltas. `--reference` is the
+extracted-frames directory, `%0Nd` pattern or JSON frame→path map (relative paths resolve next to
+the map file) at composition resolution. When the input is a video, `--reference` may be omitted
+(or `--auto-reference` passed): FFmpeg extracts exactly the beat-inflection frames into
+`reference-frames/` under `--output` and that map feeds the same gate. Two
+honest stop states: `--dry-run` compiles and stops without touching Cavalry, and a run without
+`--live` reports `gate.status: "unavailable"` — no frame was rendered or compared, so it is not a
+pass. `unconverged` after `--max-passes` is likewise reported, never smoothed into a claim. The
+pure-Node stages and the prelude contract are in the test suite; the live leg has also been run
+against a real Cavalry 2.8.0 / Stallion 0.9.0 session through cavalry-mcp 3.0.0, where a
+controlled known-offset reference converged on pass two with one batched patch. It has not yet
+been exercised against a real reference video end to end. Codes and readings are catalogued in
+[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md#the-procedural-route-node-srcclimjs-procedural).
 
 ## Resuming, and what a rerun costs
 

@@ -1,9 +1,14 @@
 name: CI
 
-# Windows is the supported platform, so Windows is the only leg this verifies. The engine is
-# plain Node ESM and has passed on Linux in the past, but nothing here claims or tests that any
-# more: an unverified second platform is a promise the repository cannot keep. package.json
-# carries the same decision as "os": ["win32"], so npm refuses the install elsewhere.
+# Windows is the Cavalry host; Ubuntu runs the same pure-Node suite so path, process and
+# FFmpeg assumptions cannot regress silently. Cavalry itself is only exercised by the
+# manual self-hosted job below. package.json allows win32 and linux, so npm ci works on
+# both legs. macOS remains unsupported and is refused at install time.
+#
+# refclone is checked out into its own directory so the optional cavalry-mcp sibling can
+# sit next to it. That layout is exactly what test/contract.test.mjs probes (via
+# CAVALRY_MCP_ROOT, then ../cavalry-mcp), so the cross-repo contract runs automatically
+# when the sibling checkout succeeds and skips cleanly in isolated forks.
 
 on:
   push:
@@ -16,13 +21,37 @@ permissions:
 
 jobs:
   test:
-    name: Unit and synthetic-pipeline tests (windows-latest)
-    runs-on: windows-latest
+    name: Unit and synthetic-pipeline tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: refclone
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout refclone
+        uses: actions/checkout@v4
+        with:
+          path: refclone
 
-      - name: Install FFmpeg
+      # cavalry-mcp is public, so the default token can read it. The step is allowed to
+      # fail: an isolated fork without access still runs the whole local suite, and the
+      # contract test reports a skip instead of a fake pass.
+      - name: Checkout sibling cavalry-mcp (optional cross-repo contract)
+        id: cavalry
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: akspro9866-art/cavalry-mcp
+          ref: main
+          path: cavalry-mcp
+          persist-credentials: false
+
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           # windows-latest ships Chocolatey but not FFmpeg, and the media stages need both
@@ -33,32 +62,43 @@ jobs:
           ffmpeg -version | Select-Object -First 1
           ffprobe -version | Select-Object -First 1
 
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
       - name: Use Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: refclone/package-lock.json
 
       - name: npm ci
         run: npm ci
 
-      - name: Syntax check every module
-        run: node .github/scripts/syntax-check.mjs
-
-      - name: Shipped configs stay in sync
-        run: node .github/scripts/config-parity.mjs
-
-      - name: Skill mirrors stay in sync
-        run: node .github/scripts/skill-parity.mjs
-
-      - name: No personal paths or private reference material
-        run: node .github/scripts/privacy-scan.mjs
+      - name: Build the cavalry-mcp sibling (cross-repo contract)
+        if: steps.cavalry.outcome == 'success'
+        working-directory: cavalry-mcp
+        run: |
+          npm ci
+          npm run build
 
       - name: npm test
+        # An empty value is filtered out by the contract locator, which then tries the
+        # sibling path and skips honestly if the checkout did not happen.
+        env:
+          CAVALRY_MCP_ROOT: ${{ steps.cavalry.outcome == 'success' && format('{0}/cavalry-mcp', github.workspace) || '' }}
         run: npm test
 
-      - name: Every test count in the docs is current
-        run: node .github/scripts/test-count.mjs
+      - name: verify (syntax, config, skills, privacy)
+        run: npm run verify
+
+      - name: verify:docs (every quoted test count is current)
+        run: npm run verify:docs
 
   live-integration:
     name: Cavalry integration (manual, needs a real app)

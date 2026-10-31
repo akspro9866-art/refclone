@@ -41,15 +41,16 @@ body:
   - type: dropdown
     id: os
     attributes:
-      label: Windows edition
+      label: Platform
       description: >-
-        This project is supported and verified on Windows 10 and 11 only. If you are
-        not on one of these, say what you tried in the description - we will not be
-        able to reproduce it, and CI will not run there.
+        Cavalry and the live stages are verified on Windows 10 and 11 only. The Node pipeline and
+        synthetic suite are also verified on Ubuntu. If you are elsewhere, say what you tried in
+        the description - we will not be able to reproduce it, and CI will not run there.
       options:
         - Windows 11
         - Windows 10
         - Windows Server / LTSC
+        - Ubuntu (Node pipeline only, no Cavalry)
         - Other (unsupported)
     validations:
       required: true
@@ -57,7 +58,7 @@ body:
     id: tools
     attributes:
       label: Tool versions
-      description: "node --version, the first line of ffmpeg -version, Cavalry version, cavalry-mcp version. If ffmpeg is not found, paste where.exe ffmpeg instead."
+      description: "node --version, the first line of ffmpeg -version, Cavalry version, cavalry-mcp version. If ffmpeg is not found, paste where.exe ffmpeg (Windows) or command -v ffmpeg (Linux) instead."
   - type: checkboxes
     id: tests
     attributes:

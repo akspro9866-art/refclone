@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "license": "MIT",
-  "description": "Windows-only evidence-gated pipeline that clones any reference video into an editable Cavalry scene through MCP, driven by an AI coding agent (Qoder, Antigravity, ZCode and friends).",
+  "description": "Evidence-gated pipeline that clones reference videos into editable Cavalry scenes through MCP. Windows is the Cavalry host; the Node pipeline and synthetic suite are CI-verified on Windows and Ubuntu.",
   "author": "refclone contributors",
   "repository": {
     "type": "git",
@@ -18,7 +18,8 @@
     "node": ">=24"
   },
   "os": [
-    "win32"
+    "win32",
+    "linux"
   ],
   "bin": {
     "refclone": "src/cli.mjs"
@@ -64,7 +65,11 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
+    "@visioncortex/vtracer": "^1.0.0-alpha.4",
     "ajv": "8.20.0",
+    "bezier-easing": "^3.2.0",
+    "fit-curve": "^0.2.0",
+    "odiff-bin": "^4.5.0",
     "pngjs": "7.0.0"
   }
 }

@@ -7,11 +7,13 @@ The engine is a Node CLI. An agentic IDE contributes exactly two things to the p
    follows the gates instead of freelancing a "close enough" recreation.
 
 Everything else — FFmpeg, Node, the schemas, the measurement code — is the same in every tool, and
-every location below is the **Windows** one, because Windows is the platform this project supports.
-Two forms of the same path appear in this file, and mixing them up is the most common way a
-connection fails: in a PowerShell command write `C:\Users\<you>\...`, but inside a JSON or TOML
-config write `C:/Users/<you>/...` — a backslash is an escape character there. `%USERPROFILE%` is
-`C:\Users\<you>`. Snippets live in [`examples/mcp/`](../examples/mcp); delete the `_place` and
+every location below is the **Windows** one, because Cavalry is a Windows application and the
+live stages need it. The pure-Node pipeline and its synthetic suite also run on Ubuntu (CI proves
+both), but the Cavalry MCP server only has an app to talk to on Windows. Two forms of the same path
+appear in this file, and mixing them up is the most common way a connection fails: in a PowerShell
+command write `C:\Users\<you>\...`, but inside a JSON or TOML config write `C:/Users/<you>/...` —
+a backslash is an escape character there. `%USERPROFILE%` is `C:\Users\<you>` (or `~` on Linux).
+Snippets live in [`examples/mcp/`](../examples/mcp); delete the `_place` and
 `_note` keys (they are notes to you, not configuration) and replace `<CAVALRY_MCP>` with your own
 absolute path.
 
@@ -49,8 +51,8 @@ Do this once, before touching any editor.
 
    ```powershell
    cd refclone
-   npm ci                         # refuses to run on a non-Windows platform, by design
-   npm test                       # 215 tests, no Cavalry required
+   npm ci                         # installs on Windows and Linux; macOS is refused
+   npm test                       # 258 tests, no Cavalry required
    node .github/scripts/privacy-scan.mjs
    ```
 

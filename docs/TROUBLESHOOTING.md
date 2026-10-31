@@ -21,7 +21,7 @@ that your video is bad. Most reports of "it won't run" are one of the four in th
 ```powershell
 npm ci
 npm run verify     # syntax-check + config parity + skill parity + privacy scan
-npm test           # 215 tests; exercises FFmpeg, never Cavalry
+npm test           # 258 tests; exercises FFmpeg, never Cavalry
 node --version     # must be 24+
 ffmpeg -version
 ffprobe -version
@@ -33,16 +33,17 @@ If `npm test` is red, nothing downstream is trustworthy and the problem is not y
 ### Getting `ffmpeg` and `ffprobe` onto `PATH`
 
 The suite generates and decodes its own short clips, so it needs both binaries even though it never
-opens Cavalry. Two Windows routes — the first is the one CI uses, so it is the verified one:
+opens Cavalry. On Windows, two routes — the first is the one CI uses, so it is the verified one:
 
 ```powershell
 choco install ffmpeg -y
 winget install Gyan.FFmpeg     # the usual desktop route; CI does not exercise it
 ```
 
-A fresh install does not reach a PowerShell window that was already open, so reopen the window
-before concluding the install failed. Then prove it, one command per line (`&&` is a bash-ism that
-Windows PowerShell 5.1 does not parse):
+On Ubuntu CI the binaries come from `sudo apt-get install -y ffmpeg`. A fresh install does not reach
+a PowerShell window that was already open, so reopen the window before concluding the install
+failed. Then prove it, one command per line (`&&` is a bash-ism that Windows PowerShell 5.1 does not
+parse):
 
 ```powershell
 ffmpeg -version
@@ -81,6 +82,72 @@ you are writing it into JSON).
 | `SOURCE_MISMATCH` / `RUN_JOB_MISMATCH` | review payload or `--job` belongs to a different reference | take `sourceHash` from the current run output; never reuse yesterday's review file |
 | `TRANSFORMATION_APPROVAL_REQUIRED` (from `tools/make-shot-spec-review.mjs`) | the spec you submitted changed `transformations` relative to the draft | a spec review is not a transformation approval. Author the transformation deliberately in its own reviewed step or leave it out |
 | `AUTOANALYSIS_SETTING_INVALID`, `AUTO_ANALYSIS_INVALID`, `AUTO_SHOT_UNKNOWN`, `AUTO_SHOT_UNSAMPLED` | CV settings outside range, or a draft/artifact referencing a shot the reviewed boundaries do not contain | re-check `autoAnalysis.*` in the config and rerun after the boundary review; a draft built on a rejected cut set is not salvageable |
+
+## The procedural route (`node src/cli.mjs procedural`)
+
+The procedural route is the low-token alternative: beats, vector crops, smoothed tracks, one
+batched `_mg` script, then a sparse odiff gate. It uses no per-layer MCP tools and never sends a
+frame to a vision model. Its refusals are local and named:
+
+| Code | Meaning | Usable response |
+|---|---|---|
+| `CLI_USAGE` | an unknown flag, a missing flag value, `procedural` without `--input` or `--dry-run`, `--dry-run`/`--live` together, `--live` without `--reference` or a video `--input`, `--reference` and `--auto-reference` together, `--auto-reference` on a scene JSON, or live-only flags without `--live` | match the help text; `--threshold`, `--max-passes` and `--max-layers-per-beat` take values |
+| `PROCEDURAL_OPTIONS_INVALID` | `--threshold` outside 0–100, `--max-passes` not an integer 1–10, or `--max-layers-per-beat` not an integer 1–8 | fix the flag; a pass ceiling is not a convergence claim |
+| `FILE_READ_FAILED` | the input is missing, is a directory, or the scene JSON cannot be parsed | point `--input` at a real file |
+| `REFERENCE_AUTO_REQUIRES_VIDEO` | `--auto-reference` (or an implicit auto-extraction) was requested for a scene JSON | a JSON has no pixels to extract; pass `--reference` with frames, a pattern or a frame→path map |
+| `REFERENCE_EXTRACT_INVALID` | the auto-extraction got no video path, no sparse frames, or an extracted file is not a readable PNG | the Stage 1 beats and the input path must both be usable; nothing is substituted |
+| `REFERENCE_EXTRACT_COUNT` | FFmpeg produced fewer frames than the select filter asked for | the clip may be shorter than `outFrame - 1`; inspect the beats and the source duration |
+| `PROCEDURAL_INPUT_INVALID` | a `.json` input without a `tracks` or `elements` array | a scene JSON needs measured tracks; a video needs `--tracks` |
+| `TRACKS_REQUIRED` | the input is a video and no Stage 2B tracker file was supplied | pass `--tracks <tracker.json>`; the route will not invent tracks |
+| `OUTPUT_EXISTS` | `--output` names a directory that already holds these artifacts | pick a new directory; procedural artifacts are never overwritten |
+| `VECTOR_CROP_INVALID` | a crop entry has neither a path nor a nonempty buffer | give each crop a readable file; nothing is substituted |
+| `PERCEPTUAL_COMPARE_FAILED` | neither odiff nor the pure-JS PNG fallback could read the frames | check that the sparse frames and reference frames exist and have dimensions |
+| `PATCH_TARGET_REQUIRED` | a drift patch could not resolve a layer id or compiled reference | inspect the promotion; a patch needs a real target |
+| `LIVE_LAYER_IDS_MISSING` | the live Stage 4 script did not return one id per compiled reference | do not patch blind: inspect the scene, run the script once by hand and check its return value |
+| `TRANSPORT_CONFIG_INVALID` | no `mcp` block, or `--stallion-url` is not an http(s) URL | point `config.json` at your cavalry-mcp `dist/index.js`, or fix the URL |
+| `TRANSPORT_NOT_CONNECTED` | a transport call was made before `connect()` | a live run always connects first; this is a programming error, not a scene state |
+| `TRANSPORT_SCRIPT_INVALID`, `TRANSPORT_RENDER_INVALID` | an empty script or an empty/non-integer frame list reached the transport | the gate only sends compiled scripts and Stage 1 frames; check the report before retrying |
+| `ADAPTER_CONFIG_INVALID` | `mcp.command`/`mcp.args` still contain the shipped `REPLACE_ME` placeholder | see [`IDE_SETUP.md`](IDE_SETUP.md); the error names the placeholder |
+| `MCP_CONNECTION_FAILED`, `MCP_TIMEOUT` | Cavalry is not running with Scripts → Stallion enabled, or a call timed out | start the Stallion script; after a timeout the scene state is unknown — inspect before retrying |
+
+Stage 2A reports its own outcome in `vectors` (`count`, `traced`, `removedBytes`, `errors`) and in
+`limitations`. A crop that VTracer cannot trace or read stays absent — it is never replaced by a
+raster fallback or an empty path. A crop whose id matches no track is also listed in `limitations`;
+renaming the crop to the track id is the fix.
+
+Two statuses deserve their plain reading: `gate.status: "unavailable"` means no live render
+transport was supplied (`--live` absent or `--dry-run`), so nothing was rendered or compared — it
+is not a pass; and `status: "unconverged"` after `--max-passes` means the scene is honestly not
+within threshold, not that another pass would fix it. `--live` runs in order: connect and
+`cavalry_inspect` the roots, execute the one batched script, render only the sparse beat frames,
+compare each locally, then send at most one `_mg.patch` script per pass — patch scripts never
+re-emit the comp header, so resolution/fps/range are not reset between passes. A pass selects up to
+`--max-layers-per-beat` (default 4) layers that are genuinely moving in that beat, ranks them by
+odiff mismatch-box overlap when layer boxes are known and by displacement amplitude otherwise, and
+writes every selected layer's share of the drift into that same single patch script. When all
+active layers sit on one expected position the delta is attributed to the primary layer only;
+stagger followers, whose absolute position is owned by the group rule, receive relative deltas.
+The report's `attribution` records the basis and each target's weight, so a surprising repair can
+be read back rather than guessed. Reference frames must be at composition resolution; a size
+mismatch is a layout diff, not a rescaled delta. When the input is a video, Stage 5 can extract
+its own reference frames — automatically when `--reference` is omitted, or explicitly with
+`--auto-reference` — into `reference-frames/` under `--output`; an existing extraction directory
+is refused with `OUTPUT_EXISTS`, never overwritten. Without `--output` the extraction is
+temporary and removed, which is honest but useless for a second run. The
+source of each beat is in `beatSource`: `pyscenedetect` when the Python tool answered,
+`activity`/`fingerprint-fallback` when the local frame-delta route did, `fixture`/`provided` when
+the input already carried beats, and `fallback`/`unsegmented` when no instrument produced a cut. A
+fallback `beatSource` does not weaken the promotion, but it is a different instrument and worth
+knowing. The suite exercises the live leg against cavalry-mcp's mock Cavalry API and its real
+`_mg` prelude (set `CAVALRY_MCP_ROOT` to enable that cross-repo check). CI never opens a Cavalry
+session. A live calibration on 2026-10-31 against Cavalry 2.8.0 / Stallion 0.9.0 through
+cavalry-mcp 3.0.0 converged on pass two with one batched patch, 0.00% mismatch, when the reference
+was a live render translated by a known 24 px and the patched layer had no earlier position
+keyframes. In the same session, a layer whose position curve already had keyframes did not
+converge within three passes: the keyframe inserted at the failing beat frame changes the
+interpolation on neighbouring frames, so the next pass measures a new residual. Treat
+`unconverged` as real, read `attribution`, and inspect the diff images; a single-frame patch is
+not a guarantee of a smooth moving-curve repair.
 
 ## "The plan is blocked" is usually the correct answer
 

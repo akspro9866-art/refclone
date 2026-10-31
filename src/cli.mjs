@@ -14,6 +14,9 @@ import { renderVideo } from './render.mjs';
 import { runQa } from './qa.mjs';
 import { exportFinal } from './export.mjs';
 import { runPipeline } from './run.mjs';
+import { runProcedural, defaultFixturePath } from './procedural.mjs';
+import { isVideoInput } from './stages/referenceExtract.mjs';
+import { createStallionTransport, resolveReferenceMap } from './transport/stallionTransport.mjs';
 import { readJson, WorkflowError } from './core.mjs';
 
 const HELP = `refclone - reference-faithful video cloning (qualified commands only)
@@ -33,6 +36,9 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs render <scene-plan.json> --project <saved-scene> [--shot <shot-id>] [--job <directory>]
   node src/cli.mjs qa <scene-plan.json> --render <render-manifest.json> [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs export <scene-plan.json> --project <saved-scene> --render <render-manifest.json> --qa <qa-report.json> [--build <build-report.json>] [--reference <video>] [--config <json>] [--job <directory>]
+  node src/cli.mjs procedural --input <scene.json|video> [--tracks <tracker.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--output <directory>]
+  node src/cli.mjs procedural --dry-run [--input <scene.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--output <directory>]
+  node src/cli.mjs procedural --live [--reference <frames-dir|pattern|json>] [--auto-reference] [--input <scene.json|video>] [--tracks <tracker.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--stallion-url <url>] [--config <json>] [--output <directory>]
   node src/cli.mjs --help
 
 Run is the one-command, resume-first pipeline. It reuses a complete verified
@@ -98,6 +104,22 @@ directory, re-verifies every hash, decodes the video, reopens the saved project,
 checks the composition and layer readback, re-renders the first frame and compares
 it with the manifest frame, then writes a schema-valid final-export manifest. A
 previous final is never overwritten; QA status is carried forward, not recomputed.
+Procedural is the low-token route: it segments beats from the reference, promotes
+dense tracks into two-keyframe magic-easing moves and one stagger group, and emits
+a single batched _mg script (dry-run prints it before any Cavalry connection).
+Stage 5 compares only sparse beat frames with local odiff and sends at most one
+compact patch script per pass; it never uploads a frame to a vision model. Without
+--tracks it consumes a scene JSON whose tracks were measured by Stage 2B.
+Procedural --live opens the configured cavalry-mcp session, sends the one batched
+_mg script through cavalry_run_script, renders only the sparse beat inflection
+frames, compares them locally and sends at most one batched _mg.patch per pass,
+up to --max-passes. Each pass targets up to --max-layers-per-beat (default 4)
+actively moving layers and partitions the beat's bbox drift across them.
+--reference supplies the extracted reference frames (a directory, a %0Nd pattern
+or a JSON frame->path map). When --input is a video and --reference is omitted,
+or --auto-reference is passed, FFmpeg extracts the sparse beat frames from that
+video automatically; a scene JSON still requires --reference. Without --live or
+with --dry-run, Stage 5 stays unavailable and nothing waits on a socket.
 Existing files/checkpoints are retained. Cache reuse requires matching hashes.
 No Cavalry scene is edited by these commands. Unreviewed boundaries remain pending.
 `;
@@ -105,6 +127,117 @@ No Cavalry scene is edited by these commands. Unreviewed boundaries remain pendi
 export async function main(args) {
   if (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]))) return { help: HELP };
   const [command, reference, ...rest] = args;
+  // Shared by the flag-driven procedural branch and the positional commands below.
+  const loadConfig = async requested => {
+    const configPath = path.resolve(requested ?? fileURLToPath(new URL('../config.json', import.meta.url)));
+    const config = await readJson(configPath);
+    if (config.schemaVersion !== 1) throw new WorkflowError('CONFIG_INVALID', 'Unsupported configuration schemaVersion');
+    // A relative authored catalog path resolves against the file that names it.
+    return { config: { ...config, _configPath: configPath }, configPath };
+  };
+  if (command === 'procedural') {
+    // Unlike the artifact commands, procedural is flag-driven: --dry-run may supply the
+    // shipped fixture and therefore has no positional input path.
+    const flags = {};
+    const valueFlags = new Set(['--input', '--tracks', '--threshold', '--max-passes', '--max-layers-per-beat', '--output', '--reference', '--stallion-url', '--config']);
+    const booleanFlags = new Set(['--dry-run', '--smooth', '--live', '--auto-reference']);
+    for (let i = 1; i < args.length; i += 1) {
+      const key = args[i];
+      if (booleanFlags.has(key)) {
+        if (key in flags) throw new WorkflowError('CLI_USAGE', `Invalid, repeated or incomplete option: ${key}`);
+        flags[key] = true;
+        continue;
+      }
+      if (!valueFlags.has(key)) throw new WorkflowError('CLI_USAGE', `Invalid option for procedural: ${key}`);
+      const value = args[i + 1];
+      if (!value || value.startsWith('--') || key in flags) throw new WorkflowError('CLI_USAGE', `Invalid, repeated or incomplete option: ${key}`);
+      flags[key] = value;
+      i += 1;
+    }
+    if (!flags['--input'] && !flags['--dry-run']) {
+      throw new WorkflowError('CLI_USAGE', 'procedural requires --input <scene.json|video> or --dry-run');
+    }
+    const dryRun = flags['--dry-run'] === true;
+    const liveRequested = flags['--live'] === true;
+    if (dryRun && liveRequested) {
+      throw new WorkflowError('CLI_USAGE', 'procedural takes --dry-run or --live, not both: a dry run must never wait on a socket.');
+    }
+    const autoReference = flags['--auto-reference'] === true;
+    if (!liveRequested && (flags['--reference'] !== undefined || flags['--stallion-url'] !== undefined || autoReference)) {
+      throw new WorkflowError('CLI_USAGE', '--reference, --auto-reference and --stallion-url belong to --live; without it Stage 5 stays unavailable.');
+    }
+    if (autoReference && flags['--reference'] !== undefined) {
+      throw new WorkflowError('CLI_USAGE', 'procedural takes --reference or --auto-reference, not both: a supplied frame map is never re-extracted.');
+    }
+    const input = flags['--input'] ? path.resolve(flags['--input']) : defaultFixturePath();
+    if (autoReference && !isVideoInput(input)) {
+      throw new WorkflowError('CLI_USAGE', 'procedural --auto-reference needs a video --input (.mp4, .mov, .webm, .mkv); a scene JSON cannot yield reference frames.');
+    }
+    const options = {
+      dryRun,
+      smooth: flags['--smooth'] === true,
+      tracksPath: flags['--tracks'] ? path.resolve(flags['--tracks']) : undefined,
+      outputDirectory: flags['--output'] ? path.resolve(flags['--output']) : undefined,
+      threshold: flags['--threshold'] === undefined ? undefined : Number(flags['--threshold']),
+      maxPasses: flags['--max-passes'] === undefined ? undefined : Number(flags['--max-passes']),
+      maxLayersPerBeat: flags['--max-layers-per-beat'] === undefined ? undefined : Number(flags['--max-layers-per-beat']),
+      autoReference
+    };
+    let result;
+    if (liveRequested) {
+      // A video input can extract its own sparse reference frames; a scene JSON cannot,
+      // so it keeps the explicit guard.
+      if (!flags['--reference'] && !autoReference && !isVideoInput(input)) {
+        throw new WorkflowError('CLI_USAGE', 'procedural --live needs --reference <frames directory | %0Nd pattern | json map> or a video --input for --auto-reference: Stage 5 compares sparse renders against reference frames.');
+      }
+      const { config } = await loadConfig(flags['--config']);
+      options.ffmpeg = config.ffmpeg ?? 'ffmpeg';
+      // A .json reference is a frame -> path map whose relative paths resolve
+      // against the map's own directory. Anything else is a directory or a
+      // %0Nd pattern resolved by the gate.
+      let referenceFrames = null;
+      if (flags['--reference']) {
+        if (/\.json$/i.test(flags['--reference'])) {
+          const mapPath = path.resolve(flags['--reference']);
+          referenceFrames = resolveReferenceMap(await readJson(mapPath), mapPath);
+        } else {
+          referenceFrames = path.resolve(flags['--reference']);
+        }
+      }
+      const transport = createStallionTransport({ mcp: config.mcp, stallionUrl: flags['--stallion-url'] });
+      try {
+        const session = await transport.connect();
+        result = await runProcedural(input, {
+          ...options,
+          client: transport,
+          referenceFrames,
+          liveInfo: {
+            connected: true,
+            server: session.server,
+            tools: session.tools,
+            toolChecks: session.checks.map(check => ({ name: check.name, present: check.present, schemaValid: check.schemaValid })),
+            roots: Array.isArray(session.roots?.layers) ? session.roots.layers.length : null,
+            rootsTruncated: session.roots?.truncated === true,
+            stallionUrl: flags['--stallion-url'] ?? null
+          }
+        });
+      } finally {
+        await transport.close();
+      }
+    } else {
+      result = await runProcedural(input, options);
+    }
+    return {
+      status: result.status, version: result.version, input: result.input,
+      beatSource: result.beatSource, beats: result.beats, tracks: result.tracks,
+      layers: result.layers, groups: result.groups, vectors: result.vectors, stats: result.stats,
+      script: result.script, scriptBytes: result.scriptBytes,
+      tokenEstimate: result.tokenEstimate, tokenBudget: result.tokenBudget,
+      frameBakedArrays: result.frameBakedArrays, live: result.live,
+      reference: result.reference, gate: result.gate,
+      artifacts: result.artifacts, limitations: result.limitations
+    };
+  }
   if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
   if (!reference || reference.startsWith('--')) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
   const flags = {};
@@ -127,13 +260,6 @@ export async function main(args) {
     if (!allowed.includes(key) || !rest[i + 1] || rest[i + 1].startsWith('--') || key in flags) throw new WorkflowError('CLI_USAGE', `Invalid, repeated or incomplete option: ${key}`);
     flags[key] = rest[i + 1];
   }
-  const loadConfig = async requested => {
-    const configPath = path.resolve(requested ?? fileURLToPath(new URL('../config.json', import.meta.url)));
-    const config = await readJson(configPath);
-    if (config.schemaVersion !== 1) throw new WorkflowError('CONFIG_INVALID', 'Unsupported configuration schemaVersion');
-    // A relative authored catalog path resolves against the file that names it.
-    return { config: { ...config, _configPath: configPath }, configPath };
-  };
   // A generic profile declares no reference of its own, so a standalone QA or
   // export would otherwise fail inside a path call instead of naming the missing flag.
   const requireReference = async () => {

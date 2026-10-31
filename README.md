@@ -32,6 +32,7 @@ reference.mp4 → ingest → CV draft → reviewed shot-spec → assets → desi
 - [Set up your IDE or agent](#set-up-your-ide-or-agent)
 - [First clone, in five commands](#first-clone-in-five-commands)
 - [The gates, one by one](#the-gates-one-by-one)
+- [The procedural route](#the-procedural-route)
 - [What you get at the end](#what-you-get-at-the-end)
 - [Profiles: generic and legacy](#profiles-generic-and-legacy)
 - [Verify your checkout](#verify-your-checkout)
@@ -48,7 +49,8 @@ reference.mp4 → ingest → CV draft → reviewed shot-spec → assets → desi
 artifacts, and an adapter that only uses the three Cavalry MCP tools that actually exist. It is
 built to be driven by an agentic IDE — Qoder, Google Antigravity, Z.ai ZCode, Claude Code, Codex,
 Cursor, Zed, or anything else that speaks MCP and can run shell commands — on **Windows 10 or 11**,
-which is the platform Cavalry, the installed-font registry and this project's CI all live on.
+which is where Cavalry and the installed-font registry live. The Node pipeline and its synthetic
+test suite are also CI-verified on **Ubuntu**. Live Cavalry stages still require the Windows host.
 
 **It is not** a one-click "AI copies any video" button. It does not have an OCR engine, does not
 download fonts, does not substitute lookalike assets, does not auto-approve a review, and cannot
@@ -62,22 +64,22 @@ anybody's footage, music, fonts, or brand assets.
 
 ## Requirements
 
-**This is a Windows project.** Windows 10 or 11 is the platform it is developed, tested and
-supported on, and the only one CI verifies. Cavalry itself is installed on your machine, the
-installed-font discovery reads the Windows registry, and every command in these docs is written
-for Windows PowerShell. `package.json` declares `"os": ["win32"]`, so `npm ci` on another platform
-stops with `EBADPLATFORM` — a `notsup Unsupported platform` line naming the wanted and the actual
-OS — rather than letting you discover it half-way through a job. That refusal was checked here by
-flipping the declaration to `"darwin"` and watching `npm ci` reject it on this Windows machine.
+**Cavalry is a Windows application; the Node pipeline is cross-platform.** Windows 10 or 11 is the
+host for Cavalry, the installed-font discovery and the live MCP stages. The deterministic Node
+pipeline (`ingest` through `export`, plus `procedural`) and its synthetic test suite are CI-verified
+on both Windows and Ubuntu; commands in these docs are written for Windows PowerShell because that
+is where the live round-trips happen. `package.json` allows `win32` and `linux`, so `npm ci` works
+on both CI legs; macOS remains unsupported and is refused at install time.
 
 | Requirement | Why | Verified with |
 |---|---|---|
-| **Windows 10 or 11** | the supported and CI-verified platform; `npm` enforces it | CI on `windows-latest`; elsewhere `npm ci` stops with `EBADPLATFORM` |
+| **Windows 10 or 11** | the Cavalry host and the only platform that can run `build`, `render`, `export` and the manual integration leg | CI on `windows-latest` |
+| **Ubuntu (Node pipeline)** | runs the same unit and synthetic suite without Cavalry, catching path and process assumptions | CI on `ubuntu-latest` |
 | Node.js **24+** | ESM `.mjs`, `node --test` runner | `node --version` |
 | `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version`; install routes in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
-| The three npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`) | schema validation, PNG decode, MCP client | `npm ci` (installs 96 packages, no global installs) |
-| **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for `build`, `render`, `export` | live MCP round-trips, see `docs/MCP_CAPABILITIES.md` |
-| A `cavalry-mcp` checkout | the MCP server this project talks to | `node C:\path\to\cavalry-mcp\dist\index.js` |
+| The npm dependencies (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`, `fit-curve`, `bezier-easing`, `odiff-bin`, `@visioncortex/vtracer`) | schema validation, PNG decode, MCP client, curve fitting, a local perceptual gate and WASM vector tracing | `npm ci` (no global installs) |
+| **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for live scene work and rendering | live MCP round-trips, see `docs/MCP_CAPABILITIES.md` |
+| A `cavalry-mcp` checkout on the Windows host | the MCP server this project talks to | `node C:\path\to\cavalry-mcp\dist\index.js` |
 
 Cavalry is proprietary software and is **not** part of this repository. The MCP server and the
 Stallion bridge are third-party MIT projects described in [`docs/CREDITS.md`](docs/CREDITS.md);
@@ -245,6 +247,69 @@ side-by-side images for the worst frames, and returns `needs_review`, which only
 resolve. Export copies everything into a new unique directory, re-verifies every hash, and never
 overwrites a previous final.
 
+## The procedural route
+
+The gate-by-gate route above is the honest, general-purpose one. For references whose motion is
+mostly shapes and type, there is a second route that skips the catalog and bakes less: it measures
+beats, vectorises crops, fits one curve per track per beat, collapses identical staggers, and emits
+**a single batched `_mg` script** — not a 60 fps keyframe table. Stage 5 then renders only the
+sparse beat-inflection frames and compares them locally with odiff; no frame ever goes to a vision
+model.
+
+```powershell
+# compile the shipped ten-layer synthetic fixture and prove the plumbing, no Cavalry needed
+node src/cli.mjs procedural --dry-run
+
+# a measured scene JSON, kept as artifacts that are never overwritten
+node src/cli.mjs procedural --input examples\procedural\synthetic-ten-layer.json --output work\procedural
+
+# a video needs Stage 2B tracks: the route will not invent them
+node src/cli.mjs procedural --input "C:\Videos\reference.mp4" --tracks tracks.json --smooth --threshold 1.5 --max-passes 3
+
+# live Stage 5: execute the script, render sparse frames, odiff, patch (Cavalry running)
+node src/cli.mjs procedural --live --input scene.json --reference work\frames --threshold 1.5 --max-passes 3
+
+# live Stage 5 without extracted frames: FFmpeg pulls the sparse beat frames from the clip
+node src/cli.mjs procedural --live --input "C:\Videos\reference.mp4" --tracks tracks.json --auto-reference
+```
+
+`--smooth` applies Savitzky–Golay smoothing (edge samples preserved) to measured tracks; it is off
+by default because the shipped fixture is already pre-measured and clean. A scene JSON may also
+list `crops` — `{ "id": "mark", "path": "mark.png" }`, resolved relative to the scene file — which
+Stage 2A traces with VTracer and attaches to the track of the same id; a crop with no matching
+track is reported, not silently emitted. `--dry-run` stops after compilation and says so in
+`limitations`; it never opens Cavalry. `--live` binds the Stage 5 transport to the `mcp` block in
+`config.json` (or `--stallion-url`): it opens the cavalry-mcp/Stallion session, sends the one
+batched script through `cavalry_run_script`, renders only the sparse beat frames through the
+verified per-frame route, compares them locally, and sends at most one compact `_mg.patch` script
+per pass until `--threshold` is met or `--max-passes` is exhausted. Each pass targets up to
+`--max-layers-per-beat` (default 4) layers that are actually moving in that beat — ranked by odiff
+mismatch-box overlap when layer boxes are known and by displacement amplitude otherwise — and
+splits the measured drift across them in one batched patch. When every active layer sits on the
+same expected position, the whole delta falls back to the primary layer rather than duplicating it;
+stagger followers receive relative deltas. cavalry-mcp registers no
+`cavalry_render_frames` tool, so the transport renders each sparse frame through the verified
+`api.setFrame` + `api.renderPNGFrame` route inside `cavalry_run_script` — one PNG per call, never a
+scene re-emit. `--reference` accepts an extracted-frames directory, a `%0Nd` pattern or a JSON
+frame→path map (relative paths resolve against the map's own directory) at composition resolution —
+deltas are measured in those pixels, so a resolution mismatch is reported as a layout diff rather
+than silently scaled. When the input itself is a video, `--reference` may be omitted (or
+`--auto-reference` passed): FFmpeg extracts exactly the Stage 1 inflection frames (`inFrame + 1`,
+`peakFrame`, `outFrame - 1`) into `reference-frames/` under `--output`, and that frame→path map
+feeds the same gate — a scene JSON still needs an explicit `--reference`, because it has no pixels
+to extract. Without `--live`, Stage 5 reports `unavailable` and never waits on a socket.
+The output is a `procedural-report.json` with the token estimate (the ten-layer fixture
+compiles to well under the 800-token budget), the number of frame-baked arrays (must be 0), the
+beat source (`fixture`/`provided` beats, `pyscenedetect`, or the local `activity`/`fingerprint-fallback`
+routes), the live session facts when one ran, and the per-beat gate status. `CONVERGED` means
+within `--threshold` percent of differing pixels; `unconverged` after `--max-passes` is reported
+as such. This route is younger than the main one: the pure-Node stages and the runtime prelude
+contract are covered by the suite, and the live leg has been exercised against a running Cavalry
+2.8.0 / Stallion 0.9.0 session through cavalry-mcp 3.0.0 — a controlled known-offset reference
+converged on pass two with one batched `_mg.patch`, and the scene was cleaned afterwards. It has
+not yet been exercised against a real reference video end to end; see
+[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md#the-procedural-route-node-srcclimjs-procedural).
+
 ## What you get at the end
 
 ```
@@ -287,7 +352,7 @@ configs, the generic modules, the skills, the README, or any report you would ha
 
 ```powershell
 npm run verify     # syntax check every module + config parity + skill mirrors + privacy scan
-npm test           # 215 tests, no Cavalry needed (the runner reports 216 entries because it also lists test/fixtures.mjs, a helper module)
+npm test           # 258 tests, no Cavalry needed (259 entries: test/fixtures.mjs is a helper; the _mg contract test skips unless CAVALRY_MCP_ROOT points at a built cavalry-mcp)
 npm run verify:docs  # re-runs the suite and checks that every test count quoted in these docs is current
 npm run test:integration   # LIVE: needs Cavalry 2.8 + Stallion; writes integration/evidence/ (gitignored)
 ```
@@ -299,12 +364,12 @@ redistributed — reproduce it on your own machine.
 
 ## Limitations, stated plainly
 
-- **Windows is the only platform this verifies.** The engine is plain Node ESM and its media
-  stages go through FFmpeg, so other systems may well run it — but CI does not run them, no claim
-  is made about them, and `package.json` declares `"os": ["win32"]`, which makes `npm ci` refuse
-  elsewhere with `EBADPLATFORM` instead of half-installing. If you need it elsewhere, that is a
-  fork decision with real work in it: installed-font discovery, path semantics and file-sharing
-  behaviour all differ per OS.
+- **Linux CI covers the Node pipeline, not Cavalry.** Windows 10/11 and Ubuntu both run the unit
+  and synthetic suite, so the measurement, planning, procedural and export code is exercised on
+  both. Live Cavalry work is Windows-host only and the integration leg is manually dispatched.
+  macOS is unsupported and `package.json` still refuses it at install time. Installed-font
+  discovery, path semantics and file-sharing behaviour differ per OS; a change that assumes
+  Windows APIs will still be caught by the Ubuntu leg only if a test covers it.
 - **No OCR.** No recognizer is installed and nothing is downloaded, so on-screen copy always comes
   from a human transcription decision. The CV pass proposes geometry, not words.
 - **Fonts are not identified from pixels.** `font.family` stays `null` until you resolve it against

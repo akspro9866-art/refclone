@@ -9,13 +9,17 @@ Qoder reads this file and `.qoder/skills/*/SKILL.md`. Antigravity, ZCode, Codex,
 Zed and other agents that read `AGENTS.md` get the same contract; see
 [docs/IDE_SETUP.md](docs/IDE_SETUP.md) for where each tool puts rules and skills.
 
-**The platform is Windows 10/11** — that is where Cavalry, the installed-font
-registry and this repository's CI live, and `package.json` restricts install to
-`win32`. So when you emit a command, write it for PowerShell or `cmd.exe`: one
-command per line, no trailing-backslash continuation, no `&&` chaining (Windows
-PowerShell 5.1 cannot parse it), and `Invoke-Item` rather than `open`. Paths in
-JSON and TOML use forward slashes (`C:/Users/<you>/...`) because a backslash is
-an escape character there; paths you hand to a Windows shell use backslashes.
+**The Cavalry host is Windows 10/11** — that is where Cavalry, the installed-font
+registry and the live MCP stages live. The Node pipeline and its synthetic test
+suite are CI-verified on Windows and Ubuntu, and `package.json` allows `win32`
+and `linux` (macOS is refused). When you drive Cavalry, write commands for
+PowerShell or `cmd.exe`: one command per line, no trailing-backslash
+continuation, no `&&` chaining (Windows PowerShell 5.1 cannot parse it), and
+`Invoke-Item` rather than `open`. Paths in JSON and TOML use forward slashes
+(`C:/Users/<you>/...`) because a backslash is an escape character there; paths
+you hand to a Windows shell use backslashes. New pure-Node modules must not bake
+in Windows path or process assumptions: resolve with `node:path` and let the
+Ubuntu CI leg verify it.
 
 ## Non-negotiables
 
