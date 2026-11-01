@@ -68,7 +68,8 @@
   },
   "qa": {
     "thresholdsCalibrated": false,
-    "requireManualReview": true
+    "requireManualReview": true,
+    "regions": { "enabled": true, "maxRegions": 24 }
   },
   "correction": {
     "maxIterations": 3,

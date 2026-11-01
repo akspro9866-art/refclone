@@ -8,8 +8,9 @@ import {
   validateArtifact, verifyFiles, withJobLock, writeJsonState
 } from './core.mjs';
 import { deriveJobDirectory } from './assets.mjs';
+import { inkField, inkRects, modalBackground, rectDisplacement } from './stages/bandTracking.mjs';
 
-export const QA_VERSION = '1.0.0';
+export const QA_VERSION = '1.1.0';
 
 // Provisional comparator thresholds. They are deliberately conservative and are
 // reported as uncalibrated: config.qa.thresholdsCalibrated is false, so the
@@ -24,7 +25,18 @@ const DEFAULT_THRESHOLDS = {
   frameAttentionSsim: 0.6,
   changedPixelDelta: 24,
   shiftSearchRadius: 6,
-  shiftImprovement: 0.35
+  shiftImprovement: 0.35,
+  // Region scoring (see compareRegions). A region is a reference row-ink band, so
+  // these limits are per text line rather than per frame.
+  regions: true,         // config.qa.regions.enabled overrides this
+  regionMaxCount: 24,
+  regionMinRowInkRatio: 0.02,
+  regionUpSample: 8,     // profile interpolation: the measurement quantum is 1/8 px
+  regionSearchRadiusPx: 8,
+  regionNoiseFloorPx: 0.125,
+  regionPassMae: 3,
+  regionGeometryGain: 0.6,
+  regionTextureGain: 0.25
 };
 
 const DIFF_CELL = 32;
@@ -43,51 +55,12 @@ function luminance(data, index) {
 }
 
 /**
- * Compare one aligned reference/render pair. SSIM uses non-overlapping 8x8
- * luminance blocks (a documented approximation of the published SSIM variant),
- * and the ink mask uses the dominant luminance as the flat-background estimate,
- * so text layout agreement is measured independently of anti-aliasing color.
+ * Mean SSIM over non-overlapping 8x8 luminance blocks. `lumA`/`lumB` are contiguous
+ * `width` x `height` buffers, so one implementation serves the whole-frame score and
+ * a cropped region score alike. Blocks at the right and bottom edge are clamped
+ * rather than dropped, exactly as the original frame-level loop did.
  */
-export function compareFrames(reference, render, { changedPixelDelta }) {
-  if (reference.width !== render.width || reference.height !== render.height) {
-    throw new WorkflowError('QA_FRAME_DIMENSIONS', 'Reference and render frame dimensions differ.', {
-      reference: { width: reference.width, height: reference.height },
-      render: { width: render.width, height: render.height }
-    });
-  }
-  const width = reference.width, height = reference.height, pixels = width * height;
-  const lumA = new Float32Array(pixels), lumB = new Float32Array(pixels);
-  const histogram = new Uint32Array(256);
-  let absSum = 0, squaredSum = 0, changed = 0;
-  let minX = width, minY = height, maxX = -1, maxY = -1, centroidX = 0, centroidY = 0, weight = 0;
-  const columns = Math.ceil(width / DIFF_CELL), rows = Math.ceil(height / DIFF_CELL);
-  const cells = new Float64Array(columns * rows);
-  for (let y = 0, i = 0, p = 0; y < height; y++) {
-    for (let x = 0; x < width; x++, i++, p += 4) {
-      const la = luminance(reference.data, p), lb = luminance(render.data, p);
-      lumA[i] = la; lumB[i] = lb;
-      histogram[Math.min(255, Math.round(la))] += 1;
-      const dr = Math.abs(reference.data[p] - render.data[p]);
-      const dg = Math.abs(reference.data[p + 1] - render.data[p + 1]);
-      const db = Math.abs(reference.data[p + 2] - render.data[p + 2]);
-      absSum += dr + dg + db;
-      const dl = la - lb;
-      squaredSum += dl * dl;
-      const delta = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
-      if (delta > changedPixelDelta) {
-        changed += 1;
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-        centroidX += x * delta; centroidY += y * delta; weight += delta;
-      }
-      cells[Math.min(rows - 1, Math.floor(y / DIFF_CELL)) * columns + Math.min(columns - 1, Math.floor(x / DIFF_CELL))] += Math.abs(dl);
-    }
-  }
-  const mae = absSum / (pixels * 3);
-  const rmse = Math.sqrt(squaredSum / pixels);
-
+function blockSsim(lumA, lumB, width, height) {
   const C1 = (0.01 * 255) ** 2, C2 = (0.03 * 255) ** 2;
   let ssimSum = 0, blocks = 0;
   for (let by = 0; by < height; by += 8) {
@@ -114,31 +87,107 @@ export function compareFrames(reference, render, { changedPixelDelta }) {
       blocks += 1;
     }
   }
+  return { ssim: ssimSum / Math.max(1, blocks), blocks };
+}
 
-  // Dominant (background) luminance: the mode of the reference histogram.
+/**
+ * Accumulate the pixel statistics of one rectangle of an aligned pair.
+ *
+ * `lumA`/`lumB` are contiguous buffers of the *cropped* rect, which is what lets the
+ * same SSIM block loop score a frame and a line of type. Every other output — the
+ * difference bbox, the centroid, the optional energy cells — is reported in full-frame
+ * coordinates, so a region's numbers can be read against the picture a human sees.
+ * The ink mask thresholds on the rect's own modal luminance: a text line and a logo
+ * plate can sit on different backgrounds inside one frame.
+ */
+function pixelStatistics(reference, render, rect, changedPixelDelta, { cells = false } = {}) {
+  const width = rect.width, height = rect.height, pixels = width * height;
+  const lumA = new Float32Array(pixels), lumB = new Float32Array(pixels);
+  const histogram = new Uint32Array(256);
+  let absSum = 0, squaredSum = 0, changed = 0;
+  let minX = reference.width, minY = reference.height, maxX = -1, maxY = -1, centroidX = 0, centroidY = 0, weight = 0;
+  const columns = cells ? Math.ceil(reference.width / DIFF_CELL) : 0;
+  const rows = cells ? Math.ceil(reference.height / DIFF_CELL) : 0;
+  const grid = cells ? new Float64Array(columns * rows) : null;
+  for (let y = 0, i = 0; y < height; y++, i += width) {
+    const sourceY = rect.y + y;
+    for (let x = 0; x < width; x++) {
+      const index = i + x;
+      const sourceX = rect.x + x;
+      const at = (sourceY * reference.width + sourceX) * 4;
+      const other = (sourceY * render.width + sourceX) * 4;
+      const la = luminance(reference.data, at), lb = luminance(render.data, other);
+      lumA[index] = la; lumB[index] = lb;
+      histogram[Math.min(255, Math.round(la))] += 1;
+      const dr = Math.abs(reference.data[at] - render.data[other]);
+      const dg = Math.abs(reference.data[at + 1] - render.data[other + 1]);
+      const db = Math.abs(reference.data[at + 2] - render.data[other + 2]);
+      absSum += dr + dg + db;
+      const dl = la - lb;
+      squaredSum += dl * dl;
+      const delta = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
+      if (delta > changedPixelDelta) {
+        changed += 1;
+        if (sourceX < minX) minX = sourceX;
+        if (sourceY < minY) minY = sourceY;
+        if (sourceX > maxX) maxX = sourceX;
+        if (sourceY > maxY) maxY = sourceY;
+        centroidX += sourceX * delta; centroidY += sourceY * delta; weight += delta;
+      }
+      if (cells) grid[Math.min(rows - 1, Math.floor(sourceY / DIFF_CELL)) * columns + Math.min(columns - 1, Math.floor(sourceX / DIFF_CELL))] += Math.abs(dl);
+    }
+  }
   let background = 0;
   for (let value = 1; value < 256; value++) if (histogram[value] > histogram[background]) background = value;
   const inkThreshold = background - 24;
   let intersect = 0, union = 0;
-  for (let i = 0; i < pixels; i++) {
-    const a = lumA[i] < inkThreshold, b = lumB[i] < inkThreshold;
+  for (let index = 0; index < pixels; index++) {
+    const a = lumA[index] < inkThreshold, b = lumB[index] < inkThreshold;
     if (a && b) intersect += 1;
     if (a || b) union += 1;
   }
-  const inkIou = union / pixels < 0.005 ? null : intersect / union;
+  return {
+    lumA, lumB, pixels, width, height,
+    mae: absSum / (pixels * 3),
+    rmse: Math.sqrt(squaredSum / pixels),
+    changed,
+    inkIou: union / pixels < 0.005 ? null : intersect / union,
+    backgroundLuminance: background,
+    diffBbox: maxX >= 0 ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null,
+    diffCentroid: weight > 0 ? { x: round(centroidX / weight, 1), y: round(centroidY / weight, 1) } : null,
+    centroidWeight: weight,
+    cells: grid, columns, rows
+  };
+}
+
+/**
+ * Compare one aligned reference/render pair. SSIM uses non-overlapping 8x8
+ * luminance blocks (a documented approximation of the published SSIM variant),
+ * and the ink mask uses the dominant luminance as the flat-background estimate,
+ * so text layout agreement is measured independently of anti-aliasing color.
+ */
+export function compareFrames(reference, render, { changedPixelDelta }) {
+  if (reference.width !== render.width || reference.height !== render.height) {
+    throw new WorkflowError('QA_FRAME_DIMENSIONS', 'Reference and render frame dimensions differ.', {
+      reference: { width: reference.width, height: reference.height },
+      render: { width: render.width, height: render.height }
+    });
+  }
+  const width = reference.width, height = reference.height;
+  const stats = pixelStatistics(reference, render, { x: 0, y: 0, width, height }, changedPixelDelta, { cells: true });
+  const { lumA, lumB, pixels, mae, rmse, changed, inkIou, diffBbox, diffCentroid, cells, columns, rows } = stats;
+  const ssimValue = blockSsim(lumA, lumB, width, height).ssim;
 
   const ranked = [];
   for (let cy = 0; cy < rows; cy++) {
     for (let cx = 0; cx < columns; cx++) ranked.push({ cx, cy, energy: cells[cy * columns + cx] });
   }
   ranked.sort((a, b) => b.energy - a.energy);
-  const topCell = ranked[0] ?? null;
 
   return {
-    mae: round(mae, 3), rmse: round(rmse, 3), ssim: round(ssimSum / Math.max(1, blocks), 4),
+    mae: round(mae, 3), rmse: round(rmse, 3), ssim: round(ssimValue, 4),
     changedFraction: round(changed / pixels, 4), inkIou: inkIou === null ? null : round(inkIou, 4),
-    diffBbox: maxX >= 0 ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null,
-    diffCentroid: weight > 0 ? { x: round(centroidX / weight, 1), y: round(centroidY / weight, 1) } : null,
+    diffBbox, diffCentroid,
     topCells: ranked.slice(0, 3).map(cell => ({
       x: cell.cx * DIFF_CELL, y: cell.cy * DIFF_CELL, energy: round(cell.energy, 1)
     }))
@@ -184,7 +233,355 @@ export function estimateShift(reference, render, { radius }) {
   return { dx: best.dx, dy: best.dy, residual: round(best.error, 2), zeroResidual: round(zero, 2), improvement: round(improvement, 3) };
 }
 
-function composeComparison(reference, render, { changedPixelDelta = 24 } = {}) {
+// ---------------------------------------------------------------------------
+// Region-aware scoring.
+//
+// One whole-frame MAE cannot say *where* a render is wrong, and one whole-frame
+// shift cannot say *why*. A region here is a row of reference ink — the same band
+// discovery the motion measurement uses — so the score belongs to a line of type
+// rather than to an arbitrary grid. For each region the stage measures three
+// separable things: the pixel error, the sub-pixel displacement of the render's ink
+// against the reference's, and how much of the pixel error a rigid slide removes.
+// The last pair is the texture-versus-geometry test: an error that a translation
+// explains is a placement error and is patchable; an error that survives every
+// translation is an appearance error — glyph shapes, anti-aliasing, colours — and
+// no position patch fixes it.
+// ---------------------------------------------------------------------------
+
+/** Modal RGB of a decoded frame, the flat-background estimate the ink field needs. */
+export function modalColor(png, options = {}) {
+  return modalBackground(png, options);
+}
+
+/**
+ * Find the ink bands of one frame, in full-frame pixel coordinates.
+ *
+ * The bands come from the reference only: a region the reference does not show is
+ * not something the render can be scored against, and extra ink in the render is
+ * reported by that region's own error rather than by inventing a region for it.
+ */
+export function deriveRegions(png, options = {}) {
+  const settings = { ...DEFAULT_THRESHOLDS, ...options };
+  const domainX = settings.domain?.x ?? 0;
+  const discovered = inkRects(png, {
+    background: settings.background,
+    minRowInkRatio: settings.regionMinRowInkRatio,
+    maxBands: settings.regionMaxCount,
+    domainStart: domainX,
+    domainEnd: settings.domain?.width != null ? domainX + settings.domain.width : png.width,
+    rowStart: settings.domain?.y ?? 0,
+    rowEnd: settings.domain?.height != null ? (settings.domain.y ?? 0) + settings.domain.height : png.height
+  });
+  return {
+    background: discovered.background,
+    basis: `${discovered.bands.length} of ${discovered.found} reference ink band(s); a row counts as ink once ${discovered.minInk} weighted pixel(s) of it differ from ${discovered.background}.`,
+    found: discovered.found,
+    truncated: discovered.truncated,
+    minInk: discovered.minInk,
+    regions: discovered.bands.map(band => ({ id: band.id, rect: band.rect, ink: band.ink }))
+  };
+}
+
+/**
+ * Sub-pixel displacement of the render's ink against the reference's, on both axes.
+ *
+ * Thin wrapper over bandTracking's `rectDisplacement`, which is the same measurement
+ * Stage 2D tracks motion with and the same one Stage 5 patches from: a drift in a QA
+ * report and a drift in a patch cannot be different numbers about the same pixels.
+ * Positive dxPx/dyPx means the render sits right of or below the reference;
+ * `correctionPx` is what a layer needs, already negated.
+ */
+export function regionDrift(reference, render, rect, options = {}) {
+  const settings = { ...DEFAULT_THRESHOLDS, ...options };
+  return rectDisplacement(reference, render, rect, {
+    background: settings.background ?? settings.fields?.background,
+    fields: settings.fields,
+    upsample: settings.regionUpSample,
+    rangePx: settings.regionSearchRadiusPx,
+    noiseFloorPx: settings.regionNoiseFloorPx
+  });
+}
+
+/**
+ * How much of a region's error a rigid slide removes.
+ *
+ * The candidates are the measured drift and its +-1 px neighbourhood (plus zero, which
+ * is the control), never a wide blind search: a search free to move far would find a
+ * low error by aligning a different word entirely. Only offsets that keep most of the
+ * region inside the frame are eligible, so a slide cannot win by discarding half of the
+ * pixels it was asked to explain.
+ */
+export function rigidAlignment(reference, render, rect, drift, options = {}) {
+  const settings = { ...DEFAULT_THRESHOLDS, ...options };
+  if (!drift?.measured) return { gain: null, reason: drift?.reason ?? 'no-sub-pixel-measurement' };
+  // The slide is probed at the drift the profile measured, never at the frame-level
+  // search radius: a 10 px displacement is a placement error too, and capping the probe
+  // at 6 would report it as "partly appearance" because the rest of it was never tested.
+  const clip = value => Math.max(-settings.regionSearchRadiusPx, Math.min(settings.regionSearchRadiusPx, value));
+  const base = { x: clip(Math.round(drift.dxPx)), y: clip(Math.round(drift.dyPx)) };
+  const candidates = [{ x: 0, y: 0 }];
+  for (const ox of [-1, 0, 1]) {
+    for (const oy of [-1, 0, 1]) {
+      const offset = { x: base.x + ox, y: base.y + oy };
+      if (offset.x === 0 && offset.y === 0) continue;
+      candidates.push(offset);
+    }
+  }
+  const errorAt = offset => {
+    let sum = 0, count = 0;
+    for (let y = 0; y < rect.height; y++) {
+      const targetY = rect.y + y + offset.y;
+      if (targetY < 0 || targetY >= render.height) continue;
+      for (let x = 0; x < rect.width; x++) {
+        const targetX = rect.x + x + offset.x;
+        if (targetX < 0 || targetX >= render.width) continue;
+        const from = ((rect.y + y) * reference.width + rect.x + x) * 4;
+        const to = (targetY * render.width + targetX) * 4;
+        sum += Math.abs(reference.data[from] - render.data[to])
+          + Math.abs(reference.data[from + 1] - render.data[to + 1])
+          + Math.abs(reference.data[from + 2] - render.data[to + 2]);
+        count += 1;
+      }
+    }
+    return { mae: count ? sum / (count * 3) : Infinity, coverage: count / (rect.width * rect.height) };
+  };
+  const zero = errorAt({ x: 0, y: 0 });
+  let best = zero, bestOffset = { x: 0, y: 0 };
+  for (const offset of candidates) {
+    if (offset.x === 0 && offset.y === 0) continue;
+    const error = errorAt(offset);
+    if (error.coverage < 0.5) continue;
+    if (error.mae < best.mae) { best = error; bestOffset = offset; }
+  }
+  const gain = zero.mae > 1e-9 ? Math.max(0, 1 - best.mae / zero.mae) : 0;
+  return {
+    gain: round(gain, 4),
+    offsetPx: bestOffset,
+    maeAtZero: round(zero.mae, 3),
+    maeAfterShift: round(best.mae, 3),
+    coverage: round(best.coverage, 4),
+    integerDriftPx: base,
+    reason: null
+  };
+}
+
+/**
+ * One region's score: pixel error, sub-pixel drift, and the texture-versus-geometry
+ * verdict. `diagnostic` is one of match | position | aligned | texture | mixed |
+ * unmeasurable, and `reason` always states the numbers the verdict was read from.
+ */
+export function measureRegion(reference, render, region, options = {}) {
+  const settings = { ...DEFAULT_THRESHOLDS, ...options };
+  const rect = region?.rect ?? region;
+  if (!rect || !Number.isInteger(rect.x) || !Number.isInteger(rect.y)) {
+    throw new WorkflowError('QA_REGION_INVALID', 'A region needs an integer top-left in frame pixels.', { region });
+  }
+  const clipped = {
+    x: Math.max(0, rect.x), y: Math.max(0, rect.y),
+    width: Math.min(reference.width - Math.max(0, rect.x), rect.width),
+    height: Math.min(reference.height - Math.max(0, rect.y), rect.height)
+  };
+  const base = {
+    id: region?.id ?? `region-${clipped.x}-${clipped.y}-${clipped.width}-${clipped.height}`,
+    rect: clipped,
+    elementId: settings.elementId ?? null
+  };
+  if (clipped.width < 8 || clipped.height < 8 || reference.width !== render.width || reference.height !== render.height) {
+    return { ...base, diagnostic: 'unmeasurable', reason: clipped.width < 8 || clipped.height < 8 ? 'region-too-small' : 'dimension-mismatch', mae: null };
+  }
+  const stats = pixelStatistics(reference, render, clipped, settings.changedPixelDelta);
+  const ssimValue = blockSsim(stats.lumA, stats.lumB, clipped.width, clipped.height).ssim;
+  const drift = regionDrift(reference, render, clipped, settings);
+  const alignment = rigidAlignment(reference, render, clipped, drift, settings);
+  const mae = round(stats.mae, 3);
+  let diagnostic, reason;
+  if (mae <= settings.regionPassMae) {
+    diagnostic = 'match';
+    reason = `region MAE ${mae} is at or below the provisional region limit ${settings.regionPassMae}`;
+  } else if (alignment.gain === null) {
+    diagnostic = 'unmeasurable';
+    reason = `the ink profile gave no sub-pixel alignment (${alignment.reason})`;
+  } else if (alignment.gain >= settings.regionGeometryGain) {
+    // The slide explains the error; the only question is whether it is big enough to
+    // act on. A drift at or under the patch floor says "this line is placed as
+    // accurately as a position key can be", and patching it would be noise.
+    diagnostic = drift.aboveNoiseFloor ? 'position' : 'aligned';
+    reason = diagnostic === 'position'
+      ? `a rigid slide of ${alignment.offsetPx.x}, ${alignment.offsetPx.y} px removes ${round(alignment.gain * 100, 1)}% of the region error`
+      : `a slide of ${round(Math.abs(drift.dxPx), 3)}, ${round(Math.abs(drift.dyPx), 3)} px removes ${round(alignment.gain * 100, 1)}% of the error, at or under the ${settings.regionNoiseFloorPx} px patch floor`;
+  } else if (alignment.gain <= settings.regionTextureGain) {
+    diagnostic = 'texture';
+    reason = `no slide removes more than ${round(alignment.gain * 100, 1)}% of the region error, so the difference is in the pixels themselves`;
+  } else {
+    diagnostic = 'mixed';
+    reason = `a slide removes ${round(alignment.gain * 100, 1)}% of the error and ${alignment.maeAfterShift} MAE survives it`;
+  }
+  return {
+    ...base,
+    pixels: stats.pixels,
+    mae,
+    rmse: round(stats.rmse, 3),
+    ssim: round(ssimValue, 4),
+    changedFraction: round(stats.changed / stats.pixels, 4),
+    inkIou: stats.inkIou === null ? null : round(stats.inkIou, 4),
+    diffBbox: stats.diffBbox,
+    diffCentroid: stats.diffCentroid,
+    ink: region?.ink ?? null,
+    drift: {
+      dxPx: drift.dxPx, dyPx: drift.dyPx, correctionPx: drift.correctionPx,
+      score: drift.score, marginPx: drift.marginPx, quantumPx: drift.quantumPx,
+      noiseFloorPx: drift.noiseFloorPx, aboveNoiseFloor: drift.aboveNoiseFloor, reason: drift.reason
+    },
+    geometry: alignment,
+    diagnostic,
+    // A position verdict that still leaves a large residual is both: the layer is in the
+    // wrong place *and* its rendering differs. Saying so beats picking one.
+    alsoAppearance: diagnostic === 'position' && Number.isFinite(alignment.maeAfterShift) && alignment.maeAfterShift > settings.regionPassMae,
+    reason
+  };
+}
+
+/**
+ * Score every reference ink band of one frame pair.
+ *
+ * Cost is bounded by design: the bands come from the reference, the ink field is
+ * decoded once per frame, and the rigid alignment only probes the neighbourhood of the
+ * measured drift. `summary` is the roll-up a report line needs; the per-region records
+ * carry the evidence.
+ */
+export function compareRegions(reference, render, options = {}) {
+  const settings = { ...DEFAULT_THRESHOLDS, ...options };
+  let derived;
+  if (options.regions) {
+    derived = {
+      regions: options.regions,
+      basis: 'supplied region list',
+      background: settings.background ?? modalBackground(reference).hex
+    };
+  } else {
+    try {
+      derived = deriveRegions(reference, settings);
+    } catch (error) {
+      throw new WorkflowError('QA_REGION_DISCOVERY', 'No reference ink band could be found, so the frame cannot be scored region by region.', {
+        reason: error.message, background: settings.background ?? null
+      });
+    }
+  }
+  const background = derived.background;
+  if (!background) {
+    throw new WorkflowError('QA_REGION_BACKGROUND', 'The reference frame carries no pixels, so no background can be measured and no region scored.', {});
+  }
+  const fields = {
+    background,
+    reference: inkField(reference, { background }),
+    render: inkField(render, { background })
+  };
+  const elements = options.elementRects ?? [];
+  const records = derived.regions.map(region => {
+    const match = elements.find(element => overlapFraction(element.rect, region.rect) >= 0.2);
+    return measureRegion(reference, render, region, { ...settings, background, fields, elementId: match?.id ?? null });
+  });
+  const scored = records.filter(record => Number.isFinite(record.mae));
+  const worst = scored.reduce((max, record) => (!max || record.mae > max.mae ? record : max), null);
+  const offDiagonal = scored.filter(record => record.diagnostic !== 'match');
+  return {
+    background,
+    basis: derived.basis,
+    regions: records,
+    summary: {
+      regions: records.length,
+      scored: scored.length,
+      unmeasurable: records.length - scored.length,
+      worstMae: worst?.mae ?? null,
+      worstRegionId: worst?.id ?? null,
+      position: offDiagonal.filter(record => record.diagnostic === 'position').length,
+      texture: offDiagonal.filter(record => record.diagnostic === 'texture').length,
+      mixed: offDiagonal.filter(record => record.diagnostic === 'mixed').length,
+      // An 'aligned' region has an error a slide would explain, but the slide is at or
+      // under the patch floor: reported so a reviewer can see the render is that close,
+      // and never patched.
+      aligned: offDiagonal.filter(record => record.diagnostic === 'aligned').length,
+      attributed: records.filter(record => record.elementId).length
+    },
+    limitations: []
+  };
+}
+
+/** IoU-style overlap of two {x, y, width, height} rectangles. */
+function overlapFraction(a, b) {
+  if (!a || !b) return 0;
+  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  if (width <= 0 || height <= 0) return 0;
+  const intersection = width * height;
+  return intersection / (a.width * a.height + b.width * b.height - intersection);
+}
+
+/**
+ * Best-effort mapping from plan elements to frame rectangles.
+ *
+ * A scene plan is not required to carry geometry, and where it does the shape differs
+ * by planner (normalized bbox, pixel bounds, or a size plus an origin). This reads all
+ * three and reports nothing it cannot resolve; an unattributed region is a known gap in
+ * the plan, not a measurement failure.
+ */
+export function elementRects(plan, frame) {
+  const rects = [];
+  for (const element of plan?.elements ?? []) {
+    const parameters = element?.parameters ?? {};
+    const direct = parameters.bbox ?? parameters.bounds ?? parameters.rect ?? parameters.pixelBounds ?? null;
+    let rect = null;
+    if (direct && (Number.isFinite(direct.x) || Number.isFinite(direct.left))) {
+      const left = direct.left ?? direct.x, top = direct.top ?? direct.y;
+      // `rightExclusive`/`bottomExclusive` are how Stage 2B stores pixel bounds; `right`
+      // is already treated as an exclusive end, so both spellings give the same width.
+      const right = direct.right ?? direct.rightExclusive ?? (Number.isFinite(direct.width) ? left + direct.width : null);
+      const bottom = direct.bottom ?? direct.bottomExclusive ?? (Number.isFinite(direct.height) ? top + direct.height : null);
+      if (Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom)) {
+        // A bbox whose extents are <= 1 is normalized, which is how auto-analysis states
+        // are stored; anything else is already in pixels.
+        const normalized = Math.max(right, bottom) <= 1.5;
+        rect = normalized
+          ? { x: Math.round(left * frame.width), y: Math.round(top * frame.height), width: Math.round((right - left) * frame.width), height: Math.round((bottom - top) * frame.height) }
+          : { x: Math.round(left), y: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top) };
+      }
+    }
+    if (!rect && Number.isFinite(parameters.widthPx) && Number.isFinite(parameters.heightPx)) {
+      const width = Math.round(parameters.widthPx), height = Math.round(parameters.heightPx);
+      // Cavalry positions layers by their origin, which the generic planner derives from
+      // a bbox centre; `center`/`position` name the centre itself. Both are read as the
+      // anchor they are called, because a rect built on the wrong assumption is worse
+      // than no attribution at all.
+      const centered = parameters.origin === undefined;
+      const anchor = centered ? (parameters.center ?? parameters.position ?? null) : parameters.origin;
+      if (anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y)) {
+        rect = centered
+          ? { x: Math.round(anchor.x - width / 2), y: Math.round(anchor.y - height / 2), width, height }
+          : { x: Math.round(anchor.x), y: Math.round(anchor.y), width, height };
+      }
+    }
+    if (!rect && Number.isFinite(parameters.widthPx) && Number.isFinite(parameters.heightPx)
+        && Number.isFinite(parameters.centerXPx) && Number.isFinite(parameters.centerYPx)) {
+      // `centerXPx`/`centerYPx` are the planner's frame-pixel ink centre plus measured
+      // size, which is the shape a real scene-plan carries for text and image layers.
+      // Full-frame backgrounds reuse the same keys with the comp centre as (0, 0), and
+      // that is not a frame-pixel centre: the rect is only claimed when it lands inside
+      // the frame, so a background stays unattributed instead of overlapping every band.
+      const width = Math.round(parameters.widthPx), height = Math.round(parameters.heightPx);
+      const candidate = {
+        x: Math.round(parameters.centerXPx - width / 2),
+        y: Math.round(parameters.centerYPx - height / 2),
+        width, height
+      };
+      if (candidate.x >= 0 && candidate.y >= 0
+          && candidate.x + width <= frame.width && candidate.y + height <= frame.height) rect = candidate;
+    }
+    if (rect && rect.width > 0 && rect.height > 0) rects.push({ id: element.id, rect });
+  }
+  return rects;
+}
+
+function composeComparison(reference, render, { changedPixelDelta = 24, regions = null } = {}) {
   const width = reference.width, height = reference.height, gap = 6;
   const sheet = new PNG({ width: width * 3 + gap * 2, height });
   sheet.data.fill(18);
@@ -208,6 +605,20 @@ function composeComparison(reference, render, { changedPixelDelta = 24 } = {}) {
       const value = Math.min(255, delta * 4);
       sheet.data[to] = value; sheet.data[to + 1] = value; sheet.data[to + 2] = value; sheet.data[to + 3] = 255;
     }
+  }
+  // Region outlines on the diff panel: a reviewer sees which line of the measurement
+  // each score belongs to, instead of guessing from a coordinate in the report.
+  for (const region of regions ?? []) {
+    if (!region?.rect || region.rect.width <= 0 || region.rect.height <= 0) continue;
+    const left = diffOffset + region.rect.x, top = region.rect.y;
+    const right = left + region.rect.width - 1, bottom = top + region.rect.height - 1;
+    const mark = (x, y) => {
+      if (x < diffOffset || x >= sheet.width || y < 0 || y >= height) return;
+      const at = (y * sheet.width + x) * 4;
+      sheet.data[at] = 0; sheet.data[at + 1] = 255; sheet.data[at + 2] = 0; sheet.data[at + 3] = 255;
+    };
+    for (let x = left; x <= right; x++) { mark(x, top); mark(x, bottom); }
+    for (let y = top; y <= bottom; y++) { mark(left, y); mark(right, y); }
   }
   return PNG.sync.write(sheet);
 }
@@ -329,6 +740,24 @@ function qaMarkdown(report, context) {
     const m = shot.metrics;
     lines.push(`| ${shot.shotId} | ${shot.status} | ${m.maeMean} | ${m.maeP95} | ${m.ssimMean} | ${(m.changedFractionMean * 100).toFixed(1)}% | ${m.inkIouMean ?? '—'} | ${context.worstFrames[shot.shotId] ?? '—'} |`);
   }
+  if (report.shots.some(shot => Array.isArray(shot.regions) && shot.regions.length)) {
+    lines.push('', '## Regions', '');
+    lines.push('Per reference ink band on the sampled frame. `gain` is the share of the region error a rigid slide removes;', '');
+    lines.push('`drift` is render-minus-reference in px, and `patch` is the correction that slide would apply.', '');
+    for (const shot of report.shots) {
+      if (!Array.isArray(shot.regions) || shot.regions.length === 0) continue;
+      lines.push('', `### ${shot.shotId} (frame ${shot.regionsSampledFrame})`, '');
+      lines.push('| Region | Element | Diagnostic | MAE | SSIM | Ink IoU | Drift x,y | Gain | Patch dx,dy |');
+      lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+      for (const region of shot.regions) {
+        const drift = region.drift ?? {};
+        lines.push(`| ${region.id} (rows ${region.rect?.y}–${(region.rect?.y ?? 0) + (region.rect?.height ?? 0)}) | ${region.elementId ?? '—'} | ${region.diagnostic} | ${region.mae ?? '—'} | ${region.ssim ?? '—'} | ${region.inkIou ?? '—'} | ${drift.dxPx ?? '—'}, ${drift.dyPx ?? '—'} | ${region.geometry?.gain ?? '—'} | ${drift.correctionPx ? `${drift.correctionPx.dx}, ${drift.correctionPx.dy}` : '—'} |`);
+      }
+      for (const region of shot.regions.filter(item => item.diagnostic !== 'match')) {
+        lines.push('', `- ${region.id}: ${region.diagnostic} — ${region.reason}`);
+      }
+    }
+  }
   if (report.discrepancies.length) {
     lines.push('', '## Discrepancies', '');
     for (const item of report.discrepancies) {
@@ -369,6 +798,40 @@ function reportLimitations(plan, config, referenceProbe) {
     if (text) limitations.push(`Unresolved in plan: ${text}`);
   }
   return [...new Set(limitations)];
+}
+
+/**
+ * What region scoring can and cannot claim, written from the records it produced
+ * rather than from the settings, so a disabled or empty pass says so in its own words.
+ */
+function regionLimitations(thresholds, shots, { enabled, elementRectCount }) {
+  if (!enabled) {
+    return ['Region scoring is disabled (config.qa.regions.enabled=false): every score in this report is a whole-frame average, so no line-level cause is claimed.'];
+  }
+  const sampled = shots.filter(shot => Array.isArray(shot.regions));
+  if (sampled.length === 0) {
+    return ['Region scoring was enabled but no sampled frame produced a region list, so no line-level cause is claimed.'];
+  }
+  const regions = sampled.flatMap(shot => shot.regions ?? []);
+  const scored = regions.filter(region => Number.isFinite(region.mae));
+  const attributed = scored.filter(region => region.elementId).length;
+  const aligned = scored.filter(region => region.diagnostic === 'aligned').length;
+  const limitations = [
+    `Regions are reference ink bands measured on one sampled frame per shot (${sampled.length} of ${shots.length} shots); they are not plan elements, and ink that enters or leaves the frame mid-shot is unmeasured here.`,
+    'Geometry gain classifies an error as placement or appearance; it does not prove which layer is offset, and a region suggestion is a candidate for a gated correction pass, never an applied change.'
+  ];
+  if (elementRectCount === 0) {
+    limitations.push('The plan carries no per-element geometry, so no region is attributed to an element id: region findings name pixel rows, not layers.');
+  } else if (attributed < scored.length) {
+    limitations.push(`${scored.length - attributed} of ${scored.length} region(s) could not be matched to a plan element rectangle and are reported unattributed.`);
+  }
+  if (aligned > 0) {
+    limitations.push(`${aligned} region(s) differ only by a slide at or under the ${thresholds.regionNoiseFloorPx} px patch floor; they are reported and deliberately not patched.`);
+  }
+  if (scored.some(region => region.alsoAppearance)) {
+    limitations.push('At least one region is placed wrongly and rendered differently; its position patch would not close the whole error.');
+  }
+  return limitations;
 }
 
 /**
@@ -413,11 +876,19 @@ export async function runQa(planPath, options = {}) {
   const frameRecordsValid = await verifyFiles(manifest.frames.map(frame => ({ path: frame.path, sha256: frame.sha256 })));
   if (!frameRecordsValid) throw new WorkflowError('QA_FRAME_HASH_MISMATCH', 'Rendered frames no longer match the render manifest.', {});
   const thresholds = { ...DEFAULT_THRESHOLDS, ...(options.thresholds ?? {}) };
+  // Region scoring is opt-out: a frame is broken into its reference ink bands and each
+  // band is scored separately. The plan's element geometry, where it has any, is what
+  // turns a band into "this element is wrong" rather than "rows 50-78 are wrong".
+  const regionScoring = config.qa?.regions?.enabled !== false && thresholds.regions !== false;
+  const regionMaxCount = config.qa?.regions?.maxRegions ?? thresholds.regionMaxCount;
   const jobDirectory = options.jobDirectory ? absolutePath(options.jobDirectory) : deriveJobDirectory(resolvedPlanPath);
   return withJobLock(jobDirectory, async () => {
+    // The enabled flag and the band cap change what the report claims, so they belong in
+    // the cache key: a disabled run must not be served the cached result of an enabled one.
     const key = hashObject({
       version: QA_VERSION, planSha256: await hashFile(resolvedPlanPath),
-      renderManifestSha256: await hashFile(renderManifestPath), referenceSha256, thresholds
+      renderManifestSha256: await hashFile(renderManifestPath), referenceSha256, thresholds,
+      regionScoring, regionMaxCount
     });
     const cacheDirectory = path.join(jobDirectory, 'qa', key);
     await fs.mkdir(cacheDirectory, { recursive: true });
@@ -447,6 +918,17 @@ export async function runQa(planPath, options = {}) {
       });
     }
     const reference = await referenceFrames(jobDirectory, referencePath, referenceSha256, plan, config);
+    const regionElements = regionScoring ? elementRects(plan, { width: plan.project.width, height: plan.project.height }) : [];
+    // `regions` is the opt-out switch, not a region list: compareRegions reads a truthy
+    // `regions` as "score exactly these", so the flag is taken out before the rest of the
+    // thresholds are passed through.
+    const regionThresholds = { ...thresholds };
+    delete regionThresholds.regions;
+    const regionOptions = {
+      ...regionThresholds,
+      elementRects: regionElements,
+      regionMaxCount
+    };
 
     const renderByFrame = new Map(manifest.frames.map(frame => [frame.frame, frame]));
     const shotForFrame = frame => plan.shots.find(shot => frame >= shot.startFrame && frame < shot.endFrameExclusive);
@@ -498,22 +980,54 @@ export async function runQa(planPath, options = {}) {
         try {
           shift = estimateShift(referenceImage, renderImage, { radius: thresholds.shiftSearchRadius });
         } catch { shift = null; }
+        let regions = null;
+        if (regionScoring) {
+          try {
+            regions = compareRegions(referenceImage, renderImage, regionOptions);
+          } catch (error) {
+            // A region pass that cannot run is a gap in the evidence, never a reason to
+            // drop the frame's whole-frame numbers.
+            record.regionError = error?.code ?? error?.message ?? 'region-scoring-failed';
+          }
+        }
         const comparisonPath = path.join(comparisonsDirectory, `${shot.id}-frame-${String(record.frame).padStart(3, '0')}.png`);
-        await fs.writeFile(comparisonPath, composeComparison(referenceImage, renderImage, { changedPixelDelta: thresholds.changedPixelDelta }), { flag: 'wx' })
-          .catch(error => { if (error.code !== 'EEXIST') throw error; });
+        await fs.writeFile(comparisonPath, composeComparison(referenceImage, renderImage, {
+          changedPixelDelta: thresholds.changedPixelDelta,
+          regions: regions?.regions?.filter(region => region.diagnostic !== 'match') ?? null
+        }), { flag: 'wx' }).catch(error => { if (error.code !== 'EEXIST') throw error; });
         comparisonPaths.push(comparisonPath);
         record.shift = shift;
         record.comparisonPath = comparisonPath;
+        record.regions = regions?.regions ?? null;
+        record.regionSummary = regions?.summary ?? null;
+        record.regionBasis = regions?.basis ?? null;
       }
       const notes = [];
+      const worst = summary.worst;
+      // Regions that carry an explanation, in descending error order. 'match' and
+      // 'aligned' are excluded: the first agrees, the second is off by less than the
+      // patch floor, and neither is a thing a correction pass should touch.
+      const offending = (worst?.regions ?? [])
+        .filter(region => region.diagnostic === 'position' || region.diagnostic === 'texture' || region.diagnostic === 'mixed')
+        .sort((a, b) => b.mae - a.mae);
+      const worstRegion = offending[0] ?? null;
       if (summary.status !== 'pass') {
-        const worst = summary.worst;
         notes.push(`Mean MAE ${summary.metrics.maeMean} (provisional pass limit ${thresholds.shotPassMae}); mean SSIM ${summary.metrics.ssimMean}.`);
-        const positional = worst?.shift && worst.shift.improvement >= thresholds.shiftImprovement && Math.abs(worst.shift.dx) + Math.abs(worst.shift.dy) > 0;
+        // Region evidence outranks the whole-frame shift estimate: it names the line that
+        // is wrong and says whether a slide fixes it. The frame-level estimate stays as
+        // the fallback for shots scored before region scoring existed, or where every
+        // region was unmeasurable.
+        const positionalByRegion = worstRegion?.diagnostic === 'position';
+        const positional = positionalByRegion || (worst?.shift && worst.shift.improvement >= thresholds.shiftImprovement
+          && Math.abs(worst.shift.dx) + Math.abs(worst.shift.dy) > 0);
+        const regionNote = worstRegion
+          ? `Worst region ${worstRegion.id}${worstRegion.elementId ? ` (${worstRegion.elementId})` : ''}: ${worstRegion.diagnostic}, ${worstRegion.reason}.`
+          : null;
+        if (regionNote) notes.push(regionNote);
         discrepancies.push({
           id: `qa-${shot.id}-appearance`,
           shotId: shot.id,
-          elementId: null,
+          elementId: worstRegion?.elementId ?? null,
           category: positional ? 'position-offset' : 'appearance-reconstruction',
           timeSeconds: worst?.timeSeconds ?? shot.startSeconds ?? 0,
           frame: worst?.frame ?? shot.startFrame,
@@ -523,15 +1037,50 @@ export async function runQa(planPath, options = {}) {
             worstFrameMetrics: worst?.metrics ?? null,
             comparisonPath: worst?.comparisonPath ?? null,
             shift: worst?.shift ?? null,
-            topCells: worst?.metrics?.topCells ?? []
+            topCells: worst?.metrics?.topCells ?? [],
+            regionSummary: worst?.regionSummary ?? null,
+            regionBasis: worst?.regionBasis ?? null,
+            worstRegion: worstRegion ?? null,
+            regions: offending.slice(0, 8)
           },
-          confidence: 0.95,
+          confidence: worstRegion ? 0.97 : 0.95,
           priority: summary.metrics.maeMean,
-          suggestion: positional
-            ? `Render content of ${shot.id} is rigidly offset by about (${worst.shift.dx}, ${worst.shift.dy}) px at frame ${worst.frame}; inspect the responsible layer before patching.`
-            : `${shot.id} differs in glyph shapes, text texture or background detail; verify the documented font/asset substitutions before changing geometry.`,
+          suggestion: positionalByRegion
+            ? `${shot.id} region ${worstRegion.id} is displaced by about (${worstRegion.drift.correctionPx.dx}, ${worstRegion.drift.correctionPx.dy}) px at frame ${worst.frame}; that slide removes ${Math.round(worstRegion.geometry.gain * 100)}% of the region error${worstRegion.alsoAppearance ? ', and the error that survives it is an appearance difference, not a position one' : ''}.`
+            : positional
+              ? `Render content of ${shot.id} is rigidly offset by about (${worst.shift.dx}, ${worst.shift.dy}) px at frame ${worst.frame}; inspect the responsible layer before patching.`
+              : `${shot.id} differs in glyph shapes, text texture or background detail${worstRegion ? `; region ${worstRegion.id} keeps ${worstRegion.geometry?.maeAfterShift ?? worstRegion.mae} MAE after the best slide` : ''}; verify the documented font/asset substitutions before changing geometry.`,
           actionable: Boolean(positional)
         });
+        // One discrepancy per offending region, so a correction pass has a target rather
+        // than a frame average to guess from. Only the three worst are listed: beyond
+        // that a shot with many small offenders is a systemic issue, reported by the
+        // shot-level entry above.
+        for (const region of offending.slice(0, 3)) {
+          const patchable = region.diagnostic === 'position';
+          discrepancies.push({
+            id: `qa-${shot.id}-region-${region.id}`,
+            shotId: shot.id,
+            elementId: region.elementId ?? null,
+            category: patchable ? 'region-position' : region.diagnostic === 'mixed' ? 'region-mixed' : 'region-appearance',
+            timeSeconds: worst?.timeSeconds ?? shot.startSeconds ?? 0,
+            frame: worst?.frame ?? shot.startFrame,
+            evidence: {
+              region,
+              rect: region.rect,
+              comparisonPath: worst?.comparisonPath ?? null,
+              frameMetrics: worst?.metrics ?? null
+            },
+            confidence: region.diagnostic === 'position' ? 0.95 : 0.85,
+            priority: region.mae,
+            suggestion: patchable
+              ? `Move the layer that draws ${region.id}${region.elementId ? ` (${region.elementId})` : ''} of ${shot.id} by (${region.drift.correctionPx.dx}, ${region.drift.correctionPx.dy}) px at frame ${worst?.frame ?? shot.startFrame}; measured drift ${region.drift.dxPx}, ${region.drift.dyPx} px at a ${region.drift.quantumPx} px quantum.`
+              : region.diagnostic === 'mixed'
+                ? `${region.id} of ${shot.id} is both displaced (${region.drift?.correctionPx?.dx}, ${region.drift?.correctionPx?.dy}) px and rendered differently; patch the position first, then compare the residue.`
+                : `${region.id} of ${shot.id} is placed as far as a slide can tell and still differs: check the copy, the font substitution and the colour before touching geometry.`,
+            actionable: patchable
+          });
+        }
       }
       if (outlierCandidates.length) {
         for (const record of outlierCandidates) {
@@ -555,9 +1104,29 @@ export async function runQa(planPath, options = {}) {
           });
         }
       }
-      shots.push({ shotId: shot.id, status: summary.status, metrics: summary.metrics, notes });
+      // Region numbers are measured on the sampled worst frame, so they enter the shot
+      // as counts and the worst value rather than as a mean over frames: averaging a
+      // per-line drift across frames of an animated shot would describe nothing real.
+      if (worst?.regionSummary) {
+        const rs = worst.regionSummary;
+        summary.metrics.regionCount = rs.regions;
+        summary.metrics.regionWorstMae = rs.worstMae;
+        summary.metrics.regionPosition = rs.position;
+        summary.metrics.regionAppearance = rs.texture + rs.mixed;
+        summary.metrics.regionAlignedSubFloor = rs.aligned;
+      }
+      shots.push({
+        shotId: shot.id,
+        status: summary.status,
+        metrics: summary.metrics,
+        notes,
+        // The region detail lives on the sampled frame(s); null says region scoring was
+        // off or could not run, which is a stated gap rather than a silent zero.
+        regions: regionScoring ? (worst?.regions ?? null) : null,
+        regionsSampledFrame: regionScoring ? (worst?.frame ?? null) : null
+      });
       await fs.writeFile(path.join(metadataDirectory, `${shot.id}.json`),
-        JSON.stringify({ shotId: shot.id, status: summary.status, metrics: summary.metrics, frames }, null, 2), 'utf8');
+        JSON.stringify({ shotId: shot.id, status: summary.status, metrics: summary.metrics, regionsSampledFrame: worst?.frame ?? null, frames }, null, 2), 'utf8');
     }
     discrepancies.sort((a, b) => b.priority - a.priority);
     const anyFail = shots.some(shot => shot.status === 'fail');
@@ -578,7 +1147,10 @@ export async function runQa(planPath, options = {}) {
           rmse: 'Root mean squared luminance error on a 0-255 scale.',
           ssim: 'SSIM over 8x8 non-overlapping luminance blocks, averaged.',
           changedFraction: `Fraction of pixels whose maximum RGB channel delta exceeds ${thresholds.changedPixelDelta}.`,
-          inkIou: 'IoU of dark-ink masks using the dominant reference luminance as the background estimate; null when ink covers <0.5% of the frame.'
+          inkIou: 'IoU of dark-ink masks using the dominant reference luminance as the background estimate; null when ink covers <0.5% of the frame.',
+          regionMae: `Per-region MAE on the sampled frame's reference ink bands; a region at or under ${thresholds.regionPassMae} is a match.`,
+          regionDriftPx: 'Render-to-reference ink-profile displacement measured by normalized cross-correlation of an interpolated profile, quantised to 1/' + thresholds.regionUpSample + ' px. Positive means the render sits right of or below the reference; correctionPx is its negation.',
+          regionGeometryGain: `Fraction of a region's error that a rigid slide near the measured drift removes. At or above ${thresholds.regionGeometryGain} the difference is placement; at or below ${thresholds.regionTextureGain} it is appearance.`
         }
       },
       alignment: {
@@ -601,7 +1173,10 @@ export async function runQa(planPath, options = {}) {
       },
       shots,
       discrepancies,
-      limitations: reportLimitations(plan, config, referenceProbe)
+      limitations: [
+        ...reportLimitations(plan, config, referenceProbe),
+        ...regionLimitations(thresholds, shots, { enabled: regionScoring, elementRectCount: regionElements.length })
+      ]
     };
     await validateArtifact('qa-report', report);
     const reportPath = path.join(runDirectory, 'qa-report.json');

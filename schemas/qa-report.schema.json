@@ -37,7 +37,17 @@
             "propertyNames": { "type": "string", "minLength": 1 },
             "additionalProperties": { "type": ["number", "null"] }
           },
-          "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+          "notes": { "$ref": "common.schema.json#/definitions/stringList" },
+          "regions": {
+            "type": ["array", "null"],
+            "description": "Per-region scores of one sampled frame, in full-frame pixels. Null means region scoring was disabled or could not run. Region keys stay open because they are comparator-specific; the diagnostic vocabulary and the patch noise floor are checked in code.",
+            "items": { "type": "object", "additionalProperties": true }
+          },
+          "regionsSampledFrame": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "Frame index the regions array was measured on; region scores are never averaged across an animated shot."
+          }
         }
       }
     },

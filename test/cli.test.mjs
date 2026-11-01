@@ -60,6 +60,18 @@ test('generic commands fail with their own usage errors, not with a file read', 
   assert.match((await failure(['export', 'plan.json', '--render', 'r.json'])).message, /--project/);
 });
 
+test('render accepts --frames as a documented option and fails on the plan, not the flag', async () => {
+  const directory = await fs.mkdtemp(path.join(work, 'cli-render-'));
+  const missing = path.join(directory, 'no-plan.json');
+  // A typo of the flag is a parser error; the real flag survives parsing and only
+  // then discovers that the plan does not exist. No scene, no bridge, no FFmpeg.
+  assert.equal((await failure(['render', missing, '--project', 'x.cv', '--fram', '28:60'])).code, 'CLI_USAGE');
+  for (const spec of ['28:60', '28-60', '0:215:12', '0,28-60:4,215']) {
+    const error = await failure(['render', missing, '--project', 'x.cv', '--frames', spec]);
+    assert.equal(error.code, 'FILE_READ_FAILED', `${spec} must reach the plan read`);
+  }
+});
+
 test('a reference-less configuration turns a standalone QA or export into a named flag error', async () => {
   const directory = await fs.mkdtemp(path.join(work, 'cli-reference-'));
   const configPath = path.join(directory, 'config.json');

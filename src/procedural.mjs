@@ -11,7 +11,7 @@ import { normalizeTracks, smoothTracks } from './stages/kinematicTracking.mjs';
 import { evaluateLayerAt, promoteTracks } from './stages/proceduralPromotion.mjs';
 import { extractVectors } from './stages/vectorExtract.mjs';
 import { compilePromotion } from './dsl/_mg.mjs';
-import { boxOverlapArea, runPerceptualGate } from './stages/perceptualDiff.mjs';
+import { boxOverlapArea, bandDriftEnabled, runPerceptualGate } from './stages/perceptualDiff.mjs';
 import { extractReferenceFrames, isVideoInput } from './stages/referenceExtract.mjs';
 
 export const PROCEDURAL_VERSION = '1.0.0';
@@ -60,6 +60,47 @@ function maxLayerCount(value) {
     throw new WorkflowError('PROCEDURAL_OPTIONS_INVALID', 'maxLayersPerBeat must be an integer from 1 to 8.', { maxLayersPerBeat: value });
   }
   return parsed;
+}
+
+/**
+ * Stage 5 band-drift options, validated before any render so a mistyped noise floor fails
+ * in the argument pass rather than after a minute of Cavalry work.
+ */
+export function bandDriftOptions(options = {}) {
+  const pixels = (name, value) => {
+    if (value === undefined || value === null) return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new WorkflowError('PROCEDURAL_OPTIONS_INVALID', `${name} must be a positive number of pixels.`, { [name]: value });
+    }
+    return parsed;
+  };
+  const integer = (name, value, minimum) => {
+    if (value === undefined || value === null) return undefined;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < minimum) {
+      throw new WorkflowError('PROCEDURAL_OPTIONS_INVALID', `${name} must be an integer of at least ${minimum}.`, { [name]: value });
+    }
+    return parsed;
+  };
+  const ratio = (name, value) => {
+    if (value === undefined || value === null) return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
+      throw new WorkflowError('PROCEDURAL_OPTIONS_INVALID', `${name} must be a correlation score between 0 and 1.`, { [name]: value });
+    }
+    return parsed;
+  };
+  return {
+    bandDrift: options.bandDrift ?? null,
+    bands: options.bands ?? null,
+    noiseFloorPx: pixels('noiseFloorPx', options.noiseFloorPx),
+    bandUpsample: integer('bandUpsample', options.bandUpsample, 1),
+    bandRangePx: pixels('bandRangePx', options.bandRangePx),
+    bandMaxCount: integer('bandMaxCount', options.bandMaxCount, 1),
+    minBandScore: ratio('minBandScore', options.minBandScore),
+    contestedSpreadPx: pixels('contestedSpreadPx', options.contestedSpreadPx)
+  };
 }
 
 /**
@@ -211,6 +252,10 @@ async function attachVectors(scene, scenePath, tracks, options = {}) {
  *   tracksPath       Stage 2B tracker JSON when the input is a video
  *   referenceFrames  map/directory/pattern for Stage 5
  *   client           live transport: { exec(script), renderFrames({frames,directory}) }
+ *   bandDrift        Stage 5 measures the failing frame band by band instead of by one
+ *                    whole-frame ink centroid (off unless asked, or unless `bands` is given)
+ *   bands            explicit band list for band drift; otherwise the reference's ink rows
+ *   noiseFloorPx     smallest drift worth patching; default is the measurement quantum
  *   liveInfo         session facts (server, tools, checks, roots) recorded in the result
  *   outputDirectory  write the promotion, script and report with exclusive-create semantics
  *   smooth           apply Savitzky-Golay smoothing (default false; fixtures are pre-measured)
@@ -220,6 +265,8 @@ export async function runProcedural(inputPath, options = {}) {
   const threshold = positiveNumber(options.threshold, 'threshold', DEFAULT_THRESHOLD);
   const maxPasses = passCount(options.maxPasses, DEFAULT_MAX_PASSES);
   const maxLayersPerBeat = maxLayerCount(options.maxLayersPerBeat);
+  const band = bandDriftOptions(options);
+  const useBandDrift = bandDriftEnabled(band.bandDrift, band.bands);
   const resolvedInput = path.resolve(inputPath ?? defaultFixturePath());
   if (options.autoReference === true && !isVideoInput(resolvedInput)) {
     throw new WorkflowError('REFERENCE_AUTO_REQUIRES_VIDEO',
@@ -306,7 +353,9 @@ export async function runProcedural(inputPath, options = {}) {
         .map(target => ({ ...target, id: liveIdFor(target.layerId), ref: null }))
         .filter(target => target.id);
     }
-    limitations.push(`Live Stage 5 splits each beat's bbox drift across up to ${maxLayersPerBeat} actively moving layers in one batched _mg.patch per pass, using odiff bbox overlap when layer boxes are known and displacement share otherwise; stagger followers receive relative deltas.`);
+    limitations.push(useBandDrift
+      ? `Live Stage 5 measures each failing frame band by band (reference ink rows unless a band list is supplied) and patches up to ${maxLayersPerBeat} layers per pass with the correction observed in the bands their predicted positions fall in; drift at or under the noise floor is reported, never patched.`
+      : `Live Stage 5 splits each beat's bbox drift across up to ${maxLayersPerBeat} actively moving layers in one batched _mg.patch per pass, using odiff bbox overlap when layer boxes are known and displacement share otherwise; stagger followers receive relative deltas.`);
   }
 
   // A video input with no supplied reference frames is extracted automatically at the
@@ -331,6 +380,9 @@ export async function runProcedural(inputPath, options = {}) {
 
   let gate = null;
   if (!dryRun) {
+    if (useBandDrift && band.bands?.length) {
+      limitations.push(`The ${band.bands.length} supplied band(s) are measured at every beat: they describe a layout that holds across the clip, not per-beat positions.`);
+    }
     if (!options.client) {
       gate = await runPerceptualGate({
         client: null, beats: promotion.beats, referenceFrames,
@@ -348,7 +400,8 @@ export async function runProcedural(inputPath, options = {}) {
         layerForBeat: options.layerForBeat ?? null,
         layersForBeat: beatTargets,
         layerRefs: compiled.layerRefs,
-        onPatch: options.onPatch ?? null
+        onPatch: options.onPatch ?? null,
+        ...band
       });
       limitations.push(...(gate.limitations ?? []));
     }
@@ -377,6 +430,7 @@ export async function runProcedural(inputPath, options = {}) {
     const gatePath = gate ? await write('procedural-gate.json', `${JSON.stringify(gate, null, 2)}\n`) : null;
     const reportPath = await write('procedural-report.json', `${JSON.stringify({
       version: PROCEDURAL_VERSION, input: resolvedInput, dryRun, threshold, maxPasses,
+      bandDrift: { enabled: useBandDrift, bands: band.bands?.length ?? null, noiseFloorPx: band.noiseFloorPx ?? null },
       stats: promotion.stats, vectors: vectorized.vectors,
       tokenEstimate: compiled.tokenEstimate, tokenBudget: TOKEN_BUDGET,
       frameBakedArrays: baked, live, reference: referenceExtraction,

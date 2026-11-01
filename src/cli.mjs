@@ -33,12 +33,12 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs design-generic <shot-spec.json> [--manifest <asset-manifest.json>] [--catalog <component-catalog.json>] [--capabilities <report.json>] [--config <json>] [--job <directory>]
   node src/cli.mjs plan-generic <shot-spec.json> --manifest <asset-manifest.json> --tokens <design-tokens.json> [--catalog <component-catalog.json>] [--capabilities <report.json>] [--fps <num[/den]>] [--config <json>] [--job <directory>]
   node src/cli.mjs build <scene-plan.json> [--shot <shot-id>] [--phase static|animation|full] [--project <saved-scene>] [--job <directory>]
-  node src/cli.mjs render <scene-plan.json> --project <saved-scene> [--shot <shot-id>] [--job <directory>]
+  node src/cli.mjs render <scene-plan.json> --project <saved-scene> [--shot <shot-id>] [--frames <a:b|a-b|list[:stride]>] [--job <directory>]
   node src/cli.mjs qa <scene-plan.json> --render <render-manifest.json> [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs export <scene-plan.json> --project <saved-scene> --render <render-manifest.json> --qa <qa-report.json> [--build <build-report.json>] [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs procedural --input <scene.json|video> [--tracks <tracker.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--output <directory>]
   node src/cli.mjs procedural --dry-run [--input <scene.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--output <directory>]
-  node src/cli.mjs procedural --live [--reference <frames-dir|pattern|json>] [--auto-reference] [--input <scene.json|video>] [--tracks <tracker.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--stallion-url <url>] [--config <json>] [--output <directory>]
+  node src/cli.mjs procedural --live [--reference <frames-dir|pattern|json>] [--auto-reference] [--input <scene.json|video>] [--tracks <tracker.json>] [--smooth] [--threshold <percent>] [--max-passes <n>] [--max-layers-per-beat <n>] [--band-drift] [--noise-floor <px>] [--band-range <px>] [--stallion-url <url>] [--config <json>] [--output <directory>]
   node src/cli.mjs --help
 
 Run is the one-command, resume-first pipeline. It reuses a complete verified
@@ -90,15 +90,23 @@ readback verification, then a versioned scene save. An interrupted pass resumes 
 the saved scene and the recorded layer ids, so reruns update elements instead of
 creating duplicates. Video rendering is not exposed by the MCP and stays a separate
 command.
-Render opens the saved scene, renders the requested shot range as numbered PNGs
+Render opens the saved scene, renders the requested frames as numbered PNGs
 through the verified route, encodes them with FFmpeg, re-validates the result with
-FFprobe and writes a render manifest. Existing frames are reused; a finished video
-is never overwritten.
+FFprobe and writes a render manifest. --frames takes an inclusive range
+("28:60" or "28-60"), an optional stride ("0:215:12") or a comma-separated mix
+("0,28-60:4,215"); without it the shot range --shot selects, or the whole plan,
+is rendered. Existing frames are reused; a finished video is never overwritten,
+and a sparse selection keeps its verified frames but encodes no video rather than
+filling the gap it skipped.
 QA decodes the reference video into cached frames, compares every frame index to
 the verified render, measures MAE/SSIM/ink-mask agreement per shot, writes
 side-by-side comparison images for the worst frames and emits a schema-valid
-qa-report. Thresholds are provisional and marked uncalibrated; QA never edits the
-plan or the scene.
+qa-report. Each scored frame is also measured region by region: the reference's
+own ink rows define the regions, and per region the report says whether a rigid
+slide explains the error (placement, with the correction a patch would need) or
+does not (appearance). config qa.regions.enabled switches that pass off.
+Thresholds are provisional and marked uncalibrated; QA never edits the plan or
+the scene.
 Export copies the verified render, saved scene and evidence into a new unique
 directory, re-verifies every hash, decodes the video, reopens the saved project,
 checks the composition and layer readback, re-renders the first frame and compares
@@ -114,7 +122,11 @@ Procedural --live opens the configured cavalry-mcp session, sends the one batche
 _mg script through cavalry_run_script, renders only the sparse beat inflection
 frames, compares them locally and sends at most one batched _mg.patch per pass,
 up to --max-passes. Each pass targets up to --max-layers-per-beat (default 4)
-actively moving layers and partitions the beat's bbox drift across them.
+actively moving layers and partitions the beat's bbox drift across them. With
+--band-drift the failing frame is measured row band by row band instead of by one
+whole-frame ink centroid, so each layer gets the displacement seen in the bands it
+draws; a drift at or under --noise-floor (default 0.125 px, the measurement quantum)
+is reported rather than patched, and a texture-only difference sends no patch at all.
 --reference supplies the extracted reference frames (a directory, a %0Nd pattern
 or a JSON frame->path map). When --input is a video and --reference is omitted,
 or --auto-reference is passed, FFmpeg extracts the sparse beat frames from that
@@ -139,8 +151,8 @@ export async function main(args) {
     // Unlike the artifact commands, procedural is flag-driven: --dry-run may supply the
     // shipped fixture and therefore has no positional input path.
     const flags = {};
-    const valueFlags = new Set(['--input', '--tracks', '--threshold', '--max-passes', '--max-layers-per-beat', '--output', '--reference', '--stallion-url', '--config']);
-    const booleanFlags = new Set(['--dry-run', '--smooth', '--live', '--auto-reference']);
+    const valueFlags = new Set(['--input', '--tracks', '--threshold', '--max-passes', '--max-layers-per-beat', '--noise-floor', '--band-range', '--output', '--reference', '--stallion-url', '--config']);
+    const booleanFlags = new Set(['--dry-run', '--smooth', '--live', '--auto-reference', '--band-drift']);
     for (let i = 1; i < args.length; i += 1) {
       const key = args[i];
       if (booleanFlags.has(key)) {
@@ -163,8 +175,13 @@ export async function main(args) {
       throw new WorkflowError('CLI_USAGE', 'procedural takes --dry-run or --live, not both: a dry run must never wait on a socket.');
     }
     const autoReference = flags['--auto-reference'] === true;
+    const bandFlags = flags['--band-drift'] === true
+      || flags['--noise-floor'] !== undefined || flags['--band-range'] !== undefined;
     if (!liveRequested && (flags['--reference'] !== undefined || flags['--stallion-url'] !== undefined || autoReference)) {
       throw new WorkflowError('CLI_USAGE', '--reference, --auto-reference and --stallion-url belong to --live; without it Stage 5 stays unavailable.');
+    }
+    if (!liveRequested && bandFlags) {
+      throw new WorkflowError('CLI_USAGE', '--band-drift, --noise-floor and --band-range belong to --live: without a render there is no failing frame to measure band by band.');
     }
     if (autoReference && flags['--reference'] !== undefined) {
       throw new WorkflowError('CLI_USAGE', 'procedural takes --reference or --auto-reference, not both: a supplied frame map is never re-extracted.');
@@ -181,6 +198,9 @@ export async function main(args) {
       threshold: flags['--threshold'] === undefined ? undefined : Number(flags['--threshold']),
       maxPasses: flags['--max-passes'] === undefined ? undefined : Number(flags['--max-passes']),
       maxLayersPerBeat: flags['--max-layers-per-beat'] === undefined ? undefined : Number(flags['--max-layers-per-beat']),
+      bandDrift: flags['--band-drift'] === true ? true : undefined,
+      noiseFloorPx: flags['--noise-floor'] === undefined ? undefined : Number(flags['--noise-floor']),
+      bandRangePx: flags['--band-range'] === undefined ? undefined : Number(flags['--band-range']),
       autoReference
     };
     let result;
@@ -251,7 +271,7 @@ export async function main(args) {
     : command === 'design-generic' ? ['--config', '--manifest', '--catalog', '--capabilities', '--job']
     : command === 'plan-generic' ? ['--config', '--manifest', '--tokens', '--catalog', '--capabilities', '--fps', '--job']
     : command === 'build' ? ['--shot', '--phase', '--project', '--job']
-    : command === 'render' ? ['--project', '--shot', '--job']
+    : command === 'render' ? ['--project', '--shot', '--frames', '--job']
     : command === 'qa' ? ['--render', '--reference', '--config', '--job']
     : command === 'export' ? ['--project', '--render', '--qa', '--build', '--reference', '--config', '--job']
     : ['--manifest', '--job'];
@@ -514,15 +534,17 @@ export async function main(args) {
     const result = await renderVideo(path.resolve(reference), {
       projectPath: path.resolve(flags['--project']),
       shot: flags['--shot'],
+      frames: flags['--frames'],
       jobDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined
     });
     return {
       status: result.status, reused: result.reused,
       runDirectory: result.runDirectory, frames: result.frames.length,
+      frameSelection: result.frameSelection,
       renderedNow: result.encodedFrames, video: result.video,
       manifestPath: result.manifestPath, markdownPath: result.markdownPath, errors: result.errors,
       limitations: [
-        'Encoding follows the verified numbered-PNG route; the MCP exposes no video render.',
+        'Encoding follows the verified numbered-PNG route; a sparse --frames selection keeps verified frames but encodes no video.',
         'A verified render manifest is not a visual match: QA compares aligned frames separately.'
       ]
     };

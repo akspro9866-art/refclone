@@ -1,6 +1,7 @@
-// Stage 5 tests: local perceptual comparison, compact delta patches and the sparse
-// closed loop. The fake transport renders deterministic PNGs, so the pass count and the
-// patch payload are asserted instead of inspected through a live Cavalry session.
+// Stage 5 tests: local perceptual comparison, compact delta patches, the sparse closed
+// loop and its band-attributed drift mode. The fake transport renders deterministic PNGs,
+// so the pass count and the patch payload are asserted instead of inspected through a live
+// Cavalry session.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -8,10 +9,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import {
-  buildDeltaPatch, compareImages, distributeDrift, inkBounds, runPerceptualGate, sparseBeatFrames
+  attributeBandDrift, bandDriftEnabled, beatBands, buildDeltaPatch, compareImages,
+  distributeDrift, inkBounds, measureBandDrift, runPerceptualGate, sparseBeatFrames
 } from '../src/stages/perceptualDiff.mjs';
 import { estimateTokens } from '../src/dsl/_mg.mjs';
-import { BLUE, RED, WHITE, canvas, plate } from './fixtures.mjs';
+import { BLUE, RED, WHITE, canvas, plate, textLine } from './fixtures.mjs';
 
 const project = fileURLToPath(new URL('../', import.meta.url));
 const work = path.join(project, '.test-work');
@@ -291,4 +293,218 @@ test('without a render transport the gate is unavailable, never a fake convergen
   assert.ok(unavailable.limitations[0].includes('Stallion'));
   await assert.rejects(runPerceptualGate({ client: null, beats: [], threshold: -1 }),
     error => error.code === 'PERCEPTUAL_OPTIONS_INVALID');
+});
+
+// Band drift needs copy rather than blocks: a solid rectangle carries the same ink in
+// every row, so a vertical profile has nothing to lock onto. Two lines of text give each
+// band structure on both axes, which is what a real title card looks like.
+const LINES = { width: 160, height: 60 };
+function twoLines({ aLeft = 8, aTop = 8, bLeft = 8, bTop = 32, color = RED, bColor = color, bText = 'LINE' } = {}) {
+  const png = canvas(LINES.width, LINES.height, WHITE);
+  textLine(png, 'TEXT', { left: aLeft, top: aTop, color, scale: 2 });
+  textLine(png, bText, { left: bLeft, top: bTop, color: bColor, scale: 2 });
+  return PNG.sync.write(png);
+}
+
+async function linesFixture(state = {}) {
+  const directory = await fs.mkdtemp(path.join(work, 'band-'));
+  const referencePath = path.join(directory, 'reference.png');
+  await fs.writeFile(referencePath, twoLines());
+  const layers = [
+    { id: 'line-a', base: { position: { x: 30, y: 15 }, scale: 1, rotation: 0, opacity: 100 }, moves: [] },
+    { id: 'line-b', base: { position: { x: 30, y: 39 }, scale: 1, rotation: 0, opacity: 100 }, moves: [] }
+  ];
+  return {
+    directory,
+    beats: [{ beatIndex: 0, inFrame: 0, peakFrame: 5, outFrame: 10 }],
+    referenceFrames: new Map([[1, referencePath], [5, referencePath], [9, referencePath]]),
+    scene: { layers },
+    layersForBeat: () => layers.map(layer => ({
+      id: layer.id, amplitude: 10, expected: { position: { ...layer.base.position } }
+    })),
+    layerRefs: { 'line-a': 'L0', 'line-b': 'L1' },
+    state
+  };
+}
+
+function linesTransport(state) {
+  let current = { ...state };
+  const execs = [];
+  return {
+    execs,
+    available: true,
+    async renderFrames({ frames, directory }) {
+      await fs.mkdir(directory, { recursive: true });
+      const rendered = [];
+      for (const frame of frames) {
+        const filePath = path.join(directory, `render-${String(frame).padStart(6, '0')}.png`);
+        await fs.writeFile(filePath, twoLines(current));
+        rendered.push({ frame, path: filePath });
+      }
+      return rendered;
+    },
+    async exec(script) {
+      execs.push(script);
+      // The patch is applied: from here the transport renders the reference itself.
+      current = {};
+      return { ok: true };
+    }
+  };
+}
+
+test('band drift is opt-in, and supplying a band list implies it', () => {
+  assert.equal(bandDriftEnabled(undefined, undefined), false);
+  assert.equal(bandDriftEnabled(null, [{ y: 8, height: 14 }]), true);
+  assert.equal(bandDriftEnabled(true, null), true);
+  assert.equal(bandDriftEnabled(false, [{ y: 8, height: 14 }]), false);
+});
+
+test('bands are the reference ink rows unless the caller supplies its own', () => {
+  const reference = PNG.sync.read(twoLines());
+  const discovered = beatBands(reference, null, {});
+  assert.deepEqual(discovered.bands.map(band => band.rect.y), [8, 32]);
+  assert.deepEqual(discovered.bands.map(band => band.rect.height), [14, 14]);
+  assert.match(discovered.basis, /reference ink band/);
+
+  // Any of the shapes a caller plausibly holds resolves to the same rect.
+  const supplied = beatBands(reference, [
+    { id: 'first', start: 8, end: 22 },
+    { id: 'second', rect: { x: 0, y: 32, width: LINES.width, height: 14 } },
+    { id: 'third', y: 8, height: 14 }
+  ], {});
+  assert.deepEqual(supplied.bands.map(band => band.rect), [
+    { x: 0, y: 8, width: LINES.width, height: 14 },
+    { x: 0, y: 32, width: LINES.width, height: 14 },
+    { x: 0, y: 8, width: LINES.width, height: 14 }
+  ]);
+  assert.equal(supplied.basis, '3 supplied band(s)');
+  assert.throws(() => beatBands(reference, [{ note: 'not a band' }], {}),
+    error => error.code === 'PERCEPTUAL_BANDS_INVALID');
+});
+
+test('each band is measured on its own, with the sign a patch needs', () => {
+  const reference = PNG.sync.read(twoLines());
+  const render = PNG.sync.read(twoLines({ aLeft: 11, bTop: 35 }));
+  const bands = beatBands(reference, null, {}).bands;
+  const measurement = measureBandDrift(reference, render, bands, {});
+  assert.equal(measurement.summary.bands, 2);
+  assert.equal(measurement.summary.patchable, 2);
+  assert.equal(measurement.summary.maxCorrectionPx, 3);
+  const [upper, lower] = measurement.bands;
+  assert.equal(upper.id, 'rows-8-22');
+  assert.deepEqual(upper.correctionPx, { dx: -3, dy: 0 });
+  assert.deepEqual(lower.correctionPx, { dx: 0, dy: -3 });
+  assert.equal(upper.quantumPx, 0.125);
+  assert.equal(upper.noiseFloorPx, 0.125);
+  assert.equal(upper.aboveNoiseFloor, true);
+
+  // A band of empty rows is refused with a reason, never reported as a plausible zero.
+  const blank = measureBandDrift(reference, render, [{ id: 'empty', rect: { x: 0, y: 52, width: LINES.width, height: 6 } }], {});
+  assert.equal(blank.bands[0].measured, false);
+  assert.equal(blank.bands[0].patchable, false);
+  assert.equal(blank.bands[0].reason, 'flat-reference');
+
+  // Drift at or under the floor is evidence about a placement that is already right.
+  const tiny = measureBandDrift(reference, PNG.sync.read(twoLines({ aLeft: 9 })), bands, { noiseFloorPx: 4 });
+  assert.deepEqual(tiny.bands.map(band => band.patchable), [false, false]);
+  assert.deepEqual(tiny.summary.belowNoiseFloor, ['rows-8-22', 'rows-32-46']);
+  assert.equal(tiny.summary.patchable, 0);
+});
+
+test('a band is claimed by the layer drawn inside it, or reported as unattributed', () => {
+  const opposite = value => (value === 0 ? 0 : -value);
+  const band = (id, y, correctionPx) => ({
+    id, rect: { x: 0, y, width: LINES.width, height: 14 }, patchable: true,
+    correctionPx, dxPx: opposite(correctionPx.dx), dyPx: opposite(correctionPx.dy)
+  });
+  const targets = [
+    { id: 'line-a', expected: { position: { x: 30, y: 15 } } },
+    { id: 'line-b', expected: { position: { x: 30, y: 39 } } }
+  ];
+  const split = attributeBandDrift({ bands: [band('rows-8-22', 8, { dx: -3, dy: 0 }), band('rows-32-46', 32, { dx: 0, dy: -3 })] }, targets);
+  assert.deepEqual(split.corrections.map(entry => [entry.target.id, entry.correctionPx.dx, entry.correctionPx.dy]),
+    [['line-a', -3, 0], ['line-b', 0, -3]]);
+  assert.deepEqual(split.corrections.map(entry => entry.basis), ['position-in-band', 'position-in-band']);
+  assert.deepEqual([split.contested, split.unattributed], [[], []]);
+
+  // Two bands on one rigid layer are two measurements of one displacement: the median wins.
+  const agreed = attributeBandDrift({ bands: [band('a1', 8, { dx: -3, dy: 0 }), band('a2', 10, { dx: -5, dy: 0 })] }, [targets[0]]);
+  assert.equal(agreed.corrections.length, 1);
+  assert.deepEqual(agreed.corrections[0].correctionPx, { dx: -4, dy: 0 });
+  assert.deepEqual(agreed.corrections[0].spreadPx, { dx: 2, dy: 0 });
+
+  // Bands that disagree by more than a rigid layer can explain are not averaged into a guess.
+  const contested = attributeBandDrift({ bands: [band('a1', 8, { dx: -3, dy: 0 }), band('a2', 10, { dx: -6, dy: 0 })] }, [targets[0]]);
+  assert.equal(contested.corrections.length, 0);
+  assert.equal(contested.contested.length, 1);
+  assert.match(contested.contested[0].reason, /disagree by 3 px/);
+
+  // A band no candidate owns is reported, not dumped on the primary layer.
+  const orphan = attributeBandDrift({ bands: [band('rows-52-58', 52, { dx: -4, dy: 0 })] }, targets);
+  assert.equal(orphan.corrections.length, 0);
+  assert.deepEqual(orphan.unattributed, [{ id: 'rows-52-58', dxPx: 4, dyPx: 0, reason: 'no-active-layer-in-band' }]);
+});
+
+test('band drift sends one correction per drawn band and converges on pass two', async () => {
+  const fixture = await linesFixture({ aLeft: 11, bTop: 35 });
+  const client = linesTransport(fixture.state);
+  const gate = await runPerceptualGate({
+    client, beats: fixture.beats, referenceFrames: fixture.referenceFrames, scene: fixture.scene,
+    layersForBeat: fixture.layersForBeat, layerRefs: fixture.layerRefs,
+    outputDirectory: fixture.directory, threshold: 1.5, maxPasses: 3, bandDrift: true
+  });
+  assert.equal(gate.status, 'converged');
+  assert.equal(gate.convergedAtPass, 2);
+  assert.equal(gate.bandDrift.enabled, true);
+  assert.equal(client.execs.length, 1, 'one batched refinement pass');
+  assert.deepEqual(gate.patches.map(patch => patch.targetRef), ['L0', 'L1']);
+  // Each layer is corrected in its own axis only — a shared centroid would slide both in both.
+  assert.deepEqual(gate.patches[0].attrs, { 'position.x': 27 });
+  assert.deepEqual(gate.patches[1].attrs, { 'position.y': 36 });
+  assert.deepEqual(gate.patches.map(patch => patch.bands), [['rows-8-22'], ['rows-32-46']]);
+  const attribution = gate.passes[0].attribution[0];
+  assert.equal(attribution.basis, 'band-drift');
+  assert.equal(attribution.maxCorrectionPx, 3);
+  assert.deepEqual(attribution.targets.map(entry => entry.dx), [-3, 0]);
+  assert.deepEqual(attribution.targets.map(entry => entry.dy), [0, -3]);
+  assert.equal(attribution.bands.patchable, 2);
+  assert.deepEqual([attribution.contested, attribution.unattributed], [[], []]);
+  const script = gate.passes[0].script;
+  assert.equal((script.match(/_mg\.patch\(\[/g) ?? []).length, 1, 'both corrections share one patch array');
+  assert.ok(estimateTokens(script) < 200, `patch tokens ${estimateTokens(script)}`);
+});
+
+test('a texture-only difference sends no patch instead of thrashing the layer', async () => {
+  const fixture = await linesFixture({ color: BLUE });
+  const client = linesTransport(fixture.state);
+  const gate = await runPerceptualGate({
+    client, beats: fixture.beats, referenceFrames: fixture.referenceFrames, scene: fixture.scene,
+    layersForBeat: fixture.layersForBeat, layerRefs: fixture.layerRefs,
+    outputDirectory: fixture.directory, threshold: 0.05, maxPasses: 3, bandDrift: true
+  });
+  assert.equal(gate.status, 'unconverged');
+  assert.equal(gate.converged, false);
+  assert.equal(gate.patches.length, 0);
+  assert.equal(client.execs.length, 0, 'nothing was sent to Cavalry');
+  assert.ok(gate.limitations.some(line => /sent no patch/.test(line) && /noise floor/.test(line)),
+    `limitations ${JSON.stringify(gate.limitations)}`);
+  assert.ok(gate.limitations.some(line => /max-passes/.test(line)));
+  const report = gate.passes[0].bandDrift.beats[0];
+  assert.equal(report.summary.patchable, 0);
+  assert.deepEqual(report.summary.belowNoiseFloor, ['rows-8-22', 'rows-32-46']);
+  assert.equal(gate.passes.length, 1, 'the loop stops at the first refusal instead of spending its passes');
+});
+
+test('a drift under --noise-floor is measured, reported and left alone', async () => {
+  const fixture = await linesFixture({ aLeft: 11 });
+  const client = linesTransport(fixture.state);
+  const gate = await runPerceptualGate({
+    client, beats: fixture.beats, referenceFrames: fixture.referenceFrames, scene: fixture.scene,
+    layersForBeat: fixture.layersForBeat, layerRefs: fixture.layerRefs,
+    outputDirectory: fixture.directory, threshold: 1.5, maxPasses: 3, bandDrift: true, noiseFloorPx: 4
+  });
+  assert.equal(gate.patches.length, 0);
+  assert.equal(gate.bandDrift.noiseFloorPx, 4);
+  assert.ok(gate.limitations.some(line => /4 px noise floor/.test(line)),
+    `limitations ${JSON.stringify(gate.limitations)}`);
 });

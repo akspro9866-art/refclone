@@ -2,11 +2,15 @@
 //
 // cavalry-mcp's verified surface is cavalry_inspect plus cavalry_run_script
 // (this pipeline's cavalry_exec) and per-frame rendering through
-// api.setFrame + api.renderPNGFrame inside a run_script call. There is no
-// registered cavalry_render_frames tool, so renderFrames performs the same
-// sparse-frame loop the audited adapter uses, one PNG per call, and never
-// re-emits the scene. Every helper script still receives cavalry-mcp's _mg
-// prelude, which is why the transport speaks MCP instead of raw Stallion HTTP.
+// api.setFrame + api.renderPNGFrame inside a run_script call. cavalry-mcp also
+// registers cavalry_render_frames for direct clients, but this route keeps the
+// audited one-PNG-per-call loop, so renderFrames is the same sparse-frame walk
+// the adapter does and never re-emits the scene. Each call carries its own
+// per-call render timeout (`renderTimeoutMs`), because a loop of unbounded
+// single-frame calls has no natural budget; the chunked-sequence budget lives
+// in that cavalry-mcp tool instead. Every helper script still receives
+// cavalry-mcp's _mg prelude, which is why the transport speaks MCP rather than
+// raw Stallion HTTP.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { CavalryAdapter, validateAdapterConfig } from '../cavalry.mjs';
