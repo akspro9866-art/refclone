@@ -14,7 +14,18 @@ client can rediscover it, and `npm run test:integration` exercises it end to end
 | `cavalry_inspect` | Object with optional `mode`, enum `selection` or `roots`, default `selection` | Observed `{mode:"roots",layers:[],truncated:false}`. Not a full scene-property snapshot. |
 | `cavalry_run_preset` | Object requiring `name` from the discovered 120-name enum; optional generic object `params` | No declared outputSchema. Application/preset validation still required; parameter names are not individually typed by this tool schema. Not invoked by this audit. |
 
-Do not invent `cavalry_exec` or `cavalry_render_frames`: those belong to a different, unconfigured server prototype with an incompatible synchronous POST assumption. Legacy tools, if gated in source, are not enabled in the observed deployment. Persist discovered schemas rather than repeating all preset names in prompts.
+That table is what that audit's `tools/list` returned, and it is a snapshot of one build: a server
+started from a different checkout lists what that checkout registers. `cavalry_exec` is not a tool
+name in any deployment — it is this repository's word for one batched `cavalry_run_script` call.
+`cavalry_render_frames` **is** registered by the cavalry-mcp checkout `config.json` points at (added
+in that repository, present in its built `dist/core_tools.js`), for a direct MCP client that wants a
+whole sparse sequence in one chunk-budgeted call. refclone does not call it: its render route is the
+audited `api.setFrame` + `api.renderPNGFrame` pair inside `cavalry_run_script`, one PNG per call, so
+no live refclone run is evidence that the fourth tool works. A connector started before that build
+was installed still lists only the three audited tools — observed again on 2026-11-01. Read
+`tools/list` against the server you are actually talking to, persist what it returns, and invent
+nothing in either direction. Legacy tools, if gated in source, are not enabled in the observed
+deployment.
 
 Real success and deliberate non-mutating error responses were recorded during the audit; the raw transcripts stayed with that job and are not redistributed here. What was observed: success text parsed as `{"auditPing":true,"version":"2.8.0"}`, and an intentional `WORKFLOW_EXPECTED_AUDIT_ERROR` returned `isError:true` with an application stack. The adapter must examine `isError` before parsing success text. A tool return alone does not establish rendered-file integrity or visual correctness.
 

@@ -52,7 +52,7 @@ Do this once, before touching any editor.
    ```powershell
    cd refclone
    npm ci                         # installs on Windows and Linux; macOS is refused
-   npm test                       # 258 tests, no Cavalry required
+   npm test                       # 314 tests, no Cavalry required
    node .github/scripts/privacy-scan.mjs
    ```
 
@@ -322,7 +322,8 @@ That is the only script that needs the live app. It connects through the MCP, cr
 scene, keys one rectangle, saves an editable `.cv`, renders the frame range as numbered PNGs,
 re-validates every file with FFprobe and writes its evidence under `integration/evidence/`
 (gitignored — it is output from your machine, not a fixture to commit). If this passes, every IDE
-in the table above can do the same thing, because they are all talking to the same three tools.
+in the table above can do the same thing, because they are all talking to the same tools over the
+same adapter.
 Interpretation details: [`CAVALRY_ADAPTER.md`](CAVALRY_ADAPTER.md).
 
 ## If the agent ignores the gates

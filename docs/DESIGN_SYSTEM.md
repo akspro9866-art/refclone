@@ -98,7 +98,8 @@ npm test
 - `.qoder/skills/generic-clone/SKILL.md` — the per-gate runbook for cloning any reference
   video with the generic profile.
 - `.qoder/skills/cavalry-reference-fidelity/SKILL.md` — the evidence-gate discipline:
-  exact-copy rules, the three real MCP tools, timing, QA and corrections. Both reference
+  exact-copy rules, the MCP surface as it is discovered at runtime, timing, QA (whole-frame
+  and region by region) and corrections. Both reference
   the structured files above instead of copying their data, and `.agents/skills/` carries
   byte-identical mirrors for agents that look there.
 

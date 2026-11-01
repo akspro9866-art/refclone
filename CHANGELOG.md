@@ -47,8 +47,60 @@ All notable changes to this project are documented here. The format follows
   mock Cavalry API. It skips cleanly when no built checkout is present; set `CAVALRY_MCP_ROOT` to
   enable it. This is the exercised proof for the runtime sync, not a live Cavalry session.
 - New dependencies: `fit-curve`, `bezier-easing`, `odiff-bin`, `@visioncortex/vtracer`.
+- **Sub-pixel band motion** (`src/stages/bandTracking.mjs`, `tools/track-bands.mjs`): measures a
+  band's displacement frame by frame from interpolated soft-ink profiles by normalised
+  cross-correlation — 1/8 px resolution at the default upsample — with automatic ink-row band
+  discovery, word-gap anchors inside each band, a per-frame correlation score and a competitor
+  margin, and a named refusal (`no-background`, `empty-profile`, `flat-reference`, `no-overlap`,
+  `window-too-small`, `window-has-no-edge`) wherever the profile cannot support a number, instead
+  of a plausible zero. The artifact is `refclone/band-tracks@1`.
+- **Curve fitting to keys** (`src/stages/motionFitting.mjs`, Stage 2D, `tools/fit-motion.mjs`):
+  turns a `track-bands` report (or a bare `[{frame, value}]` series) into a per-band fit along the
+  representation ladder — static, linear, named preset, custom bezier, then a piecewise keyframe
+  rung under a `--max-keys` budget — and answers with the error it achieved: maximum and RMS
+  deviation from the measurement in pixels, low-confidence frames dropped by
+  `--min-score`/`--min-margin`, sub-`--min-travel` bands classified static, and `--expression`
+  printing the `magicEasing(..., "Custom", expression)` text.
+- **`render --frames a:b`** (also `a-b`, `start:end:step` and a comma mix like `0,28-60:4,215`):
+  renders one range, a stride or a mixed list instead of the whole plan, so the eight frames a band
+  actually moved across can be re-measured without waiting on 216. The selection is validated
+  against the plan's frame mapping before anything opens Cavalry (`RENDER_FRAME_SPEC_INVALID` when
+  it selects nothing or exceeds the limit), it enters the render cache key as a frame count plus its
+  contiguous runs so a range never shares a directory with the full sequence, and one contiguous run
+  encodes and verifies a video as usual. A sparse selection keeps its verified PNGs, encodes nothing,
+  records `RENDER_SEQUENCE_NONCONTIGUOUS` and writes the manifest as `partial` rather than encoding
+  the gap it skipped. QA still samples the plan's own frames and refuses a manifest missing one
+  (`QA_FRAME_MISSING`): `--frames` is for measuring frames, not for shortening a fidelity check.
+- **Region-aware QA**: every scored frame is now also measured region by region. Regions come from
+  the *reference* frame's ink rows (so a wrong render cannot define its own measuring sticks), and
+  each one carries pixel error (MAE/RMSE/SSIM/changed-fraction/ink-IoU), a sub-pixel two-axis drift
+  with a patch-ready `correctionPx`, and the share of its error a rigid slide removes — reported as
+  the verdict `match | position | aligned | texture | mixed | unmeasurable`, with `alsoAppearance`
+  when a placement fix will not finish the job. Offending regions become their own discrepancies
+  (`region-position`, `region-mixed`, `region-appearance`, at most the three worst) with the
+  correction in the suggestion, are summarised in `metrics.region*`, printed as a `## Regions` table
+  in the markdown report, and outlined in the saved comparison PNGs. `qa.regions.enabled` and
+  `qa.regions.maxRegions` in the config switch the pass off and cap it; the thresholds are
+  provisional and labelled as such in the report.
+- **Band-attributed Stage 5 drift** (`procedural --live --band-drift`): the failing frame is
+  measured band by band instead of by one ink centroid, and each band's correction is claimed by
+  the layer whose expected position falls inside it (`position-in-band`), else by overlapping layer
+  box (`box-overlap`), else left unattributed and reported. Several bands on one layer combine by
+  median; bands that disagree beyond `contestedSpreadPx` (default 2 px) make that layer
+  `contested` and unpatched. Drift at or under `--noise-floor` (default 0.125 px, the measurement
+  quantum) is reported and never patched, a texture-only beat sends no patch at all and says why in
+  `limitations`, and `--band-range` sets the per-band search radius (default 12 px).
+  `attribution.basis: "band-drift"` records the per-target spread, the band ids behind each number
+  and the contested/unattributed lists. This leg is covered by the suite and **has not been run
+  against a live Cavalry session**.
+- **End-to-end QA test** (`test/qa-e2e.test.mjs`): a real planner-produced `scene-plan`, a real
+  verified `render-manifest` and a real encoded clip go through `runQa`, and the report validates
+  against the region fields of `qa-report.schema.json` — a displaced line is caught as `position`
+  with the right sign and element attribution, a reshaped line as `texture` with no correction
+  suggested, and the cached rerun is proven to be the cache. All pixels and copy in it are
+  synthetic fixtures.
 - GitHub Actions now runs the full unit and synthetic suite on **both `windows-latest` and
-  `ubuntu-latest`**. The test suite is 258 tests; the runner lists 259 entries because
+  `ubuntu-latest`**. The test suite is 314 tests; the runner lists 315 entries because
   `test/fixtures.mjs` is a helper module.
 
 ### Changed
@@ -59,6 +111,19 @@ All notable changes to this project are documented here. The format follows
   `"os": ["win32", "linux"]`, and macOS is still refused at install time rather than half-tested.
 - The syntax-check guard now recurses into `src/stages/`, `src/dsl/` and `test/fixtures/`, so a
   new module outside the top level cannot reach a user as a runtime syntax failure.
+- One measurement truth: QA's region drift and Stage 5's band drift both call
+  `bandTracking.rectDisplacement`, so a drift in a report and a correction in a patch are the same
+  number with the same sign (positive `dxPx` = the render sits right of/below the reference;
+  `correctionPx` is already negated for patching).
+- `docs/MCP_CAPABILITIES.md` and the transport header now state what the tool list actually shows:
+  the current cavalry-mcp checkout also registers `cavalry_render_frames`, refclone never calls it
+  (its route keeps the audited `api.setFrame` + `api.renderPNGFrame` loop, one PNG per call), and a
+  connector started against an older build still lists three tools — so tools are discovered at
+  runtime and no tool name is ever invented.
+- Element attribution in QA reads the generic planner's own geometry (`widthPx`/`heightPx` around
+  `centerXPx`/`centerYPx` in frame pixels), so real plans get per-region `elementId`s; a full-frame
+  background, which reuses those keys with the comp centre as `(0, 0)`, is refused rather than
+  allowed to overlap every band.
 
 ### Fixed
 
@@ -68,6 +133,12 @@ All notable changes to this project are documented here. The format follows
   that could never exist; the recorded path is now the registry's own path.
 - The perceptual gate no longer discards patch history when a later pass converges, and the
   frame-delta fallback keeps the peak frame when a cut lands exactly on a beat boundary.
+- A region's rigid-slide probe is no longer capped by the whole-frame `shiftSearchRadius`: an
+  8 px displacement inside a 6 px frame search window used to be reported as partly an appearance
+  difference because the rest of the slide was never tested. It is now probed at the drift the
+  ink profile measured, inside `regionSearchRadiusPx`.
+- The QA cache key includes whether region scoring ran and its band cap, so a run with
+  `qa.regions.enabled: false` can no longer be served the cached report of an enabled run.
 
 ## 0.1.0 — 2026-10-30
 

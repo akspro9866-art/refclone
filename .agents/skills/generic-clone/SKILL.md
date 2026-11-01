@@ -27,9 +27,14 @@ a command argument, never a config value.
 - Never silently overwrite sources, working projects or previous final renders. Each job
   owns a directory named after the first 16 hex characters of the reference's SHA-256, and
   generic records are written under `auto-analysis/`, `design-generic/` and `plan-generic/`.
-- Use only the three real MCP tools (`cavalry_run_script`, `cavalry_inspect`,
-  `cavalry_run_preset`). Do not assume headless rendering, safe direct project-file
-  editing, transactional rollback, or undocumented APIs.
+- Discover the MCP tools at runtime and never invent a tool name. This route drives
+  `cavalry_run_script`, `cavalry_inspect` and `cavalry_run_preset`, and renders through
+  `api.setFrame` + `api.renderPNGFrame` inside a script — one PNG per call. A current
+  cavalry-mcp build also registers `cavalry_render_frames` for direct clients; this pipeline
+  does not call it, and a server started from an older build still lists three tools, so
+  re-read `tools/list` against your own build instead of assuming either way. Do not assume
+  headless rendering, safe direct project-file editing, transactional rollback, or
+  undocumented APIs.
 - Work on files you have the rights to, and keep `jobs/` and `assets/` out of version
   control: they hold someone's footage.
 
@@ -80,9 +85,17 @@ required human review is confirmed. Every gate stays blocking; the CV pass never
    (the pipeline was verified on 2.8.0; other versions are unverified). The plan is an ordinary
    `scene-plan`, so these stages are unchanged. Standalone forms take the plan/manifest/report
    paths and, under a generic config, must name the video with `--reference <video>` — the
-   config declares none. QA status `needs_review` requires a human decision; `run` never
-   approves fidelity on its own. Export writes a new unique directory and never overwrites a
-   previous final.
+   config declares none. `render --frames 28:60` (or `0:215:12`, `0,28-60:4,215`) re-renders a
+   range, a stride or a mixed list instead of the whole plan; a sparse selection keeps its
+   verified frames and encodes no video (`RENDER_SEQUENCE_NONCONTIGUOUS`), so it is a measuring
+   tool, not a shorter fidelity check. QA scores each sampled frame region by region as well as
+   whole-frame: the regions are row bands the **reference's** own ink defines, and each one says
+   whether a rigid slide explains its error (`position`, with the patch-ready correction and the
+   gain) or does not (`texture`), attributed to the plan element that draws it where the plan
+   carries geometry. Read those verdicts before moving any layer — a `texture` region is a copy,
+   font or colour problem and no slide will quiet it. QA status `needs_review` requires a human
+   decision; `run` never approves fidelity on its own. Export writes a new unique directory and
+   never overwrites a previous final.
 
 ## Standalone commands (for inspecting one stage, not for skipping gates)
 
@@ -99,6 +112,21 @@ the draft paths, the sampling basis, `review: "pending"` and the blocking diagno
 neither, the catalog comes from `config.catalog`. An authored catalog is reference-agnostic
 vocabulary — `sourceHash: null` is allowed — and runtime executability is still decided by the
 capability report at plan time.
+
+Two standalone tools measure motion and fit it, on frames you point at them with (each `--help`
+lists every option; both refuse to guess where the profile cannot support a number):
+
+```
+node tools/track-bands.mjs --frames <frames-dir> --band line-1:60:81 --axis x --out work/bands.json
+node tools/fit-motion.mjs --bands work/bands.json --out work/fits.json --expression
+```
+
+`track-bands` writes, per band and per frame, the sub-pixel displacement against one reference
+frame (quantum 1/upsample px, default 1/8) with its correlation score, competitor margin and
+word-gap anchors; `fit-motion` answers "how many keys does this move need" along a ladder
+(static, linear, named preset, custom bezier, piecewise) with the max/RMS deviation in pixels it
+actually achieved. The same `rectDisplacement` measurement is what QA's region drift and the
+procedural gate's band drift report, so a number in a fit, a report and a patch is one number.
 
 ## What the CV pass does not do
 
@@ -117,7 +145,13 @@ because a decoded frame carries no element alpha channel.
   `VFR_UNSUPPORTED`) rather than guessed; those references need an explicit reviewed mapping
   first.
 - QA thresholds ship uncalibrated, so the honest terminal status of a first job is
-  `needs_review` until a human accepts the recorded differences.
+  `needs_review` until a human accepts the recorded differences. The region verdicts inherit
+  that: `regionPassMae`, `regionGeometryGain` and `regionTextureGain` are provisional numbers
+  that separate placement from appearance, and the report labels them as such.
+- The procedural route's `--band-drift` leg (band-by-band Stage 5 correction, contested-layer
+  refusal, `--noise-floor`) is covered by the suite but has not been run against a live Cavalry
+  session; the live calibration on record used the centroid basis. Say which basis produced a
+  patch instead of implying both were exercised.
 - Every approximation must be labelled as one in the report: an estimated value is not a
   measurement.
 

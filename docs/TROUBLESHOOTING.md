@@ -21,7 +21,7 @@ that your video is bad. Most reports of "it won't run" are one of the four in th
 ```powershell
 npm ci
 npm run verify     # syntax-check + config parity + skill parity + privacy scan
-npm test           # 258 tests; exercises FFmpeg, never Cavalry
+npm test           # 314 tests; exercises FFmpeg, never Cavalry
 node --version     # must be 24+
 ffmpeg -version
 ffprobe -version
@@ -82,6 +82,31 @@ you are writing it into JSON).
 | `SOURCE_MISMATCH` / `RUN_JOB_MISMATCH` | review payload or `--job` belongs to a different reference | take `sourceHash` from the current run output; never reuse yesterday's review file |
 | `TRANSFORMATION_APPROVAL_REQUIRED` (from `tools/make-shot-spec-review.mjs`) | the spec you submitted changed `transformations` relative to the draft | a spec review is not a transformation approval. Author the transformation deliberately in its own reviewed step or leave it out |
 | `AUTOANALYSIS_SETTING_INVALID`, `AUTO_ANALYSIS_INVALID`, `AUTO_SHOT_UNKNOWN`, `AUTO_SHOT_UNSAMPLED` | CV settings outside range, or a draft/artifact referencing a shot the reviewed boundaries do not contain | re-check `autoAnalysis.*` in the config and rerun after the boundary review; a draft built on a rejected cut set is not salvageable |
+| `QA_REGION_INVALID` | a region was supplied whose rectangle has no integer top-left in frame pixels | regions are frame pixels, not normalized boxes; the error payload carries the offending region |
+| `QA_REGION_DISCOVERY`, `QA_REGION_BACKGROUND` | region scoring cannot run at all: no reference ink band could be discovered, or no background could be measured | an empty/pixel-less reference frame cannot define bands. Fix the frame (or the `--reference` path) rather than turning the pass off — `qa.regions.enabled: false` is a switch for "this job does not want region evidence", not a workaround for a broken input |
+
+### Reading the region table in a QA report
+
+Every scored frame is measured region by region in addition to whole-frame, and each region
+carries one `diagnostic` verdict: `match` (within `regionPassMae`), `position` (a rigid slide
+removes most of the error — the region also reports `drift`, sub-pixel and patch-ready
+`correctionPx`, and `geometry.gain`), `aligned` (the slide explains the error, but the drift sits
+at or under the patch floor, so the line is as well-placed as a position key allows), `texture`
+(a slide does not help: the glyphs, colours or shapes differ), `mixed` (a slide helps partly),
+and `unmeasurable` with the reason. A `position`
+verdict whose post-slide residual is still above `regionPassMae` also sets `alsoAppearance:
+true` — the placement is wrong *and* the look is wrong, and fixing the placement first is the
+honest order. Regions come from the **reference** frame's ink rows, so a render that dropped or
+split a line cannot redefine the grid it is scored against; a region whose drift sits under the
+0.125 px measurement quantum is reported, never called a placement error. Attribution to a plan
+element is evidence-backed or absent — an element whose parameters do not yield a rect inside
+the frame leaves its band `elementId: null` rather than claiming the whole comp.
+
+The frame-level `shiftSearchRadius` and the region `regionSearchRadiusPx` are different
+instruments and neither caps the other: the first is the whole-frame alignment probe, the second
+is the region profile's search range, and the rigid-slide probe is tried at the drift the
+profile actually measured. A 10 px displacement is a placement error even though the frame probe
+searches ±6.
 
 ## The procedural route (`node src/cli.mjs procedural`)
 
@@ -91,8 +116,8 @@ frame to a vision model. Its refusals are local and named:
 
 | Code | Meaning | Usable response |
 |---|---|---|
-| `CLI_USAGE` | an unknown flag, a missing flag value, `procedural` without `--input` or `--dry-run`, `--dry-run`/`--live` together, `--live` without `--reference` or a video `--input`, `--reference` and `--auto-reference` together, `--auto-reference` on a scene JSON, or live-only flags without `--live` | match the help text; `--threshold`, `--max-passes` and `--max-layers-per-beat` take values |
-| `PROCEDURAL_OPTIONS_INVALID` | `--threshold` outside 0–100, `--max-passes` not an integer 1–10, or `--max-layers-per-beat` not an integer 1–8 | fix the flag; a pass ceiling is not a convergence claim |
+| `CLI_USAGE` | an unknown flag, a missing flag value, `procedural` without `--input` or `--dry-run`, `--dry-run`/`--live` together, `--live` without `--reference` or a video `--input`, `--reference` and `--auto-reference` together, `--auto-reference` on a scene JSON, or live-only flags without `--live` — which is what you see when `--band-drift`, `--noise-floor` or `--band-range` is passed to a dry run | match the help text; `--threshold`, `--max-passes` and `--max-layers-per-beat` take values. Band drift needs a render: without `--live` there is no failing frame to measure |
+| `PROCEDURAL_OPTIONS_INVALID` | `--threshold` outside 0–100, `--max-passes` not an integer 1–10, `--max-layers-per-beat` not an integer 1–8, or `--noise-floor` / `--band-range` not a positive number of pixels | fix the flag; a pass ceiling is not a convergence claim, and a noise floor of 0 would patch measurement noise |
 | `FILE_READ_FAILED` | the input is missing, is a directory, or the scene JSON cannot be parsed | point `--input` at a real file |
 | `REFERENCE_AUTO_REQUIRES_VIDEO` | `--auto-reference` (or an implicit auto-extraction) was requested for a scene JSON | a JSON has no pixels to extract; pass `--reference` with frames, a pattern or a frame→path map |
 | `REFERENCE_EXTRACT_INVALID` | the auto-extraction got no video path, no sparse frames, or an extracted file is not a readable PNG | the Stage 1 beats and the input path must both be usable; nothing is substituted |
@@ -102,6 +127,7 @@ frame to a vision model. Its refusals are local and named:
 | `OUTPUT_EXISTS` | `--output` names a directory that already holds these artifacts | pick a new directory; procedural artifacts are never overwritten |
 | `VECTOR_CROP_INVALID` | a crop entry has neither a path nor a nonempty buffer | give each crop a readable file; nothing is substituted |
 | `PERCEPTUAL_COMPARE_FAILED` | neither odiff nor the pure-JS PNG fallback could read the frames | check that the sparse frames and reference frames exist and have dimensions |
+| `PERCEPTUAL_BANDS_INVALID` | a caller-supplied `bands` list (the library option; `--band-drift` alone makes the route discover the reference's own ink rows) resolved to no rectangle in frame pixels | band rects are frame pixels; fix the list, or omit it and let the reference define the grid |
 | `PATCH_TARGET_REQUIRED` | a drift patch could not resolve a layer id or compiled reference | inspect the promotion; a patch needs a real target |
 | `LIVE_LAYER_IDS_MISSING` | the live Stage 4 script did not return one id per compiled reference | do not patch blind: inspect the scene, run the script once by hand and check its return value |
 | `TRANSPORT_CONFIG_INVALID` | no `mcp` block, or `--stallion-url` is not an http(s) URL | point `config.json` at your cavalry-mcp `dist/index.js`, or fix the URL |
@@ -148,6 +174,38 @@ converge within three passes: the keyframe inserted at the failing beat frame ch
 interpolation on neighbouring frames, so the next pass measures a new residual. Treat
 `unconverged` as real, read `attribution`, and inspect the diff images; a single-frame patch is
 not a guarantee of a smooth moving-curve repair.
+
+**Band-attributed drift (`--band-drift`, live only).** Without it, a failing beat yields one
+centroid delta — the mean displacement of every ink pixel in the frame — which is the right
+instrument for one moving layer and the wrong one for a beat holding three lines that move three
+amounts. `--band-drift` measures the same frame band by band instead. The bands are the
+*reference's* own ink rows (up to 24, the same discovery the QA region pass uses), so a render
+that dropped or split a line cannot lay out its own measuring grid, and each band's two-axis
+displacement comes from the same sub-pixel ink-profile correlation `tools/track-bands.mjs`
+reports — quantum 1/8 px, search range `--band-range` (default 12 px). A band is patchable only
+when both axes correlate confidently (score above 0.5) *and* the displacement clears `--noise-floor`
+(default 0.125 px, the quantum); everything else is returned as evidence with its reason, in
+`passes[].bandDrift.beats[].summary`, and moves nothing.
+
+Each patchable band is then claimed by a layer: a layer whose expected position falls inside the
+band claims it (`position-in-band`), otherwise an overlapping layer box does (`box-overlap`),
+otherwise the band is `unattributed` and reported rather than dumped on the first layer. When one
+layer claims several bands their corrections combine by median, and if those bands disagree by
+more than `contestedSpreadPx` (default 2 px — a config/library number, there is deliberately no
+flag for it) the layer is `contested` and unpatched, because a median of two disagreeing
+measurements is a guess about which line is wrong. `attribution[].basis` is then `'band-drift'`,
+with per-target `spreadPx` and the `bands` ids that produced the number, plus the beat's
+`contested` and `unattributed` lists and the measurement `summary` — so a repair can be read back
+to the pixels that justified it.
+
+Two refusals are findings, not failures. A beat whose only difference is texture sends no patch at
+all: the gate stops and `limitations` says so with the counts ("N band(s) displaced no more than
+the 0.125 px noise floor; M band(s) matched no active layer"), which is the difference between an
+honest stop and a pass that quietly moves a layer to reduce a number it was never measuring. And
+band drift is the youngest part of this route: it is covered by the suite (measurement,
+attribution, contest, noise floor, refusal wording) but **has not been run against a live Cavalry
+session** — the 2026-10-31 calibration above used the centroid basis. Treat a live
+`--band-drift` run's first patch as something to inspect, not as a verified behaviour.
 
 ## "The plan is blocked" is usually the correct answer
 

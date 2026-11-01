@@ -242,10 +242,17 @@ is never permission to build.
 and the MCP reachable. Build works composition-first, per-element batches, a numbered checkpoint
 before every script, then layer readback, then a versioned save — so an interrupted run resumes
 instead of duplicating layers. Render goes through native PNG frames + FFmpeg, re-validated with
-FFprobe. QA decodes the reference and measures MAE, SSIM and ink-mask agreement per shot, writes
-side-by-side images for the worst frames, and returns `needs_review`, which only a human may
-resolve. Export copies everything into a new unique directory, re-verifies every hash, and never
-overwrites a previous final.
+FFprobe, and `--frames 28:60` (or `28-60`, `0:215:12`, `0,28-60:4,215`) renders one range, a stride
+or a mixed list instead of the whole plan — enough to re-measure the eight frames a band moved
+across without waiting on 216. QA decodes the reference and measures MAE, SSIM and ink-mask
+agreement per shot, then scores each frame it samples **region by region**: a region is a row band
+the reference's own ink defines, and for each one the report gives the pixel error, the sub-pixel
+drift of the render against the reference, and whether a rigid slide explains the error
+(`position`, with the exact correction a patch would apply) or does not (`texture`), attributed to
+the plan element that draws that band where the plan carries geometry. It writes side-by-side
+images for the worst frames, region outlines included, and returns `needs_review`, which only a
+human may resolve. Export copies everything into a new unique directory, re-verifies every hash,
+and never overwrites a previous final.
 
 ## The procedural route
 
@@ -271,6 +278,9 @@ node src/cli.mjs procedural --live --input scene.json --reference work\frames --
 
 # live Stage 5 without extracted frames: FFmpeg pulls the sparse beat frames from the clip
 node src/cli.mjs procedural --live --input "C:\Videos\reference.mp4" --tracks tracks.json --auto-reference
+
+# band-attributed Stage 5: every moving layer gets the drift of the ink rows it actually draws
+node src/cli.mjs procedural --live --input scene.json --reference work\frames --band-drift --threshold 1.5
 ```
 
 `--smooth` applies Savitzky–Golay smoothing (edge samples preserved) to measured tracks; it is off
@@ -282,15 +292,26 @@ track is reported, not silently emitted. `--dry-run` stops after compilation and
 `config.json` (or `--stallion-url`): it opens the cavalry-mcp/Stallion session, sends the one
 batched script through `cavalry_run_script`, renders only the sparse beat frames through the
 verified per-frame route, compares them locally, and sends at most one compact `_mg.patch` script
-per pass until `--threshold` is met or `--max-passes` is exhausted. Each pass targets up to
-`--max-layers-per-beat` (default 4) layers that are actually moving in that beat — ranked by odiff
-mismatch-box overlap when layer boxes are known and by displacement amplitude otherwise — and
-splits the measured drift across them in one batched patch. When every active layer sits on the
-same expected position, the whole delta falls back to the primary layer rather than duplicating it;
-stagger followers receive relative deltas. cavalry-mcp registers no
-`cavalry_render_frames` tool, so the transport renders each sparse frame through the verified
-`api.setFrame` + `api.renderPNGFrame` route inside `cavalry_run_script` — one PNG per call, never a
-scene re-emit. `--reference` accepts an extracted-frames directory, a `%0Nd` pattern or a JSON
+per pass until `--threshold` is met or `--max-passes` is exhausted. By default each pass measures
+the whole-frame ink centroid and targets up to `--max-layers-per-beat` (default 4) layers that are
+actually moving in that beat — ranked by odiff mismatch-box overlap when layer boxes are known and
+by displacement amplitude otherwise — splitting that one drift across them in a single batched
+patch. With `--band-drift` the failing frame is measured row band by row band instead: each band's
+sub-pixel drift is claimed by the layer whose predicted position falls inside it (or, failing that,
+by the layers whose known box overlaps it), so a line drifting right and a line drifting down get
+two different patches rather than one averaged slide that moves both layers in both axes. `--band-range`
+bounds how far that search looks (default 12 px). Bands on one layer combine by median, and bands
+that disagree by more than the report's `contestedSpreadPx` (default 2 px, a config-side number, not
+a flag) mark the target `contested` and are left alone. A drift at or under `--noise-floor`
+(default 0.125 px, the measurement quantum) is reported and deliberately not patched, so a
+difference that is only appearance sends no patch at all and the gate stops instead of thrashing.
+When every active layer sits on the same expected position, the whole delta falls back to the
+primary layer rather than duplicating it; stagger followers receive relative deltas. The
+band-attributed pass is covered by the suite against synthetic frames with known offsets; it has
+not been run against a live Cavalry session. cavalry-mcp registers a chunked
+`cavalry_render_frames` tool for direct MCP clients, but this route keeps the verified
+`api.setFrame` + `api.renderPNGFrame` pair inside `cavalry_run_script` — one PNG per call, never a
+scene re-emit, and no live refclone run depends on that fourth tool. `--reference` accepts an extracted-frames directory, a `%0Nd` pattern or a JSON
 frame→path map (relative paths resolve against the map's own directory) at composition resolution —
 deltas are measured in those pixels, so a resolution mismatch is reported as a layout diff rather
 than silently scaled. When the input itself is a video, `--reference` may be omitted (or
@@ -309,6 +330,20 @@ contract are covered by the suite, and the live leg has been exercised against a
 converged on pass two with one batched `_mg.patch`, and the scene was cleaned afterwards. It has
 not yet been exercised against a real reference video end to end; see
 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md#the-procedural-route-node-srcclimjs-procedural).
+
+Two standalone tools measure motion the way these stages do, on frames you point at them with:
+
+```powershell
+node tools\track-bands.mjs --frames work\frames --band line-1:60:81 --axis x --out work\bands.json
+node tools\fit-motion.mjs --bands work\bands.json --out work\fits.json --expression
+```
+
+`track-bands.mjs` writes, per band and per frame, the sub-pixel displacement of the ink profile
+against one reference frame with its correlation score and competitor margin, plus the word-gap
+anchors inside the band and their spread. `fit-motion.mjs` turns that series into a named
+magic-easing preset or a piecewise custom curve under a key budget, and `--expression` prints the
+Custom easing expression text Cavalry accepts. Both refuse instead of guessing: a band whose profile
+is flat says so rather than returning a plausible zero. `--help` on either lists every option.
 
 ## What you get at the end
 
@@ -352,7 +387,7 @@ configs, the generic modules, the skills, the README, or any report you would ha
 
 ```powershell
 npm run verify     # syntax check every module + config parity + skill mirrors + privacy scan
-npm test           # 258 tests, no Cavalry needed (259 entries: test/fixtures.mjs is a helper; the _mg contract test skips unless CAVALRY_MCP_ROOT points at a built cavalry-mcp)
+npm test           # 314 tests, no Cavalry needed (315 entries: test/fixtures.mjs is a helper; the _mg contract test skips unless CAVALRY_MCP_ROOT points at a built cavalry-mcp)
 npm run verify:docs  # re-runs the suite and checks that every test count quoted in these docs is current
 npm run test:integration   # LIVE: needs Cavalry 2.8 + Stallion; writes integration/evidence/ (gitignored)
 ```

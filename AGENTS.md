@@ -38,9 +38,14 @@ Ubuntu CI leg verify it.
 
 ## MCP surface
 
-Use only the three real tools the configured Cavalry MCP exposes:
-`cavalry_run_script`, `cavalry_inspect`, `cavalry_run_preset`. Do not invent
-`cavalry_exec`, `cavalry_render_frames` or any other name. Read
+The route this pipeline drives is `cavalry_run_script` (this repository's
+`cavalry_exec`), `cavalry_inspect` and `cavalry_run_preset`. Rendering stays the
+verified `api.setFrame` + `api.renderPNGFrame` pair inside `cavalry_run_script`,
+one PNG per call. `cavalry_render_frames` is a fourth tool that our own
+cavalry-mcp checkout registers for direct MCP clients; this repository does not
+call it, and a server started from an older build does not list it — re-read
+`tools/list` against your build instead of assuming either way. Never invent a
+tool name. Read
 [docs/MCP_CAPABILITIES.md](docs/MCP_CAPABILITIES.md) before writing scene code.
 Do not assume headless rendering, transactional rollback, cancellation, or safe
 direct editing of `.cv` project files. A timed-out batch leaves unknown state:
@@ -73,6 +78,10 @@ gate with copy-pasteable `nextActions`. The gates are:
    scene-changing batch.
 6. **QA** — compare timestamp-aligned frames, record each discrepancy with
    frame, evidence and confidence, fix one actionable item, re-run checks.
+   Score each failing frame region by region, where a region is a row band the
+   *reference* ink defines: a band a rigid slide explains is a placement error
+   and carries the correction a patch would need, a band it does not is an
+   appearance difference, and only the first is offered as actionable.
 7. **Export** — save the editable project, encode a new unique final video,
    probe and decode it, write the final report, document remaining mismatches.
 
@@ -86,6 +95,9 @@ For the full per-gate runbook use the `generic-clone` skill
 - `docs/ASSET_WORKFLOW.md`, `docs/DESIGN_SYSTEM.md`, `docs/SCENE_PLANNING.md`,
   `docs/CAVALRY_ADAPTER.md` — the four stage contracts.
 - `schemas/*.schema.json` — the artifact contracts, validated at every write.
+- `node tools/track-bands.mjs --help` and `node tools/fit-motion.mjs --help` —
+  the sub-pixel band motion measurement and its curve-to-keys fit, both run on
+  decoded frames and both writing hash-independent JSON you can read.
 - `jobs/<source-hash-16>/…/index.json` — where the current artifacts live.
 - `config.json` — profile, review gates, tool paths, sampling budgets.
 
