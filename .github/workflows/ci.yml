@@ -54,15 +54,21 @@ jobs:
           repository: akspro9866-art/cavalry-mcp
           path: stack/cavalry-mcp
 
-      - name: Build the sibling stack
+      - name: Build stallion
+        working-directory: stack/stallion
         shell: pwsh
         env:
           NODE_ENV: production
         run: |
-          npm ci --prefix stack/stallion
-          npm run build --prefix stack/stallion
-          npm ci --prefix stack/cavalry-mcp
-          npm run build --prefix stack/cavalry-mcp
+          npm ci
+          npm run build
+
+      - name: Build cavalry-mcp
+        working-directory: stack/cavalry-mcp
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build
 
       - name: Syntax check every module
         run: node .github/scripts/syntax-check.mjs
