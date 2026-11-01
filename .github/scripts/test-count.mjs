@@ -2,9 +2,10 @@
 // actually produces. A suite claim is a promise to the person deciding whether to trust
 // this engine, so it is checked here rather than remembered by whoever edited a README.
 //
-// Node lists each discovered file as an entry, so a shared helper module with no tests in
-// it (test/fixtures.mjs) is reported as a passing entry. The honest number is the runner's
-// total minus those helper entries, which is what the docs quote.
+// Discovery is scoped to test/*.test.mjs (the same pattern `npm test` uses): a bare
+// `node --test` would recurse into the checked-out sibling stack in CI and count
+// its tests too. With this pattern every runner entry is a real test file, so the
+// honest number is the runner's total as-is.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -31,7 +32,9 @@ async function walk(directory) {
 
 function runSuite() {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--test', '--test-reporter=tap'], { cwd: repo, env: { ...process.env } });
+    // The runner expands the glob itself (Node >= 22), so quoted-file names
+    // cannot leak through the shell on any platform.
+    const child = spawn(process.execPath, ['--test', '--test-reporter=tap', 'test/*.test.mjs'], { cwd: repo, env: { ...process.env } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; });
@@ -49,16 +52,7 @@ const tap = await runSuite();
 // break would otherwise make the runner total unreadable on the Windows leg of CI.
 const reported = /^# tests (\d+)\r?$/m.exec(tap);
 assert.ok(reported, 'could not find the runner total in TAP output');
-const entries = Number(reported[1]);
-
-const testDirectory = path.join(repo, 'test');
-const testFiles = (await fs.readdir(testDirectory)).filter(name => name.endsWith('.mjs'));
-let helperFiles = 0;
-for (const name of testFiles) {
-  const text = await fs.readFile(path.join(testDirectory, name), 'utf8');
-  if (!/^\s*(?:test|it)(?:\.\w+)?\s*\(/m.test(text)) helperFiles += 1;
-}
-const tests = entries - helperFiles;
+const tests = Number(reported[1]);
 
 const documentation = await walk(repo);
 
@@ -79,5 +73,5 @@ for (const file of documentation) {
 assert.ok(quoted.has(tests), `no document quotes ${tests} tests, so the check has nothing to verify`);
 assert.equal(stale.length, 0, `stale test counts:\n${stale.join('\n')}`);
 
-console.log(`test-count: ${tests} tests (runner reports ${entries} entries including ${helperFiles} helper file(s)); ` +
+console.log(`test-count: ${tests} tests; ` +
   `${documentation.length} documents checked, every quoted count current`);

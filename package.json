@@ -30,7 +30,7 @@
     "refclone": "src/cli.mjs"
   },
   "scripts": {
-    "test": "node --test",
+    "test": "node --test \"test/*.test.mjs\"",
     "verify": "node .github/scripts/syntax-check.mjs && node .github/scripts/config-parity.mjs && node .github/scripts/skill-parity.mjs && node .github/scripts/privacy-scan.mjs",
     "verify:docs": "node .github/scripts/test-count.mjs",
     "test:integration": "node integration/cavalry.integration.mjs",
