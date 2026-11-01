@@ -57,10 +57,12 @@ jobs:
       - name: Build stallion
         working-directory: stack/stallion
         shell: pwsh
-        env:
-          NODE_ENV: production
         run: |
+          # NODE_ENV=production is set only for the build: npm ci would omit
+          # devDependencies (esbuild) under it, and the production flag is
+          # what turns the esbuild watch mode into a one-shot build.
           npm ci
+          $env:NODE_ENV = 'production'
           npm run build
 
       - name: Build cavalry-mcp
