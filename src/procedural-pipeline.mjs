@@ -10,8 +10,10 @@
  * All thresholds and presets are read from config.json, not hardcoded.
  */
 
+import fs from 'node:fs';
 import { WorkflowError, hashObject, validateArtifact } from './core.mjs';
 import { trackElement, trackShot, toPromotionInput, TRACKING_VERSION } from './tracking.mjs';
+import { PNG } from 'pngjs';
 import { analyzeScenePromotion, compilePromotionToScript, PROMOTION_VERSION } from './promotion.mjs';
 import { compileShotScript, MG_COMPILER_VERSION, VERIFIED_PRESETS } from './mg-compiler.mjs';
 import { analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport, PERCEPTUAL_VERSION } from './perceptual.mjs';
@@ -56,20 +58,61 @@ export function loadProceduralConfig(config) {
 /**
  * Stage 2: Extract kinematic tracking from autoanalyze observations.
  *
+ * When decoded frame pixels are available — via the `frames` argument, pixels
+ * attached to an observation (`png`, or `data` + `width` + `height`), or
+ * `decodeFrames: true` with readable observation `path` PNGs — the tracking
+ * pass uses optical flow, per-element decoupled beat grids, motion
+ * classification and stationary-edge mask hints. Without pixels everything
+ * still works through the bbox-diff fallback.
+ *
  * @param {Object} params
  * @param {string} params.shotId
  * @param {Array} params.observations - Frame observations from autoanalyze
  * @param {Object} params.metadata - Media metadata (width, height, fps)
  * @param {Object} params.config - Procedural config from loadProceduralConfig
+ * @param {Array<Object>} [params.frames] - Pre-decoded RGBA frames
+ *   ({frame, data, width, height} or {frame, png}); overrides observation paths.
+ * @param {boolean} [params.decodeFrames=false] - Decode observation `path`
+ *   PNGs synchronously (capped by config.proceduralPromotion.maxOpticalFrames).
  * @returns {Object} Tracking analysis conforming to tracking.mjs output
  */
-export function extractTrackingFromObservations({ shotId, observations, metadata, config }) {
+export function extractTrackingFromObservations({ shotId, observations, metadata, config, frames, decodeFrames = false }) {
   if (!shotId) fail('PROCEDURAL_INVALID', 'shotId is required.');
   if (!Array.isArray(observations)) fail('PROCEDURAL_INVALID', 'observations array is required.');
 
   const frameWidth = metadata?.video?.width ?? metadata?.width ?? 1920;
   const frameHeight = metadata?.video?.height ?? metadata?.height ?? 1080;
   const fps = metadata?.video?.fps ?? metadata?.fps ?? { num: 24, den: 1 };
+
+  // Collect decoded pixels keyed by frame number (first source wins):
+  // explicit `frames`, then pixels attached to observations, then optional
+  // synchronous decoding of observation PNG paths.
+  const byFrame = new Map();
+  let frameDecodeFailures = 0;
+  const attach = (frameNumber, pixels) => {
+    if (!Number.isFinite(frameNumber) || !pixels?.data || !pixels?.width || !pixels?.height) return;
+    if (!byFrame.has(frameNumber)) byFrame.set(frameNumber, { frame: frameNumber, data: pixels.data, width: pixels.width, height: pixels.height });
+  };
+  for (const frame of Array.isArray(frames) ? frames : []) {
+    const pixels = frame?.png ?? frame;
+    attach(frame?.frame, pixels);
+  }
+  for (const obs of observations) {
+    const pixels = obs?.png ?? (obs?.data && obs?.width && obs?.height ? obs : null);
+    attach(obs?.frame, pixels);
+  }
+  if (decodeFrames) {
+    const cap = Math.max(0, config?.proceduralPromotion?.maxOpticalFrames ?? 32);
+    const pending = observations.filter(obs => Number.isFinite(obs?.frame) && obs?.path && !byFrame.has(obs.frame));
+    for (const obs of pending.slice(0, cap)) {
+      try {
+        attach(obs.frame, PNG.sync.read(fs.readFileSync(obs.path)));
+      } catch {
+        frameDecodeFailures += 1; // an unreadable frame keeps the bbox fallback
+      }
+    }
+  }
+  const decodedFrames = [...byFrame.values()].sort((a, b) => a.frame - b.frame);
 
   // Convert observations to element states format expected by tracking.mjs
   // Observations from autoanalyze have: { frame, timeSeconds, path, sha256, measurement }
@@ -97,13 +140,16 @@ export function extractTrackingFromObservations({ shotId, observations, metadata
     elements,
     frameWidth,
     frameHeight,
-    fps: typeof fps === 'number' ? fps : fps.num / fps.den
+    fps: typeof fps === 'number' ? fps : fps.num / fps.den,
+    frames: decodedFrames.length > 0 ? decodedFrames : undefined
   });
 
   return {
     ...trackingAnalysis,
     version: TRACKING_VERSION,
-    sourceObservations: observations.length
+    sourceObservations: observations.length,
+    sourceFrames: decodedFrames.length,
+    ...(decodeFrames ? { frameDecodeFailures } : {})
   };
 }
 

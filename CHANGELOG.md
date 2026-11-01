@@ -64,7 +64,7 @@ a verified single-reference production run.
 - Documentation set: architecture, workflow, asset, design-system, planning,
   adapter and MCP-capability notes, plus `docs/IDE_SETUP.md` and
   `docs/TROUBLESHOOTING.md`.
-- Test suite: 335 tests over synthetic videos (no footage shipped), plus an
+- Test suite: 419 tests over synthetic videos (no footage shipped), plus an
   opt-in live integration runner.
 - CI guard scripts: module syntax, shipped-config parity, skill-mirror parity,
   a privacy scan for personal paths and private reference vocabulary, and

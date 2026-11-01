@@ -67,6 +67,12 @@
           "type": "string",
           "enum": ["none", "static", "cubic_bezier", "damped_spring", "keyframes"]
         },
+        "gate": {
+          "type": "string",
+          "enum": ["preset", "pixel_fallback", "keyframes"],
+          "description": "Which Stage 3 residual gate selected this promotion: a preset that held the pixel RMSE gate, a weighted cubic Bezier fallback after a preset missed it, or the measured-keyframes fallback."
+        },
+        "pixelRmse": { "type": "number", "minimum": 0 },
         "reason": { "type": "string" },
         "value": { "type": "number" },
         "parameters": { "$ref": "#/definitions/promotionParameters" },
@@ -88,9 +94,14 @@
     },
     "promotionParameters": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "y1": { "type": "number", "minimum": 0, "maximum": 1 },
         "y2": { "type": "number", "minimum": 0, "maximum": 1 },
+        "inWeight": { "type": "number", "minimum": 0, "maximum": 1 },
+        "inAngle": { "type": "number", "minimum": -90, "maximum": 90 },
+        "outWeight": { "type": "number", "minimum": 0, "maximum": 1 },
+        "outAngle": { "type": "number", "minimum": -90, "maximum": 90 },
         "zeta": { "type": "number", "minimum": 0, "maximum": 1 },
         "omega0": { "type": "number", "exclusiveMinimum": 0 },
         "startFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
@@ -131,7 +142,26 @@
             "y": { "type": "number" }
           }
         },
-        "correlation": { "type": "number", "minimum": 0, "maximum": 1 }
+        "correlation": { "type": "number", "minimum": 0, "maximum": 1 },
+        "stagger": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "lagFrames", "offset"],
+          "properties": {
+            "type": { "type": "string", "enum": ["temporal", "spatial"] },
+            "lagFrames": { "type": "integer", "minimum": 0 },
+            "offset": { "type": "number" }
+          }
+        },
+        "falloff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "influence"],
+          "properties": {
+            "type": { "type": "string", "enum": ["linear"] },
+            "influence": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
       }
     },
     "duplicatorDetection": {

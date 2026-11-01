@@ -5,10 +5,16 @@
  * instead of raw per-frame keyframes:
  * - Cubic-Bezier fitting for smooth monotonic transitions (RMSE <= 0.015)
  * - Damped Spring detection for oscillating trajectories (R^2 >= 0.92)
+ * - Weighted 4-parameter cubic-Bezier fitting for pixel-accurate easing fallback
  * - Duplicator & Stagger detection for N>=2 correlated elements
  *
  * All promotions are evidence-based: a trajectory that doesn't meet the threshold
  * stays as measured keyframes rather than being forced into a procedural form.
+ *
+ * When callers supply `pixelScale` (source pixels per normalized unit, derived from
+ * the frame dimensions), every preset promotion is additionally gated per frame in
+ * pixel units: if any frame misses `bezierRmseMaxPx`, the preset is bypassed in
+ * favor of a weighted cubic-Bezier fit and, failing that, measured keyframes.
  */
 
 import { WorkflowError, hashObject } from './core.mjs';
@@ -21,6 +27,10 @@ const SPRING_R2_THRESHOLD = 0.92;
 const DUPLICATOR_MIN_ELEMENTS = 2;
 const DUPLICATOR_TRAJECTORY_CORRELATION = 0.85;
 const DUPLICATOR_TIMING_TOLERANCE_FRAMES = 2;
+
+// Pixel-unit residual gate default (config: proceduralPromotion.bezierRmseMaxPx).
+// Applies per frame when a pixelScale is provided to analyzeTrajectory.
+export const BEZIER_RMSE_MAX_PX = 1.5;
 
 const fail = (code, message, details = {}) => {
   throw new WorkflowError(code, message, details);
@@ -158,6 +168,187 @@ export function fitCubicBezier(normalized) {
 }
 
 /**
+ * Weighted cubic-bezier easing (4 handle parameters, normalized [0,1] units).
+ *
+ * Control points, with both angles measured in degrees as travel-direction
+ * tangents and weights as handle lengths:
+ * - P0 = (0, 0), P3 = (1, 1)
+ * - P1 (outgoing handle) = outWeight * (cos(outAngle), sin(outAngle))
+ * - P2 (incoming handle) = (1, 1) - inWeight * (cos(inAngle), sin(inAngle))
+ *
+ * The CSS cubic-bezier (y1, y2) family is the sub-family with
+ * outWeight*cos(outAngle) = 1/3 and inWeight*cos(inAngle) = 2/3, so this
+ * parameterization strictly generalizes the 2-parameter fit.
+ */
+const DEG2RAD = Math.PI / 180;
+
+function weightedBezierControlPoints({ inWeight, inAngle, outWeight, outAngle }) {
+  const outRad = outAngle * DEG2RAD;
+  const inRad = inAngle * DEG2RAD;
+  return {
+    x1: outWeight * Math.cos(outRad),
+    y1: outWeight * Math.sin(outRad),
+    x2: 1 - inWeight * Math.cos(inRad),
+    y2: 1 - inWeight * Math.sin(inRad)
+  };
+}
+
+const WEIGHTED_LUT_SIZE = 256;
+
+/**
+ * Dense lookup table of the curve's (x, y) samples. Returns null when the
+ * handle geometry is not a valid easing curve (tangent handles cross in time:
+ * x1 > x2 means the curve travels backwards along the time axis).
+ */
+function weightedBezierLUT(parameters) {
+  const { x1, y1, x2, y2 } = weightedBezierControlPoints(parameters);
+  if (x1 > x2 + 1e-9) return null;
+  const xs = new Float64Array(WEIGHTED_LUT_SIZE + 1);
+  const ys = new Float64Array(WEIGHTED_LUT_SIZE + 1);
+  for (let j = 0; j <= WEIGHTED_LUT_SIZE; j++) {
+    const u = j / WEIGHTED_LUT_SIZE;
+    const mt = 1 - u;
+    xs[j] = 3 * mt * mt * u * x1 + 3 * mt * u * u * x2 + u * u * u;
+    ys[j] = 3 * mt * mt * u * y1 + 3 * mt * u * u * y2 + u * u * u;
+  }
+  return { xs, ys };
+}
+
+function sampleWeightedBezier(lut, x) {
+  const { xs, ys } = lut;
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[WEIGHTED_LUT_SIZE]) return ys[WEIGHTED_LUT_SIZE];
+  let lo = 0;
+  let hi = WEIGHTED_LUT_SIZE;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid] <= x) lo = mid; else hi = mid;
+  }
+  const span = xs[hi] - xs[lo];
+  const fraction = span > 1e-12 ? (x - xs[lo]) / span : 0;
+  return ys[lo] + fraction * (ys[hi] - ys[lo]);
+}
+
+/**
+ * Evaluate the weighted cubic-bezier easing at normalized time x.
+ * Exported so downstream stages and tests share one evaluator with the fitter.
+ *
+ * @param {number} x - Normalized time in [0, 1]
+ * @param {{inWeight: number, inAngle: number, outWeight: number, outAngle: number}} parameters
+ * @returns {number} Normalized value (NaN when the handle geometry is invalid)
+ */
+export function evaluateWeightedCubicBezier(x, parameters) {
+  const lut = weightedBezierLUT(parameters);
+  if (!lut) return NaN;
+  return sampleWeightedBezier(lut, x);
+}
+
+const WEIGHTED_WEIGHT_GRID = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+const WEIGHTED_ANGLE_GRID = [-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75];
+
+/**
+ * Fit a weighted cubic-bezier easing curve to a normalized trajectory.
+ * 4-parameter least-squares fit of {inWeight, inAngle, outWeight, outAngle}:
+ * a coarse grid over all four handle parameters followed by coordinate-descent
+ * refinement with shrinking steps.
+ *
+ * @param {Array<{t: number, v: number}>} normalized - Normalized trajectory points
+ * @param {{rmseMax?: number}} [options] - Success gate in normalized units (default 0.015)
+ * @returns {{success: boolean, inWeight: number, inAngle: number, outWeight: number, outAngle: number, rmse: number, predicted: number[]}}
+ */
+export function fitWeightedCubicBezier(normalized, options = {}) {
+  const rmseMax = options.rmseMax ?? BEZIER_RMSE_THRESHOLD;
+  if (!Array.isArray(normalized) || normalized.length < 2) {
+    return {
+      success: false, inWeight: 0.3, inAngle: 0, outWeight: 0.3, outAngle: 0,
+      rmse: Infinity, predicted: []
+    };
+  }
+
+  const actual = normalized.map(p => p.v);
+  const times = normalized.map(p => p.t);
+
+  const predict = params => {
+    const lut = weightedBezierLUT(params);
+    return lut ? times.map(t => sampleWeightedBezier(lut, t)) : null;
+  };
+  const rmseOf = params => {
+    const predicted = predict(params);
+    return predicted ? computeRMSE(predicted, actual) : Infinity;
+  };
+
+  const clampWeight = w => Math.max(0, Math.min(1, w));
+  const clampAngle = a => Math.max(-90, Math.min(90, a));
+  const roundWeight = w => Math.round(w * 10000) / 10000;
+  const roundAngle = a => Math.round(a * 100) / 100;
+
+  // Coarse grid search over all four handle parameters.
+  let best = { inWeight: 0.3, inAngle: 0, outWeight: 0.3, outAngle: 0, rmse: Infinity };
+  for (const outWeight of WEIGHTED_WEIGHT_GRID) {
+    for (const outAngle of WEIGHTED_ANGLE_GRID) {
+      for (const inWeight of WEIGHTED_WEIGHT_GRID) {
+        for (const inAngle of WEIGHTED_ANGLE_GRID) {
+          const rmse = rmseOf({ inWeight, inAngle, outWeight, outAngle });
+          if (rmse < best.rmse) {
+            best = { inWeight, inAngle, outWeight, outAngle, rmse };
+          }
+        }
+      }
+    }
+  }
+
+  // Coordinate-descent refinement with shrinking steps.
+  let weightStep = 0.08;
+  let angleStep = 6;
+  while (weightStep >= 1e-4 || angleStep >= 0.05) {
+    for (const key of ['outWeight', 'outAngle', 'inWeight', 'inAngle']) {
+      const isAngle = key.endsWith('Angle');
+      const step = isAngle ? angleStep : weightStep;
+      const clamp = isAngle ? clampAngle : clampWeight;
+      const current = best[key];
+      for (const direction of [-1, 1]) {
+        const candidate = {
+          ...best,
+          [key]: clamp(current + direction * step)
+        };
+        const rmse = rmseOf(candidate);
+        if (rmse < best.rmse) {
+          best = { ...candidate, rmse };
+        }
+      }
+    }
+    weightStep /= 2;
+    angleStep /= 2;
+  }
+
+  // Report rounded handles with predictions recomputed at the rounded values,
+  // falling back to the unrounded optimum if rounding breaks the geometry.
+  const rounded = {
+    inWeight: roundWeight(best.inWeight),
+    inAngle: roundAngle(best.inAngle),
+    outWeight: roundWeight(best.outWeight),
+    outAngle: roundAngle(best.outAngle)
+  };
+  let predicted = predict(rounded);
+  let finalParams = rounded;
+  if (!predicted) {
+    finalParams = { inWeight: best.inWeight, inAngle: best.inAngle, outWeight: best.outWeight, outAngle: best.outAngle };
+    predicted = predict(finalParams) ?? [];
+  }
+  const rmse = predicted.length > 0 ? computeRMSE(predicted, actual) : Infinity;
+
+  return {
+    success: rmse <= rmseMax,
+    inWeight: finalParams.inWeight,
+    inAngle: finalParams.inAngle,
+    outWeight: finalParams.outWeight,
+    outAngle: finalParams.outAngle,
+    rmse,
+    predicted
+  };
+}
+
+/**
  * Model: y(t) = A * (1 - e^(-ζω₀t) * cos(ω_d * t + φ)) + B
  * where ω_d = ω₀ * sqrt(1 - ζ²) for underdamped case (ζ < 1)
  *
@@ -261,54 +452,77 @@ export function fitDampedSpring(normalized, targetValue = 1) {
 
 /**
  * Compute cross-correlation between two trajectories.
- * Returns the correlation coefficient at the best lag.
+ * Returns the correlation coefficient at the best lag within +/- maxLag.
+ *
+ * Lag sign convention: a positive lag means traj2 is traj1 delayed, i.e.
+ * traj1[i] aligns with traj2[i + lag]. Constant series are handled explicitly
+ * (both constant = perfect match at lag 0; one constant = no match) so the
+ * lag search stays usable for shape comparison. Lags whose overlap is too
+ * small to score honestly (fewer than max(2, half the samples)) are skipped.
  */
 function crossCorrelate(traj1, traj2, maxLag) {
-  if (traj1.length !== traj2.length) {
+  if (traj1.length !== traj2.length || traj1.length === 0) {
     return { correlation: 0, lag: 0 };
   }
 
-  const mean1 = traj1.reduce((s, v) => s + v, 0) / traj1.length;
-  const mean2 = traj2.reduce((s, v) => s + v, 0) / traj2.length;
+  const n = traj1.length;
+  const mean1 = traj1.reduce((s, v) => s + v, 0) / n;
+  const mean2 = traj2.reduce((s, v) => s + v, 0) / n;
+  const std1 = Math.sqrt(traj1.reduce((s, v) => s + (v - mean1) ** 2, 0) / n);
+  const std2 = Math.sqrt(traj2.reduce((s, v) => s + (v - mean2) ** 2, 0) / n);
 
+  if (std1 < 1e-9 && std2 < 1e-9) return { correlation: 1, lag: 0 };
+  if (std1 < 1e-9 || std2 < 1e-9) return { correlation: 0, lag: 0 };
+
+  const minOverlap = Math.max(2, Math.ceil(n / 2));
   let bestCorrelation = -Infinity;
   let bestLag = 0;
 
   for (let lag = -maxLag; lag <= maxLag; lag++) {
     let sum = 0;
     let count = 0;
-    for (let i = 0; i < traj1.length; i++) {
+    for (let i = 0; i < n; i++) {
       const j = i + lag;
-      if (j >= 0 && j < traj2.length) {
+      if (j >= 0 && j < n) {
         sum += (traj1[i] - mean1) * (traj2[j] - mean2);
         count++;
       }
     }
-    if (count === 0) continue;
+    if (count < minOverlap) continue;
 
-    const std1 = Math.sqrt(traj1.reduce((s, v) => s + (v - mean1) ** 2, 0) / traj1.length);
-    const std2 = Math.sqrt(traj2.reduce((s, v) => s + (v - mean2) ** 2, 0) / traj2.length);
-
-    if (std1 === 0 || std2 === 0) continue;
-
-    const correlation = sum / (count * std1 * std2);
+    const correlation = Math.max(-1, Math.min(1, sum / (count * std1 * std2)));
     if (correlation > bestCorrelation) {
       bestCorrelation = correlation;
       bestLag = lag;
     }
   }
 
+  if (bestCorrelation === -Infinity) return { correlation: 0, lag: 0 };
   return { correlation: bestCorrelation, lag: bestLag };
 }
 
 /**
  * Detect duplicator/stagger patterns among multiple element trajectories.
  *
+ * Members of a group share trajectory SHAPE (offset-invariant correlation on
+ * both x and y, scored at the best lag within the timing tolerance). A group
+ * records the measured phase delay `lagFrames` (frames the member trails the
+ * base element), the spatial offset measured at that aligned phase, and the
+ * complete rig description: `stagger` ({type, lagFrames, offset}) and
+ * `falloff` ({type, influence}) so the emitted _mg.duplicator is executable.
+ *
  * @param {Array<{id: string, trajectory: Array<{frame: number, x: number, y: number, scale?: number, rotation?: number}>}>} elements
- * @returns {{detected: boolean, groups: Array<{elementIds: string[], lagFrames: number, spatialOffset: {x: number, y: number}, correlation: number}>}}
+ * @param {{minElements?: number, correlationMin?: number, maxLag?: number}} [options]
+ *     Thresholds; defaults mirror config proceduralPromotion
+ *     (duplicatorMinElements, duplicatorCorrelationMin, duplicatorTimingToleranceFrames).
+ * @returns {{detected: boolean, groups: Array<{elementIds: string[], lagFrames: number, spatialOffset: {x: number, y: number}, correlation: number, baseElementId: string, stagger: {type: string, lagFrames: number, offset: number}, falloff: {type: string, influence: number}}>}}
  */
-export function detectDuplicatorPattern(elements) {
-  if (!Array.isArray(elements) || elements.length < DUPLICATOR_MIN_ELEMENTS) {
+export function detectDuplicatorPattern(elements, options = {}) {
+  const minElements = options.minElements ?? DUPLICATOR_MIN_ELEMENTS;
+  const correlationMin = options.correlationMin ?? DUPLICATOR_TRAJECTORY_CORRELATION;
+  const maxLag = options.maxLag ?? DUPLICATOR_TIMING_TOLERANCE_FRAMES;
+
+  if (!Array.isArray(elements) || elements.length < minElements) {
     return { detected: false, groups: [], reason: 'insufficient_elements' };
   }
 
@@ -338,35 +552,69 @@ export function detectDuplicatorPattern(elements) {
       const y2 = traj2.slice(0, minLen).map(p => p.y);
 
       // For duplicator detection, we check if trajectories have similar SHAPE
-      // not necessarily same absolute values (they can be offset)
-      const xCorr = computeShapeCorrelation(x1, x2);
-      const yCorr = computeShapeCorrelation(y1, y2);
+      // not necessarily same absolute values (they can be offset and phase
+      // delayed). The lag search finds the phase delay between the two.
+      const xLag = crossCorrelate(x1, x2, maxLag);
+      const yLag = crossCorrelate(y1, y2, maxLag);
 
       // Both dimensions must correlate well in shape
-      if (xCorr >= DUPLICATOR_TRAJECTORY_CORRELATION &&
-          yCorr >= DUPLICATOR_TRAJECTORY_CORRELATION) {
+      if (xLag.correlation >= correlationMin &&
+          yLag.correlation >= correlationMin) {
 
-        // Compute average spatial offset
-        const offsetX = traj2.slice(0, minLen).reduce((sum, p, idx) => sum + (p.x - traj1[idx].x), 0) / minLen;
-        const offsetY = traj2.slice(0, minLen).reduce((sum, p, idx) => sum + (p.y - traj1[idx].y), 0) / minLen;
+        // The stronger dimension decides the lag; ties resolve to x.
+        const bestLag = xLag.correlation >= yLag.correlation ? xLag.lag : yLag.lag;
+
+        // Frames per sample step, so an index lag becomes a frame lag.
+        const firstFrame = traj1[0].frame;
+        const lastFrame = traj1[traj1.length - 1].frame;
+        const frameStep = traj1.length > 1 ? (lastFrame - firstFrame) / (traj1.length - 1) : 1;
+        const lagFrames = Math.max(0, Math.round(Math.abs(bestLag) * frameStep));
+
+        // Spatial offset measured at the aligned phase:
+        // traj2[i + bestLag] ~ traj1[i] + offset.
+        let offsetX = 0;
+        let offsetY = 0;
+        let samples = 0;
+        for (let k = 0; k < minLen; k++) {
+          const aligned = k + bestLag;
+          if (aligned >= 0 && aligned < minLen) {
+            offsetX += traj2[aligned].x - traj1[k].x;
+            offsetY += traj2[aligned].y - traj1[k].y;
+            samples++;
+          }
+        }
+        if (samples > 0) {
+          offsetX /= samples;
+          offsetY /= samples;
+        }
 
         group.push({
           ...elements[j],
-          lagFrames: 0,
+          lagFrames,
           spatialOffset: { x: offsetX, y: offsetY },
-          correlation: Math.min(xCorr, yCorr)
+          correlation: Math.min(xLag.correlation, yLag.correlation)
         });
         used.add(elements[j].id);
       }
     }
 
-    if (group.length >= DUPLICATOR_MIN_ELEMENTS) {
+    if (group.length >= minElements) {
+      const firstMember = group[1] ?? group[0];
+      const lagFrames = firstMember?.lagFrames ?? 0;
+      const spatialOffset = firstMember?.spatialOffset ?? { x: 0, y: 0 };
+      const staggerOffset = Math.round(Math.hypot(spatialOffset.x, spatialOffset.y) * 100) / 100;
       groups.push({
         elementIds: group.map(g => g.id),
-        lagFrames: group[1]?.lagFrames ?? 0,
-        spatialOffset: group[1]?.spatialOffset ?? { x: 0, y: 0 },
-        correlation: group[1]?.correlation ?? 0,
-        baseElementId: elements[i].id
+        lagFrames,
+        spatialOffset,
+        correlation: firstMember?.correlation ?? 0,
+        baseElementId: elements[i].id,
+        stagger: {
+          type: lagFrames > 0 ? 'temporal' : 'spatial',
+          lagFrames,
+          offset: staggerOffset
+        },
+        falloff: { type: 'linear', influence: 1 }
       });
     }
   }
@@ -380,44 +628,42 @@ export function detectDuplicatorPattern(elements) {
 }
 
 /**
- * Compute shape correlation between two trajectories (normalized, offset-invariant).
- */
-function computeShapeCorrelation(traj1, traj2) {
-  if (traj1.length !== traj2.length || traj1.length < 2) return 0;
-
-  // Normalize both to zero mean and unit variance
-  const mean1 = traj1.reduce((s, v) => s + v, 0) / traj1.length;
-  const mean2 = traj2.reduce((s, v) => s + v, 0) / traj2.length;
-
-  const std1 = Math.sqrt(traj1.reduce((s, v) => s + (v - mean1) ** 2, 0) / traj1.length);
-  const std2 = Math.sqrt(traj2.reduce((s, v) => s + (v - mean2) ** 2, 0) / traj2.length);
-
-  // If either is constant, check if both are constant
-  if (std1 < 1e-9 && std2 < 1e-9) return 1; // Both constant = perfect match
-  if (std1 < 1e-9 || std2 < 1e-9) return 0; // One constant, one not = no match
-
-  // Compute Pearson correlation
-  let sum = 0;
-  for (let i = 0; i < traj1.length; i++) {
-    sum += ((traj1[i] - mean1) / std1) * ((traj2[i] - mean2) / std2);
-  }
-
-  return sum / traj1.length;
-}
-
-/**
  * Analyze a single property trajectory and determine the best promotion.
+ *
+ * Decision order without pixelScale (normalized units, unchanged):
+ *   static -> cubic_bezier (monotonic, RMSE gate) -> damped_spring (R^2 gate)
+ *   -> keyframes fallback.
+ *
+ * Decision order with pixelScale (source pixels per normalized unit, derived
+ * by the caller from the frame dimensions): preset promotions are tried first
+ * and must additionally hold `bezierRmseMaxPx` on EVERY frame in pixel units.
+ * A preset that misses the pixel gate is bypassed for a 4-parameter weighted
+ * cubic-bezier fit ({inWeight, inAngle, outWeight, outAngle}); if that also
+ * misses the gate, measured keyframes are kept. The fired gate is recorded as
+ * metrics-level `gate` ('preset' | 'pixel_fallback' | 'keyframes') with
+ * `pixelRmse` where computable.
  *
  * @param {Object} params
  * @param {string} params.elementId - Element identifier
  * @param {string} params.property - Property name (x, y, scale, rotation, opacity)
  * @param {Array<{frame: number, value: number}>} params.points - Trajectory points
  * @param {string} [params.attributePath] - Cavalry attribute path
+ * @param {number} [params.pixelScale] - Source pixels per normalized unit; enables the pixel gate
+ * @param {number} [params.bezierRmseMaxPx] - Per-frame pixel gate (default 1.5; config proceduralPromotion.bezierRmseMaxPx)
  * @returns {Object} Promotion result with type and parameters
  */
-export function analyzeTrajectory({ elementId, property, points, attributePath }) {
+export function analyzeTrajectory({ elementId, property, points, attributePath, pixelScale, bezierRmseMaxPx }) {
   if (!elementId || !property) {
     fail('PROMOTION_INVALID', 'elementId and property are required.');
+  }
+
+  if (pixelScale !== undefined && pixelScale !== null &&
+      (typeof pixelScale !== 'number' || !Number.isFinite(pixelScale) || pixelScale <= 0)) {
+    fail('PROMOTION_INVALID', 'pixelScale must be a positive finite number.', { pixelScale });
+  }
+  if (bezierRmseMaxPx !== undefined && bezierRmseMaxPx !== null &&
+      (typeof bezierRmseMaxPx !== 'number' || !Number.isFinite(bezierRmseMaxPx) || bezierRmseMaxPx <= 0)) {
+    fail('PROMOTION_INVALID', 'bezierRmseMaxPx must be a positive finite number.', { bezierRmseMaxPx });
   }
 
   if (!Array.isArray(points) || points.length < 2) {
@@ -451,59 +697,209 @@ export function analyzeTrajectory({ elementId, property, points, attributePath }
   // Check for monotonic smooth transition (bezier candidate)
   const isMonotonic = checkMonotonic(normalized.map(p => p.v));
 
+  const pixelGateEnabled = pixelScale !== undefined && pixelScale !== null;
+  const pixelMaxPx = bezierRmseMaxPx ?? BEZIER_RMSE_MAX_PX;
+
+  /**
+   * Per-frame pixel errors of a normalized prediction against the measured
+   * trajectory: |predicted - actual| * pixelScale for every sample.
+   */
+  const pixelErrorsOf = predicted => {
+    const perFrame = normalized.map((p, i) => Math.abs(predicted[i] - p.v) * pixelScale);
+    return {
+      perFrame,
+      rmse: Math.sqrt(perFrame.reduce((sum, e) => sum + e * e, 0) / perFrame.length),
+      maxError: Math.max(...perFrame)
+    };
+  };
+
+  // Preset promotions first. In pixel mode each preset must additionally hold
+  // bezierRmseMaxPx on every frame, otherwise it is bypassed.
+  let bypassedPixelRmse = null;
+
   if (isMonotonic) {
     const bezierFit = fitCubicBezier(normalized);
     if (bezierFit.success) {
-      return {
-        elementId,
-        property,
-        attributePath: attributePath ?? null,
-        promotion: 'cubic_bezier',
-        parameters: {
-          y1: bezierFit.y1,
-          y2: bezierFit.y2,
-          startFrame: minFrame,
-          endFrame: maxFrame,
-          startValue: minValue,
-          endValue: maxValue
-        },
-        metrics: {
-          rmse: bezierFit.rmse,
-          threshold: BEZIER_RMSE_THRESHOLD,
-          pointCount: points.length,
-          frameRange
-        },
-        confidence: Math.max(0, 1 - bezierFit.rmse / BEZIER_RMSE_THRESHOLD)
-      };
+      if (!pixelGateEnabled) {
+        return {
+          elementId,
+          property,
+          attributePath: attributePath ?? null,
+          promotion: 'cubic_bezier',
+          parameters: {
+            y1: bezierFit.y1,
+            y2: bezierFit.y2,
+            startFrame: minFrame,
+            endFrame: maxFrame,
+            startValue: minValue,
+            endValue: maxValue
+          },
+          metrics: {
+            rmse: bezierFit.rmse,
+            threshold: BEZIER_RMSE_THRESHOLD,
+            pointCount: points.length,
+            frameRange
+          },
+          gate: 'preset',
+          confidence: Math.max(0, 1 - bezierFit.rmse / BEZIER_RMSE_THRESHOLD)
+        };
+      }
+
+      const pixels = pixelErrorsOf(bezierFit.predicted);
+      if (pixels.maxError <= pixelMaxPx) {
+        return {
+          elementId,
+          property,
+          attributePath: attributePath ?? null,
+          promotion: 'cubic_bezier',
+          parameters: {
+            y1: bezierFit.y1,
+            y2: bezierFit.y2,
+            startFrame: minFrame,
+            endFrame: maxFrame,
+            startValue: minValue,
+            endValue: maxValue
+          },
+          metrics: {
+            rmse: bezierFit.rmse,
+            threshold: BEZIER_RMSE_THRESHOLD,
+            pixelRmse: pixels.rmse,
+            pixelMaxError: pixels.maxError,
+            pixelThreshold: pixelMaxPx,
+            pointCount: points.length,
+            frameRange
+          },
+          gate: 'preset',
+          pixelRmse: pixels.rmse,
+          confidence: Math.max(0, 1 - bezierFit.rmse / BEZIER_RMSE_THRESHOLD)
+        };
+      }
+      bypassedPixelRmse = pixels.rmse;
     }
   }
 
   // Check for oscillating trajectory (spring candidate)
   const springFit = fitDampedSpring(normalized, 1);
   if (springFit.success) {
-    return {
-      elementId,
-      property,
-      attributePath: attributePath ?? null,
-      promotion: 'damped_spring',
-      parameters: {
-        zeta: springFit.zeta,
-        omega0: springFit.omega0,
-        startFrame: minFrame,
-        endFrame: maxFrame,
-        startValue: minValue,
-        targetValue: maxValue,
-        initialValue: points[0].value
-      },
-      metrics: {
-        r2: springFit.r2,
-        threshold: SPRING_R2_THRESHOLD,
-        signChanges: springFit.signChanges,
-        pointCount: points.length,
-        frameRange
-      },
-      confidence: Math.min(1, springFit.r2)
-    };
+    if (!pixelGateEnabled) {
+      return {
+        elementId,
+        property,
+        attributePath: attributePath ?? null,
+        promotion: 'damped_spring',
+        parameters: {
+          zeta: springFit.zeta,
+          omega0: springFit.omega0,
+          startFrame: minFrame,
+          endFrame: maxFrame,
+          startValue: minValue,
+          targetValue: maxValue,
+          initialValue: points[0].value
+        },
+        metrics: {
+          r2: springFit.r2,
+          threshold: SPRING_R2_THRESHOLD,
+          signChanges: springFit.signChanges,
+          pointCount: points.length,
+          frameRange
+        },
+        gate: 'preset',
+        confidence: Math.min(1, springFit.r2)
+      };
+    }
+
+    const pixels = pixelErrorsOf(springFit.predicted);
+    if (pixels.maxError <= pixelMaxPx) {
+      return {
+        elementId,
+        property,
+        attributePath: attributePath ?? null,
+        promotion: 'damped_spring',
+        parameters: {
+          zeta: springFit.zeta,
+          omega0: springFit.omega0,
+          startFrame: minFrame,
+          endFrame: maxFrame,
+          startValue: minValue,
+          targetValue: maxValue,
+          initialValue: points[0].value
+        },
+        metrics: {
+          r2: springFit.r2,
+          threshold: SPRING_R2_THRESHOLD,
+          signChanges: springFit.signChanges,
+          pixelRmse: pixels.rmse,
+          pixelMaxError: pixels.maxError,
+          pixelThreshold: pixelMaxPx,
+          pointCount: points.length,
+          frameRange
+        },
+        gate: 'preset',
+        pixelRmse: pixels.rmse,
+        confidence: Math.min(1, springFit.r2)
+      };
+    }
+    bypassedPixelRmse = bypassedPixelRmse ?? pixels.rmse;
+  }
+
+  // Pixel fallback: 4-parameter weighted cubic-bezier fit (explicit tangents).
+  if (pixelGateEnabled) {
+    const weightedFit = fitWeightedCubicBezier(normalized);
+    if (weightedFit.predicted.length === normalized.length) {
+      const pixels = pixelErrorsOf(weightedFit.predicted);
+      if (pixels.maxError <= pixelMaxPx) {
+        return {
+          elementId,
+          property,
+          attributePath: attributePath ?? null,
+          promotion: 'cubic_bezier',
+          parameters: {
+            inWeight: weightedFit.inWeight,
+            inAngle: weightedFit.inAngle,
+            outWeight: weightedFit.outWeight,
+            outAngle: weightedFit.outAngle,
+            startFrame: minFrame,
+            endFrame: maxFrame,
+            startValue: minValue,
+            endValue: maxValue
+          },
+          metrics: {
+            rmse: weightedFit.rmse,
+            threshold: BEZIER_RMSE_THRESHOLD,
+            pixelRmse: pixels.rmse,
+            pixelMaxError: pixels.maxError,
+            pixelThreshold: pixelMaxPx,
+            pointCount: points.length,
+            frameRange
+          },
+          gate: 'pixel_fallback',
+          pixelRmse: pixels.rmse,
+          confidence: Math.max(0, Math.min(1, 1 - pixels.maxError / pixelMaxPx))
+        };
+      }
+
+      // Hopeless for every procedural form: keep measured keyframes.
+      return {
+        elementId,
+        property,
+        attributePath: attributePath ?? null,
+        promotion: 'keyframes',
+        reason: 'pixel_gate_failed',
+        metrics: {
+          pointCount: points.length,
+          frameRange,
+          valueRange,
+          isMonotonic,
+          pixelRmse: pixels.rmse,
+          pixelMaxError: pixels.maxError,
+          pixelThreshold: pixelMaxPx,
+          ...(bypassedPixelRmse !== null ? { bypassedPresetPixelRmse: bypassedPixelRmse } : {})
+        },
+        gate: 'keyframes',
+        pixelRmse: pixels.rmse,
+        keyframes: points.map(p => ({ frame: p.frame, value: p.value }))
+      };
+    }
   }
 
   // No promotion — keep as measured keyframes
@@ -519,6 +915,7 @@ export function analyzeTrajectory({ elementId, property, points, attributePath }
       valueRange,
       isMonotonic
     },
+    gate: 'keyframes',
     keyframes: points.map(p => ({ frame: p.frame, value: p.value }))
   };
 }
@@ -548,9 +945,11 @@ function checkMonotonic(values) {
  * @param {string} params.elementId
  * @param {Object} params.trajectories - Map of property name to trajectory points
  * @param {number} params.fps - Frame rate for timing calculations
+ * @param {number} [params.pixelScale] - Source pixels per normalized unit (enables the pixel gate)
+ * @param {number} [params.bezierRmseMaxPx] - Per-frame pixel gate (default 1.5)
  * @returns {Object} Element promotion plan
  */
-export function analyzeElement({ elementId, trajectories, fps }) {
+export function analyzeElement({ elementId, trajectories, fps, pixelScale, bezierRmseMaxPx }) {
   if (!elementId) {
     fail('PROMOTION_INVALID', 'elementId is required.');
   }
@@ -559,7 +958,7 @@ export function analyzeElement({ elementId, trajectories, fps }) {
   const promotionTypes = new Set();
 
   for (const [property, points] of Object.entries(trajectories)) {
-    const result = analyzeTrajectory({ elementId, property, points });
+    const result = analyzeTrajectory({ elementId, property, points, pixelScale, bezierRmseMaxPx });
     promotions.push(result);
     promotionTypes.add(result.promotion);
   }
@@ -594,9 +993,17 @@ export function analyzeElement({ elementId, trajectories, fps }) {
 /**
  * Generate Cavalry _mg DSL expression for a promoted behavior.
  *
+ * Every expression carries an `op` descriptor used by the Stage 4 compiler to
+ * order operations into dependency tiers:
+ * - cubic_bezier with CSS easing (y1, y2)  -> { kind: 'keyframe' }   (tier 4)
+ * - cubic_bezier with weighted handles     -> { kind: 'tangent' }    (tier 5)
+ * - damped_spring behavior                 -> { kind: 'connection' } (tier 3)
+ * - keyframes fallback                     -> { kind: 'keyframe' }   (tier 4)
+ * - static / none                          -> { kind: null } (not compiled)
+ *
  * @param {Object} promotion - Promotion result from analyzeTrajectory
  * @param {Object} options - Additional options
- * @returns {{dsl: string, undoGroup: string, presetBinding: string|null}}
+ * @returns {{dsl: string, undoGroup: string, presetBinding: string|null, op: {kind: string, element: string, property: string}|null}}
  */
 export function compileToMgDSL(promotion, options = {}) {
   const { elementId, property, promotion: type, parameters } = promotion;
@@ -605,15 +1012,30 @@ export function compileToMgDSL(promotion, options = {}) {
     return {
       dsl: `// Static value — no animation\n// ${elementId}.${property} = ${promotion.value}`,
       undoGroup: `static-${elementId}-${property}`,
-      presetBinding: null
+      presetBinding: null,
+      op: null
     };
   }
 
   if (type === 'cubic_bezier') {
-    const { y1, y2, startFrame, endFrame, startValue, endValue } = parameters;
-    const duration = endFrame - startFrame;
+    const {
+      y1, y2, inWeight, inAngle, outWeight, outAngle,
+      startFrame, endFrame, startValue, endValue
+    } = parameters;
+    const weighted = [inWeight, inAngle, outWeight, outAngle]
+      .some(v => v !== undefined && v !== null);
 
-    // Cavalry spring/oscillator DSL
+    const easingBlock = weighted
+      ? `    type: "cubic-bezier",
+    inWeight: ${inWeight},
+    inAngle: ${inAngle},
+    outWeight: ${outWeight},
+    outAngle: ${outAngle}`
+      : `    type: "cubic-bezier",
+    y1: ${y1},
+    y2: ${y2}`;
+
+    // Cavalry keyframe DSL; weighted handles are explicit Bézier tangents.
     const dsl = `// Cubic Bezier Promotion: ${elementId}.${property}
 // RMSE: ${promotion.metrics.rmse.toFixed(4)} <= ${promotion.metrics.threshold}
 _mg.keyframe({
@@ -624,16 +1046,19 @@ _mg.keyframe({
   startValue: ${startValue},
   endValue: ${endValue},
   easing: {
-    type: "cubic-bezier",
-    y1: ${y1},
-    y2: ${y2}
+${easingBlock}
   }
 });`;
 
     return {
       dsl,
       undoGroup: `bezier-${elementId}-${property}-${startFrame}-${endFrame}`,
-      presetBinding: options.presetId ?? null
+      presetBinding: options.presetId ?? null,
+      op: {
+        kind: weighted ? 'tangent' : 'keyframe',
+        element: elementId,
+        property
+      }
     };
   }
 
@@ -661,7 +1086,12 @@ _mg.behavior({
     return {
       dsl,
       undoGroup: `spring-${elementId}-${property}-${startFrame}`,
-      presetBinding: options.presetId ?? 'spring-oscillator'
+      presetBinding: options.presetId ?? 'spring-oscillator',
+      op: {
+        kind: 'connection',
+        element: elementId,
+        property
+      }
     };
   }
 
@@ -684,27 +1114,48 @@ ${keyframeLines}
     return {
       dsl,
       undoGroup: `keyframes-${elementId}-${property}`,
-      presetBinding: null
+      presetBinding: null,
+      op: {
+        kind: 'keyframe',
+        element: elementId,
+        property
+      }
     };
   }
 
   return {
     dsl: `// No promotion: ${elementId}.${property}`,
     undoGroup: `none-${elementId}-${property}`,
-    presetBinding: null
+    presetBinding: null,
+    op: null
   };
 }
 
 /**
  * Generate Cavalry Duplicator + Stagger DSL for a detected pattern.
  *
+ * Emits a complete duplicator rig: `stagger` ({type, lagFrames, offset}) and
+ * `falloff` ({type, influence}). When the group carries no measured
+ * stagger/falloff (older artifacts), they are derived from lagFrames and the
+ * spatial offset magnitude.
+ *
  * @param {Object} group - Duplicator group from detectDuplicatorPattern
  * @param {Object} options - Additional options
- * @returns {{dsl: string, undoGroup: string}}
+ * @returns {{dsl: string, undoGroup: string, presetBinding: string|null, op: {kind: string, element: string, property: null}}}
  */
 export function compileDuplicatorToMgDSL(group, options = {}) {
   const { elementIds, lagFrames, spatialOffset, baseElementId } = group;
   const count = elementIds.length;
+
+  const fallbackOffset = Math.round(
+    Math.hypot(spatialOffset?.x ?? 0, spatialOffset?.y ?? 0) * 100
+  ) / 100;
+  const stagger = group.stagger ?? {
+    type: lagFrames ? 'temporal' : 'spatial',
+    lagFrames: lagFrames ?? 0,
+    offset: fallbackOffset
+  };
+  const falloff = group.falloff ?? { type: 'linear', influence: 1 };
 
   const dsl = `// Duplicator + Stagger Promotion
 // Base element: ${baseElementId}
@@ -713,20 +1164,25 @@ _mg.duplicator({
   base: "${baseElementId}",
   count: ${count},
   stagger: {
-    type: "${lagFrames !== 0 ? 'temporal' : 'spatial'}",
-    lagFrames: ${lagFrames},
-    offset: { x: ${spatialOffset.x}, y: ${spatialOffset.y} }
+    type: "${stagger.type}",
+    lagFrames: ${stagger.lagFrames},
+    offset: ${stagger.offset}
   },
   falloff: {
-    type: "linear",
-    influence: 1.0
+    type: "${falloff.type}",
+    influence: ${falloff.influence}
   }
 });`;
 
   return {
     dsl,
     undoGroup: `duplicator-${baseElementId}-${count}`,
-    presetBinding: options.presetId ?? 'duplicator-stagger'
+    presetBinding: options.presetId ?? 'duplicator-stagger',
+    op: {
+      kind: 'deformer',
+      element: baseElementId,
+      property: null
+    }
   };
 }
 
@@ -760,9 +1216,12 @@ ${body.split('\n').map(line => `    ${line}`).join('\n')}
  * @param {Array} params.elements - Elements with trajectories
  * @param {number} params.fps - Frame rate
  * @param {Object} [params.capabilities] - Adapter capabilities
+ * @param {number} [params.pixelScale] - Source pixels per normalized unit (enables the pixel gate)
+ * @param {number} [params.bezierRmseMaxPx] - Per-frame pixel gate (default 1.5)
+ * @param {Object} [params.duplicatorOptions] - detectDuplicatorPattern thresholds
  * @returns {Object} Complete promotion analysis
  */
-export function analyzeScenePromotion({ elements, fps, capabilities }) {
+export function analyzeScenePromotion({ elements, fps, capabilities, pixelScale, bezierRmseMaxPx, duplicatorOptions }) {
   if (!Array.isArray(elements) || elements.length === 0) {
     return {
       version: PROMOTION_VERSION,
@@ -786,7 +1245,9 @@ export function analyzeScenePromotion({ elements, fps, capabilities }) {
     const analysis = analyzeElement({
       elementId: element.id,
       trajectories: element.trajectories ?? {},
-      fps
+      fps,
+      pixelScale,
+      bezierRmseMaxPx
     });
     elementAnalyses.push(analysis);
 
@@ -809,7 +1270,7 @@ export function analyzeScenePromotion({ elements, fps, capabilities }) {
   }
 
   // Detect duplicator patterns
-  const duplicatorResult = detectDuplicatorPattern(allTrajectories);
+  const duplicatorResult = detectDuplicatorPattern(allTrajectories, duplicatorOptions);
 
   // Compute summary
   const summary = {

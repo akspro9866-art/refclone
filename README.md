@@ -287,7 +287,7 @@ configs, the generic modules, the skills, the README, or any report you would ha
 
 ```powershell
 npm run verify     # syntax check every module + config parity + skill mirrors + privacy scan
-npm test           # 335 tests, no Cavalry needed (the runner reports 312 entries because it also lists test/fixtures.mjs, a helper module)
+npm test           # 419 tests, no Cavalry needed (the runner reports 420 entries because it also lists test/fixtures.mjs, a helper module)
 npm run verify:docs  # re-runs the suite and checks that every test count quoted in these docs is current
 npm run test:integration   # LIVE: needs Cavalry 2.8 + Stallion; writes integration/evidence/ (gitignored)
 ```

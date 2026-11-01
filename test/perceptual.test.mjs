@@ -9,11 +9,24 @@ import {
   compareFrames,
   compareTrajectories,
   computeCorrectionDeltas,
+  computeThreeChannelDiff,
   analyzeElementPerceptual,
   analyzeShotPerceptual,
   generateRefinementReport,
+  DEFAULT_CHANNEL_THRESHOLDS,
   PERCEPTUAL_VERSION
 } from '../src/perceptual.mjs';
+import {
+  toLab,
+  labDistance,
+  labHistogram,
+  histogramDiff,
+  silhouetteMask,
+  maskIoU,
+  chamferDistance,
+  opticalFlowMagnitude,
+  flowFieldDiff
+} from '../src/pixels.mjs';
 
 // Helper to create a simple test PNG
 function createTestPNG(width, height, color = { r: 255, g: 255, b: 255 }) {
@@ -28,6 +41,24 @@ function createTestPNG(width, height, color = { r: 255, g: 255, b: 255 }) {
     }
   }
   return png;
+}
+
+// Helper to create a plain RGBA frame ({data, width, height}) with an optional
+// per-pixel painter function (x, y) => color.
+function makeFrame(width, height, painterOrColor = { r: 255, g: 255, b: 255 }) {
+  const data = new Uint8Array(width * height * 4);
+  const painter = typeof painterOrColor === 'function' ? painterOrColor : () => painterOrColor;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (width * y + x) << 2;
+      const color = painter(x, y);
+      data[idx] = color.r;
+      data[idx + 1] = color.g;
+      data[idx + 2] = color.b;
+      data[idx + 3] = 255;
+    }
+  }
+  return { data, width, height };
 }
 
 describe('perceptual: IoU computation', () => {
@@ -440,5 +471,457 @@ describe('perceptual: refinement report', () => {
     const report = generateRefinementReport(shotAnalysis, { iteration: 5, maxIterations: 5 });
 
     assert.equal(report.canIterate, false);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// v2: 3-channel structured diff vector (pixels.mjs kernels + perceptual.mjs)
+// ---------------------------------------------------------------------------
+
+const WHITE = { r: 255, g: 255, b: 255 };
+const BLACK = { r: 0, g: 0, b: 0 };
+
+describe('pixels: toLab (sRGB -> CIE Lab, D65)', () => {
+  it('maps white to L=100 with neutral a/b', () => {
+    const lab = toLab(makeFrame(2, 2, WHITE).data, 2, 2);
+    assert.equal(lab.length, 12);
+    assert.ok(Math.abs(lab[0] - 100) < 1e-6, `L was ${lab[0]}`);
+    assert.ok(Math.abs(lab[1]) < 1e-6, `a was ${lab[1]}`);
+    assert.ok(Math.abs(lab[2]) < 1e-6, `b was ${lab[2]}`);
+  });
+
+  it('maps black to L=0', () => {
+    const lab = toLab(makeFrame(2, 2, BLACK).data, 2, 2);
+    assert.ok(Math.abs(lab[0]) < 1e-9, `L was ${lab[0]}`);
+    assert.equal(lab[1], 0);
+    assert.equal(lab[2], 0);
+  });
+
+  it('places pure red at positive a and b with mid lightness', () => {
+    const lab = toLab(makeFrame(1, 1, { r: 255, g: 0, b: 0 }).data, 1, 1);
+    assert.ok(lab[0] > 50 && lab[0] < 60, `L was ${lab[0]}`);
+    assert.ok(lab[1] > 0, `a was ${lab[1]}`);
+    assert.ok(lab[2] > 0, `b was ${lab[2]}`);
+  });
+
+  it('places mid gray near L=53 and stays deterministic', () => {
+    const first = toLab(makeFrame(3, 3, { r: 128, g: 128, b: 128 }).data, 3, 3);
+    const second = toLab(makeFrame(3, 3, { r: 128, g: 128, b: 128 }).data, 3, 3);
+    assert.ok(first[0] > 52 && first[0] < 55, `L was ${first[0]}`);
+    assert.deepEqual(Array.from(first), Array.from(second));
+  });
+
+  it('rejects buffers too small for the declared dimensions', () => {
+    assert.throws(() => toLab(new Uint8Array(4), 2, 2), TypeError);
+  });
+});
+
+describe('pixels: Lab distance and histogram distance', () => {
+  it('computes zero distance for identical Lab points', () => {
+    assert.equal(labDistance([100, 0, 0], [100, 0, 0]), 0);
+  });
+
+  it('computes euclidean distance between Lab points', () => {
+    assert.equal(labDistance([100, 0, 0], [50, 0, 0]), 50);
+    assert.ok(Math.abs(labDistance([0, 3, 4], [0, 0, 0]) - 5) < 1e-12);
+  });
+
+  it('gives zero histogram distance for identical buffers', () => {
+    const lab = toLab(makeFrame(4, 4, { r: 128, g: 128, b: 128 }).data, 4, 4);
+    const h1 = labHistogram(lab, 8);
+    const h2 = labHistogram(toLab(makeFrame(4, 4, { r: 128, g: 128, b: 128 }).data, 4, 4), 8);
+    assert.equal(h1.length, 512);
+    assert.ok(Math.abs(h1.reduce((s, v) => s + v, 0) - 1) < 1e-12, 'histogram must sum to 1');
+    assert.equal(histogramDiff(h1, h2), 0);
+  });
+
+  it('gives maximal chi-square distance for disjoint colors', () => {
+    const white = labHistogram(toLab(makeFrame(4, 4, WHITE).data, 4, 4), 8);
+    const black = labHistogram(toLab(makeFrame(4, 4, BLACK).data, 4, 4), 8);
+    const diff = histogramDiff(white, black);
+    assert.ok(Math.abs(diff - 1) < 1e-12, `diff was ${diff}`);
+  });
+
+  it('rejects histograms of different lengths', () => {
+    assert.throws(() => histogramDiff(new Float64Array(8), new Float64Array(16)), TypeError);
+  });
+});
+
+describe('pixels: silhouette masks and mask IoU', () => {
+  // 16x16 white frames with an 8x8 black square: A at (2,2), B shifted +2px.
+  const frameA = makeFrame(16, 16, (x, y) => (x >= 2 && x < 10 && y >= 2 && y < 10) ? BLACK : WHITE);
+  const frameB = makeFrame(16, 16, (x, y) => (x >= 4 && x < 12 && y >= 2 && y < 10) ? BLACK : WHITE);
+  const maskA = silhouetteMask(frameA.data, 16, 16, { backgroundLuma: 255, tolerance: 16 });
+  const maskB = silhouetteMask(frameB.data, 16, 16, { backgroundLuma: 255, tolerance: 16 });
+
+  it('produces 0/255 masks sized width*height', () => {
+    assert.equal(maskA.length, 256);
+    assert.ok(maskA.every(v => v === 0 || v === 255));
+    assert.equal(maskA[0], 0); // corner is background
+    assert.equal(maskA[2 * 16 + 2], 255); // square pixel is foreground
+  });
+
+  it('computes full IoU for identical masks', () => {
+    assert.equal(maskIoU(maskA, maskA), 1);
+  });
+
+  it('computes intersection/union for shifted rectangles', () => {
+    // Intersection 6x8 = 48, union 64 + 64 - 48 = 80 -> 0.6
+    const iou = maskIoU(maskA, maskB);
+    assert.ok(Math.abs(iou - 0.6) < 1e-12, `IoU was ${iou}`);
+  });
+
+  it('counts two empty masks as identical silhouettes', () => {
+    const emptyA = silhouetteMask(makeFrame(8, 8, { r: 128, g: 128, b: 128 }).data, 8, 8, {});
+    const emptyB = silhouetteMask(makeFrame(8, 8, { r: 128, g: 128, b: 128 }).data, 8, 8, {});
+    assert.equal(maskIoU(emptyA, emptyB), 1);
+  });
+
+  it('accepts an explicit background color', () => {
+    const byColor = silhouetteMask(frameA.data, 16, 16, { backgroundColor: WHITE, tolerance: 10 });
+    assert.equal(maskIoU(byColor, maskA), 1);
+  });
+
+  it('auto-detects the background luma from the frame corners', () => {
+    const auto = silhouetteMask(frameA.data, 16, 16, {});
+    assert.equal(maskIoU(auto, maskA), 1);
+  });
+});
+
+describe('pixels: chamfer distance', () => {
+  const maskAt = offsetX => {
+    const frame = makeFrame(16, 16, (x, y) => (x >= offsetX && x < offsetX + 8 && y >= 2 && y < 10) ? BLACK : WHITE);
+    return silhouetteMask(frame.data, 16, 16, { backgroundLuma: 255, tolerance: 16 });
+  };
+
+  it('is exactly 0 for identical masks', () => {
+    const mask = maskAt(2);
+    assert.equal(chamferDistance(mask, mask, 16, 16), 0);
+  });
+
+  it('is small (about 1px) for a 1px-shifted mask', () => {
+    const chamfer = chamferDistance(maskAt(2), maskAt(3), 16, 16);
+    assert.ok(chamfer > 0, `chamfer was ${chamfer}`);
+    assert.ok(chamfer <= 1.5, `chamfer was ${chamfer}`);
+  });
+
+  it('returns the worst-case pixel sentinel when exactly one edge set is empty', () => {
+    const empty = silhouetteMask(makeFrame(16, 16, WHITE).data, 16, 16, { backgroundLuma: 255, tolerance: 16 });
+    const square = maskAt(2);
+    assert.equal(chamferDistance(empty, square, 16, 16), 32);
+    assert.equal(chamferDistance(square, empty, 16, 16), 32);
+    assert.equal(chamferDistance(empty, empty, 16, 16), 0);
+  });
+});
+
+describe('pixels: block-matcher optical flow', () => {
+  // 16x16 frames with a full-height 8px black bar: A at x in [0,7], B shifted
+  // +4px. The bar spans every block row so no background block can slide onto
+  // an object-free region (a flat partial object would let SAD-0 "escape"
+  // vectors appear); every block is pinned by the bar or the background.
+  const frameA = makeFrame(16, 16, x => (x < 8) ? BLACK : WHITE);
+  const frameB = makeFrame(16, 16, x => (x >= 4 && x < 12) ? BLACK : WHITE);
+
+  it('recovers a synthetic 4px translation on the moving blocks', () => {
+    const flow = opticalFlowMagnitude(frameA, frameB);
+    assert.equal(flow.cols, 2);
+    assert.equal(flow.rows, 2);
+    assert.equal(flow.dx[0], 4);
+    assert.equal(flow.dy[0], 0);
+    assert.equal(flow.magnitude[0], 4);
+    assert.equal(flow.dx[2], 4, 'lower object block sees the same shift');
+  });
+
+  it('reports zero flow on static background blocks', () => {
+    const flow = opticalFlowMagnitude(frameA, frameB);
+    assert.equal(flow.dx[1], 0);
+    assert.equal(flow.dy[1], 0);
+    assert.equal(flow.dx[3], 0);
+    assert.equal(flow.dy[3], 0);
+  });
+
+  it('produces an all-zero field for identical frames', () => {
+    const flow = opticalFlowMagnitude(frameA, frameA);
+    assert.ok(Array.from(flow.magnitude).every(m => m === 0));
+    assert.equal(flowFieldDiff(flow, opticalFlowMagnitude(frameA, frameA)), 0);
+  });
+
+  it('diffs moving vs static flow at the expected mean', () => {
+    // The two object blocks move 4px, the two background blocks 0px:
+    // mean |velocity difference| = (4 + 0 + 4 + 0) / 4 = 2 px/frame.
+    const moving = opticalFlowMagnitude(frameA, frameB);
+    const staticFlow = opticalFlowMagnitude(frameA, frameA);
+    const diff = flowFieldDiff(moving, staticFlow);
+    assert.ok(Math.abs(diff - 2) < 1e-12, `diff was ${diff}`);
+  });
+
+  it('restricts the diff to a region box', () => {
+    const moving = opticalFlowMagnitude(frameA, frameB);
+    const staticFlow = opticalFlowMagnitude(frameA, frameA);
+    // Restricting to block 0 (0..8) sees the full 4px difference.
+    const diff = flowFieldDiff(moving, staticFlow, { x: 0, y: 0, width: 8, height: 8 });
+    assert.equal(diff, 4);
+    // The background column alone shows no velocity difference at all.
+    const backgroundOnly = flowFieldDiff(moving, staticFlow, { x: 8, y: 0, width: 8, height: 16 });
+    assert.equal(backgroundOnly, 0);
+  });
+
+  it('rejects mismatched flow grids', () => {
+    const flowA = opticalFlowMagnitude(frameA, frameA);
+    const flowB = opticalFlowMagnitude(frameA, frameA, { blockSize: 4 });
+    assert.throws(() => flowFieldDiff(flowA, flowB), TypeError);
+  });
+});
+
+describe('perceptual: three-channel diff', () => {
+  // Low-contrast square (luma 124 on 128, away from the frame border) so global
+  // SSIM and the Lab histogram stay well inside their gates while the silhouette
+  // still sees the square (contrast 4 > tolerance 2).
+  const faintSquare = offsetX => makeFrame(16, 16, (x, y) =>
+    (x >= offsetX && x < offsetX + 8 && y >= 2 && y < 10) ? { r: 124, g: 124, b: 124 } : { r: 128, g: 128, b: 128 });
+  const tolerance2 = { tolerance: 2 };
+
+  it('passes all channels on identical frames', () => {
+    const frame = faintSquare(0);
+    const diff = computeThreeChannelDiff(frame, frame, tolerance2);
+    assert.equal(diff.pass, true);
+    assert.deepEqual(diff.failedChannels, []);
+    assert.equal(diff.geometry.silhouetteIoU, 1);
+    assert.equal(diff.geometry.chamfer, 0);
+    assert.equal(diff.appearance.labHistogramDiff, 0);
+    assert.equal(diff.appearance.ssim, 1);
+  });
+
+  it('fails only the geometry channel on a translated silhouette', () => {
+    const diff = computeThreeChannelDiff(faintSquare(0), faintSquare(4), tolerance2);
+    assert.deepEqual(diff.failedChannels, ['geometry']);
+    assert.equal(diff.pass, false);
+    assert.ok(Math.abs(diff.geometry.silhouetteIoU - 1 / 3) < 1e-12, `IoU was ${diff.geometry.silhouetteIoU}`);
+    assert.ok(diff.geometry.silhouetteIoU < 0.90, 'silhouette IoU gate must fail');
+    assert.ok(diff.geometry.chamfer > 0, `chamfer was ${diff.geometry.chamfer}`);
+    assert.ok(diff.geometry.bboxIoU < 1);
+    assert.equal(diff.appearance.labHistogramDiff, 0, 'same colors, only moved');
+  });
+
+  it('fails geometry through the chamfer gate alone when tightened', () => {
+    // Diagonal 1px shift of the faint square: silhouette IoU 0.62 stays above
+    // the loosened 0.5 gate (and SSIM/Lab stay green), but the mean edge
+    // chamfer (0.964px, no coinciding edges) exceeds the tightened 0.9px gate.
+    const maskPair = (offsetX, offsetY) => makeFrame(16, 16, (x, y) =>
+      (x >= offsetX && x < offsetX + 8 && y >= offsetY && y < offsetY + 8) ? { r: 124, g: 124, b: 124 } : { r: 128, g: 128, b: 128 });
+    const diff = computeThreeChannelDiff(maskPair(2, 2), maskPair(3, 3), {
+      tolerance: 2,
+      thresholds: { silhouetteIoU: 0.5, chamfer: 0.9 }
+    });
+    assert.deepEqual(diff.failedChannels, ['geometry']);
+    assert.ok(diff.geometry.silhouetteIoU >= 0.5, `IoU was ${diff.geometry.silhouetteIoU}`);
+    assert.ok(diff.geometry.chamfer > 0.9, `chamfer was ${diff.geometry.chamfer}`);
+  });
+
+  it('fails only the appearance channel on a recolored frame', () => {
+    const gray = makeFrame(16, 16, { r: 128, g: 128, b: 128 });
+    const bright = makeFrame(16, 16, { r: 200, g: 200, b: 200 });
+    const diff = computeThreeChannelDiff(gray, bright);
+    assert.deepEqual(diff.failedChannels, ['appearance']);
+    assert.equal(diff.geometry.silhouetteIoU, 1, 'both silhouettes are empty/uniform');
+    assert.ok(diff.appearance.labHistogramDiff > 0.12, `lab diff was ${diff.appearance.labHistogramDiff}`);
+  });
+
+  it('fails only the temporal channel on a time-shifted pair', () => {
+    // Full-height bar frames: the reference bar moves 4px right by the next
+    // frame while the render stays static. Identical frame-0 pairs keep the
+    // geometry and appearance channels green; the flow channel sees the lag.
+    const barFrame = barOffsetX => makeFrame(16, 16, x => (x >= barOffsetX && x < barOffsetX + 8) ? BLACK : WHITE);
+    const frame0 = barFrame(0);
+    const diff = computeThreeChannelDiff(frame0, frame0, {
+      referenceNext: barFrame(4),   // reference moves 4px by the next frame
+      renderedNext: barFrame(0)     // render is static
+    });
+    assert.deepEqual(diff.failedChannels, ['temporal']);
+    assert.equal(diff.geometry.silhouetteIoU, 1, 'frame-0 pixels are identical');
+    // Object blocks (0,0) and (0,1) report 4px, background blocks 0px:
+    // mean |velocity difference| = (4 + 0 + 4 + 0) / 4 = 2 px/frame.
+    assert.ok(Math.abs(diff.temporal.flowDelta - 2) < 1e-12, `flowDelta was ${diff.temporal.flowDelta}`);
+  });
+
+  it('honors configured threshold overrides', () => {
+    const diff = computeThreeChannelDiff(faintSquare(0), faintSquare(4), {
+      ...tolerance2,
+      thresholds: { silhouetteIoU: 0.3, chamfer: 5 }
+    });
+    assert.deepEqual(diff.failedChannels, []);
+    assert.equal(diff.pass, true);
+  });
+
+  it('degrades to null channel metrics when pixel data is unavailable', () => {
+    const diff = computeThreeChannelDiff(null, null, {});
+    assert.equal(diff.geometry.silhouetteIoU, null);
+    assert.equal(diff.geometry.chamfer, null);
+    assert.equal(diff.temporal.flowDelta, null);
+    assert.equal(diff.temporal.timingDelta, null);
+    assert.equal(diff.appearance.labHistogramDiff, null);
+    assert.equal(diff.appearance.ssim, null);
+    assert.equal(diff.pass, true);
+    assert.deepEqual(diff.failedChannels, []);
+  });
+
+  it('uses the documented default thresholds', () => {
+    assert.deepEqual(DEFAULT_CHANNEL_THRESHOLDS, {
+      silhouetteIoU: 0.90,
+      chamfer: 2.0,
+      flowDelta: 0.75,
+      labHistogramDiff: 0.12,
+      ssim: 0.88
+    });
+  });
+});
+
+describe('perceptual: correction delta channel routing', () => {
+  it('routes temporal failures to timing-only deltas', () => {
+    const deltas = computeCorrectionDeltas({
+      iouPass: true, centroidPass: true, ssimPass: true,
+      timingPass: false, timingDelta: 2
+    }, {});
+    assert.equal(deltas.timing, -1, 'legacy top-level timing delta unchanged');
+    assert.equal(deltas.temporalDeltas.beatFrames, -1);
+    assert.equal(deltas.temporalDeltas.staggerOffset, -0.5);
+    assert.equal(deltas.temporalDeltas.bezierWeight, 0);
+    assert.equal(deltas.temporalDeltas.bezierAngle, 0);
+    assert.equal(deltas.appearanceDeltas.colorShift, 0);
+    assert.deepEqual(deltas.appearanceDeltas.fill, { L: 0, a: 0, b: 0 });
+  });
+
+  it('routes appearance failures to color-only deltas', () => {
+    const deltas = computeCorrectionDeltas({
+      iouPass: true, centroidPass: true, timingPass: true,
+      ssimPass: false, ssim: 0.5
+    }, {});
+    assert.equal(deltas.timing, 0);
+    assert.deepEqual(deltas.temporalDeltas, { beatFrames: 0, staggerOffset: 0, bezierWeight: 0, bezierAngle: 0 });
+    assert.ok(Math.abs(deltas.appearanceDeltas.colorShift - 0.5 * (0.88 - 0.5)) < 1e-9,
+      `colorShift was ${deltas.appearanceDeltas.colorShift}`);
+  });
+
+  it('signs fill deltas from reference/rendered Lab means', () => {
+    const deltas = computeCorrectionDeltas({
+      failedChannels: ['appearance'], iouPass: true, centroidPass: true, timingPass: true
+    }, {
+      referenceLabMean: [60, 10, -5],
+      renderedLabMean: [50, 0, 5]
+    });
+    assert.deepEqual(deltas.appearanceDeltas.fill, { L: 5, a: 5, b: -5 });
+    assert.equal(deltas.temporalDeltas.beatFrames, 0);
+  });
+
+  it('routes flow-only temporal failures through the flow shortfall', () => {
+    const deltas = computeCorrectionDeltas({
+      failedChannels: ['temporal'], flowDelta: 1.75,
+      iouPass: true, centroidPass: true, timingPass: true
+    }, {});
+    // lag = 1.75 - 0.75 = 1.0 -> beatFrames = -0.5
+    assert.equal(deltas.temporalDeltas.beatFrames, -0.5);
+    assert.equal(deltas.appearanceDeltas.colorShift, 0);
+  });
+
+  it('keeps the legacy top-level delta shape untouched', () => {
+    const deltas = computeCorrectionDeltas({
+      iouPass: true, centroidPass: true, ssimPass: true, timingPass: true
+    }, {});
+    assert.deepEqual(Object.keys(deltas).sort(),
+      ['appearanceDeltas', 'opacity', 'position', 'scale', 'temporalDeltas', 'timing']);
+    assert.deepEqual(deltas.position, { x: 0, y: 0 });
+    assert.deepEqual(deltas.scale, { x: 1, y: 1 });
+    assert.equal(deltas.timing, 0);
+    assert.equal(deltas.opacity, 0);
+  });
+});
+
+describe('perceptual: element analysis 3-channel integration', () => {
+  const faintSquare = offsetX => makeFrame(16, 16, (x, y) =>
+    (x >= offsetX && x < offsetX + 8 && y >= 2 && y < 10) ? { r: 124, g: 124, b: 124 } : { r: 128, g: 128, b: 128 });
+  const identicalBox = { x: 0, y: 2, width: 8, height: 8 };
+  const shiftedBox = { x: 4, y: 2, width: 8, height: 8 };
+  // Restrict the flow channel to the object's block column so the flat
+  // background outside it cannot produce SAD-0 escape vectors.
+  const objectColumnBox = { x: 0, y: 0, width: 8, height: 16 };
+
+  it('passes every channel on identical frames and trajectories', () => {
+    const frame = makeFrame(16, 16, { r: 128, g: 128, b: 128 });
+    const result = analyzeElementPerceptual({
+      elementId: 'channel-pass',
+      frameComparisons: [
+        { frame: 0, reference: frame, rendered: frame, referenceBox: identicalBox, renderedBox: identicalBox },
+        { frame: 10, reference: frame, rendered: frame, referenceBox: identicalBox, renderedBox: identicalBox }
+      ],
+      referenceTrajectory: [{ frame: 0, value: 0 }, { frame: 10, value: 10 }],
+      renderedTrajectory: [{ frame: 0, value: 0 }, { frame: 10, value: 10 }],
+      frameWidth: 16,
+      frameHeight: 16,
+      fps: 24
+    });
+    assert.equal(result.overallPass, true);
+    assert.equal(result.needsRefinement, false);
+    assert.deepEqual(result.channels.failedChannels, []);
+    assert.equal(result.channels.geometry.silhouetteIoU, 1);
+    assert.equal(result.channels.geometry.chamfer, 0);
+    assert.equal(result.channels.temporal.flowDelta, 0);
+    assert.equal(result.channels.appearance.labHistogramDiff, 0);
+    assert.deepEqual(result.correctionDeltas.temporalDeltas, { beatFrames: 0, staggerOffset: 0, bezierWeight: 0, bezierAngle: 0 });
+    assert.deepEqual(result.correctionDeltas.appearanceDeltas.fill, { L: 0, a: 0, b: 0 });
+  });
+
+  it('catches a motion lag the measured boxes miss, and routes it to temporal deltas', () => {
+    // Measured boxes claim alignment in both frames, but the rendered square
+    // never moves: frame 0 matches, frame 1 lags 4px behind the reference.
+    const result = analyzeElementPerceptual({
+      elementId: 'channel-lag',
+      frameComparisons: [
+        { frame: 0, reference: faintSquare(0), rendered: faintSquare(0), referenceBox: identicalBox, renderedBox: identicalBox },
+        { frame: 1, reference: faintSquare(4), rendered: faintSquare(0), referenceBox: shiftedBox, renderedBox: shiftedBox }
+      ],
+      referenceTrajectory: [{ frame: 0, value: 0 }, { frame: 1, value: 4 }],
+      renderedTrajectory: [{ frame: 0, value: 0 }, { frame: 1, value: 4 }],
+      frameWidth: 16,
+      frameHeight: 16,
+      fps: 24,
+      tolerance: 2,
+      flowBox: objectColumnBox
+    });
+    assert.equal(result.version, '2.0.0');
+    // Legacy gates pass (identical boxes, high SSIM, zero timing delta)...
+    assert.ok(result.metrics.averageSSIM >= 0.88);
+    assert.equal(result.metrics.timingDelta, 0);
+    // ...but the channel vector still fails geometry and temporal.
+    assert.ok(result.channels.failedChannels.includes('geometry'));
+    assert.ok(result.channels.failedChannels.includes('temporal'));
+    assert.ok(!result.channels.failedChannels.includes('appearance'));
+    assert.equal(result.overallPass, false);
+    assert.equal(result.needsRefinement, true);
+    // Both object-column blocks report the full 4px reference motion against
+    // the static render -> mean |velocity difference| = 4 px/frame.
+    assert.ok(Math.abs(result.channels.temporal.flowDelta - 4) < 1e-12,
+      `flowDelta was ${result.channels.temporal.flowDelta}`);
+    // flowDelta 4.0 vs threshold 0.75 -> lag 3.25 -> beatFrames -1.625
+    assert.equal(result.correctionDeltas.temporalDeltas.beatFrames, -1.625);
+    assert.equal(result.correctionDeltas.appearanceDeltas.colorShift, 0);
+  });
+
+  it('treats an unverifiable rendered trajectory as a temporal failure', () => {
+    const frame = makeFrame(16, 16, { r: 128, g: 128, b: 128 });
+    const result = analyzeElementPerceptual({
+      elementId: 'channel-no-trajectory',
+      frameComparisons: [
+        { frame: 0, reference: frame, rendered: frame, referenceBox: identicalBox, renderedBox: identicalBox }
+      ],
+      referenceTrajectory: [{ frame: 0, value: 0 }],
+      renderedTrajectory: [],
+      frameWidth: 16,
+      frameHeight: 16,
+      fps: 24
+    });
+    assert.ok(result.channels.failedChannels.includes('temporal'));
+    assert.equal(result.channels.temporal.timingDelta, Infinity);
+    assert.equal(result.overallPass, false);
   });
 });

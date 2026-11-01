@@ -25,6 +25,59 @@ const fail = (code, message, details = {}) => {
 };
 
 /**
+ * Dependency tiers for emitted _mg operations. Operations are emitted in
+ * strict tier order so the runtime never sees an operation that references
+ * state a previous tier has not created:
+ * 1. create     — node/layer creation & pivots
+ * 2. deformer   — deformers & falloffs (duplicator/stagger/falloff/bevel)
+ * 3. connection — graph connections & masks (behaviors bind dynamics in)
+ * 4. keyframe   — keyframe values
+ * 5. tangent    — explicit Bézier tangents (weighted handles)
+ */
+export const MG_OPERATION_TIERS = Object.freeze({
+  create: 1,
+  deformer: 2,
+  connection: 3,
+  keyframe: 4,
+  tangent: 5
+});
+
+/**
+ * Classify an emitted operation into its dependency tier.
+ *
+ * @param {{kind: string}} op - Emitted operation descriptor (requires a known `kind`)
+ * @returns {number} Tier, 1..5
+ * @throws {WorkflowError} MG_COMPILE_INVALID for unknown or missing kinds
+ */
+export function tierOf(op) {
+  if (!op || typeof op !== 'object' || Array.isArray(op)) {
+    fail('MG_COMPILE_INVALID', 'Operation must be an object with a known kind.', { op });
+  }
+  const kind = op.kind;
+  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(MG_OPERATION_TIERS, kind)) {
+    fail('MG_COMPILE_INVALID', `Unknown operation kind: ${String(kind)}.`, { op });
+  }
+  return MG_OPERATION_TIERS[kind];
+}
+
+/**
+ * Order emitted operations into strict dependency tiers (stable within a
+ * tier: same-tier operations keep their input order).
+ *
+ * @param {Array<{kind: string}>} operations - Emitted operation descriptors
+ * @returns {Array<{kind: string}>} New array ordered by tier
+ * @throws {WorkflowError} MG_COMPILE_INVALID when any operation is invalid
+ */
+export function sortOperationsByTier(operations) {
+  if (!Array.isArray(operations)) {
+    fail('MG_COMPILE_INVALID', 'operations must be an array.', { operations });
+  }
+  const decorated = operations.map((op, index) => ({ op, tier: tierOf(op), index }));
+  decorated.sort((a, b) => a.tier - b.tier || a.index - b.index);
+  return decorated.map(d => d.op);
+}
+
+/**
  * Verified preset identifiers from the 120 preset catalog.
  * These are the only presets that can be bound to procedural promotions.
  */
@@ -127,6 +180,12 @@ export function findMatchingPreset(promotion) {
   }
 
   if (type === 'cubic_bezier') {
+    // Weighted-handle promotions carry explicit custom tangents; they are not
+    // catalog easing presets and stay unbound rather than mis-binding.
+    if (parameters && (parameters.inWeight !== undefined || parameters.outWeight !== undefined)) {
+      return null;
+    }
+
     const { y1, y2 } = parameters;
 
     // Match bezier preset based on control points
@@ -157,7 +216,8 @@ export function isValidPreset(presetId) {
  * @param {string} params.groupName - Name for the atomic undo group
  * @param {Object} [params.capabilities] - Adapter capabilities for validation
  * @param {boolean} [params.autoBindPresets=true] - Automatically bind matching presets
- * @returns {Object} Compiled script with metadata
+ * @returns {Object} Compiled script with metadata, including per-operation tiers
+ *     (`expressions[].tier`) and the `tiers` count summary
  */
 export function compilePromotionScript({ analysis, groupName, capabilities, autoBindPresets = true }) {
   if (!analysis || !analysis.elements) {
@@ -169,6 +229,7 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
   }
 
   const expressions = [];
+  const ops = [];
   const presetBindings = [];
   const unboundPromotions = [];
 
@@ -195,7 +256,14 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
       }
 
       const compiled = compileToMgDSL(promotion, { presetId });
+      if (!compiled.op) {
+        fail('MG_COMPILE_INVALID', 'Compiled promotion expression is missing an operation descriptor.', {
+          elementId: element.elementId,
+          property: promotion.property
+        });
+      }
       expressions.push(compiled);
+      ops.push(compiled.op);
 
       if (compiled.presetBinding) {
         presetBindings.push({
@@ -219,6 +287,7 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
   for (const group of analysis.duplicatorGroups ?? []) {
     const compiled = compileDuplicatorToMgDSL(group, { presetId: 'duplicator-stagger' });
     expressions.push(compiled);
+    ops.push(compiled.op);
 
     presetBindings.push({
       elementIds: group.elementIds,
@@ -228,9 +297,20 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
     });
   }
 
+  // Order operations into strict dependency tiers before emitting the script.
+  const sortedOps = sortOperationsByTier(ops);
+  const opToExpression = new Map(ops.map((op, index) => [op, expressions[index]]));
+  const orderedExpressions = sortedOps.map(op => opToExpression.get(op));
+  const orderedTiers = sortedOps.map(op => tierOf(op));
+
+  const tiers = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const tier of orderedTiers) {
+    tiers[tier] += 1;
+  }
+
   // Wrap in atomic undo group
-  const script = expressions.length > 0
-    ? wrapAtomicUndo(expressions, groupName)
+  const script = orderedExpressions.length > 0
+    ? wrapAtomicUndo(orderedExpressions, groupName)
     : '// No procedural promotions to compile';
 
   // Generate script hash for caching
@@ -247,13 +327,16 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
     groupName,
     script,
     scriptHash,
-    expressions: expressions.map(e => ({
+    expressions: orderedExpressions.map((e, index) => ({
       undoGroup: e.undoGroup,
       presetBinding: e.presetBinding,
-      dslLength: e.dsl.length
+      dslLength: e.dsl.length,
+      kind: e.op.kind,
+      tier: orderedTiers[index]
     })),
     presetBindings,
     unboundPromotions,
+    tiers,
     summary: {
       totalExpressions: expressions.length,
       boundPresets: presetBindings.length,
@@ -411,6 +494,8 @@ export function generateCompilationReport(compilation) {
   report += `## Summary\n\n`;
   report += `- **Total expressions:** ${compiled.summary.totalExpressions}\n`;
   report += `- **Bound presets:** ${compiled.summary.boundPresets}\n`;
+  const tiers = compiled.tiers ?? {};
+  report += `- **Operation tiers:** ${[1, 2, 3, 4, 5].map(t => `T${t}:${tiers[t] ?? 0}`).join(' ')}\n`;
   report += `- **Spring promotions:** ${compiled.summary.springPromotions}\n`;
   report += `- **Bezier promotions:** ${compiled.summary.bezierPromotions}\n`;
   report += `- **Duplicator promotions:** ${compiled.summary.duplicatorPromotions}\n`;
