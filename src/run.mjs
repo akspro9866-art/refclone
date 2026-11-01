@@ -15,7 +15,7 @@ import { registerScenePlan, validateScenePlan } from './planner.mjs';
 import { autoAnalyze } from './autoanalyze.mjs';
 import { registerGenericDesign, registerGenericScenePlan } from './generic-planner.mjs';
 import { buildScene, BUILD_VERSION } from './build.mjs';
-import { renderVideo, RENDER_VERSION } from './render.mjs';
+import { renderVideo, renderCacheKey } from './render.mjs';
 import { runQa } from './qa.mjs';
 import { exportFinal } from './export.mjs';
 import { ADAPTER_VERSION } from './cavalry.mjs';
@@ -254,16 +254,11 @@ export async function discoverBuiltScene(jobDirectory, planSha256, config) {
   return null;
 }
 
-export function renderCacheKey(plan, planSha256, projectSha256, config) {
-  const renderConfig = config.render ?? {};
-  const frames = plan.shots.reduce((total, shot) => total + shot.endFrameExclusive - shot.startFrame, 0);
-  return hashObject({
-    version: RENDER_VERSION, planSha256, projectSha256, frames,
-    scalePercent: renderConfig.scalePercent ?? 100,
-    encoder: { ffmpeg: config.ffmpeg ?? 'ffmpeg', crf: renderConfig.crf ?? 18, preset: renderConfig.preset ?? 'medium' },
-    fps: plan.project.fps, resolution: { width: plan.project.width, height: plan.project.height }
-  });
-}
+// The render cache key belongs to the renderer, which is the only writer of the
+// directory it names; keeping one formula (src/render.mjs) means the runner and the
+// stage can never drift onto different directories for the same work. Re-exported
+// here because `run.mjs` is the documented entry point for cache keys.
+export { renderCacheKey };
 
 /**
  * Inspect the render cache for this exact plan/project/encoder combination.

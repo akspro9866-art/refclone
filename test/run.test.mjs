@@ -96,11 +96,15 @@ test('render cache key follows the renderer contract', () => {
   const projectSha256 = 'd'.repeat(64);
   const config = { ffmpeg: 'ffmpeg', render: { scalePercent: 100, crf: 18 } };
   const expected = hashObject({
-    version: RENDER_VERSION, planSha256, projectSha256, frames: 216, scalePercent: 100,
+    version: RENDER_VERSION, planSha256, projectSha256, frames: { count: 216, runs: '0-215' }, scalePercent: 100,
     encoder: { ffmpeg: 'ffmpeg', crf: 18, preset: 'medium' },
     fps: { num: 24, den: 1 }, resolution: { width: 736, height: 414 }
   });
   assert.equal(renderCacheKey(plan, planSha256, projectSha256, config), expected);
+  // A partial range is a different frame set, so it must never share the directory
+  // (and therefore the manifest) of the full sequence.
+  assert.notEqual(renderCacheKey(plan, planSha256, projectSha256, config, [28, 29, 30]), expected);
+  assert.match(renderCacheKey(plan, planSha256, projectSha256, config, [0, 1, 5]), /^[a-f0-9]{64}$/);
 });
 
 test('run rejects a profile that does not match the configuration', async t => {

@@ -10,12 +10,128 @@ import {
 import { deriveJobDirectory } from './assets.mjs';
 import { CavalryAdapter } from './cavalry.mjs';
 
-export const RENDER_VERSION = '1.0.0';
+export const RENDER_VERSION = '1.1.0';
 
 const DEFAULT_RENDER_TIMEOUT_MS = 60_000;
 
+/** A selection this large is a typo or a hostile input, not a render request. */
+const MAX_FRAME_SELECTION = 100_000;
+
 function paddedWidth(totalFrames) {
   return Math.max(3, String(totalFrames - 1).length);
+}
+
+/** Every frame the plan covers, in timeline order, optionally narrowed to one shot. */
+export function plannedFrames(plan, shotId) {
+  const shots = shotId ? plan.shots.filter(shot => shot.id === shotId) : plan.shots;
+  return shots.flatMap(shot =>
+    Array.from({ length: shot.endFrameExclusive - shot.startFrame }, (_, index) => shot.startFrame + index));
+}
+
+/**
+ * The frame list a render request actually means: the selection parsed from
+ * `--frames`, or every frame of the shot(s) being rendered — checked against the
+ * plan so no frame is discovered unmapped halfway through an expensive sequence.
+ */
+export function resolveFrames(plan, options = {}) {
+  const shots = options.shot ? plan.shots.filter(shot => shot.id === options.shot) : plan.shots;
+  if (shots.length === 0) {
+    throw new WorkflowError('RENDER_SHOT_NOT_FOUND', `No planned shot with id ${options.shot}.`, { shot: options.shot });
+  }
+  const frames = options.frames === undefined || options.frames === null || options.frames === ''
+    ? plannedFrames(plan, options.shot)
+    : parseFrameSpec(options.frames);
+  if (frames.length === 0) {
+    throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `Frame selection "${options.frames}" selects nothing.`, { spec: String(options.frames) });
+  }
+  if (frames.length > MAX_FRAME_SELECTION) {
+    throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `Frame selection expands to ${frames.length} frames, over the ${MAX_FRAME_SELECTION}-frame limit.`, {
+      spec: String(options.frames), count: frames.length, limit: MAX_FRAME_SELECTION
+    });
+  }
+  const unmapped = frames.filter(frame =>
+    !shots.some(shot => frame >= shot.startFrame && frame < shot.endFrameExclusive));
+  if (unmapped.length > 0) {
+    throw new WorkflowError('RENDER_FRAME_UNMAPPED', `${unmapped.length} requested frame(s) belong to no rendered shot.`, {
+      frames: unmapped.slice(0, 20),
+      shots: shots.map(shot => ({ id: shot.id, startFrame: shot.startFrame, endFrameExclusive: shot.endFrameExclusive }))
+    });
+  }
+  return { shots, frames };
+}
+
+/**
+ * Parse a frame selection: "28:60" or "28-60" (both inclusive), an optional stride
+ * ("0:215:12"), and a comma-separated mix of single frames and ranges
+ * ("0,28-60:4,215"). Returns sorted, de-duplicated integers.
+ */
+export function parseFrameSpec(spec) {
+  const text = typeof spec === 'string' ? spec.trim() : String(spec ?? '').trim();
+  if (!text) throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', 'A frame selection cannot be empty.');
+  const integer = value => (/^\d+$/.test(value) ? Number(value) : Number.NaN);
+  const selected = new Set();
+  for (const part of text.split(',')) {
+    const piece = part.replace(/\s+/g, '');
+    if (!piece) throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `Empty term in frame selection "${text}".`, { spec: text });
+    const range = piece.match(/^(\d+)(?:[:\-])(\d+)(?:[:\-](\d+))?$/);
+    if (range) {
+      const [, rawFirst, rawLast, rawStride] = range;
+      const first = integer(rawFirst);
+      const last = integer(rawLast);
+      const stride = rawStride === undefined ? 1 : integer(rawStride);
+      if (!(last >= first)) {
+        throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `Frame range "${piece}" runs backwards; use "first:last".`, { spec: text, first, last });
+      }
+      if (!(stride >= 1)) throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `Frame stride in "${piece}" must be a positive integer.`, { spec: text });
+      if (last - first + 1 > MAX_FRAME_SELECTION) {
+        throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `Frame range "${piece}" is wider than the ${MAX_FRAME_SELECTION}-frame limit.`, {
+          spec: text, limit: MAX_FRAME_SELECTION
+        });
+      }
+      for (let frame = first; frame <= last; frame += stride) selected.add(frame);
+      continue;
+    }
+    const single = integer(piece);
+    if (!Number.isInteger(single)) throw new WorkflowError('RENDER_FRAME_SPEC_INVALID', `"${piece}" is not a frame or an inclusive "first:last" range.`, { spec: text });
+    selected.add(single);
+  }
+  return [...selected].sort((a, b) => a - b);
+}
+
+/**
+ * Cache-key identity of a frame list: how many frames and which contiguous runs.
+ * A range must never share a render directory with the full sequence, because the
+ * manifest written there describes one specific frame set.
+ */
+export function frameListSignature(frames) {
+  if (frames.length === 0) return { count: 0, runs: '' };
+  const runs = [];
+  let start = frames[0];
+  let previous = frames[0];
+  const flush = () => runs.push(start === previous ? `${start}` : `${start}-${previous}`);
+  for (const frame of frames.slice(1)) {
+    if (frame === previous + 1) { previous = frame; continue; }
+    flush();
+    start = previous = frame;
+  }
+  flush();
+  return { count: frames.length, runs: runs.join(',') };
+}
+
+/**
+ * The single authoritative render cache key. run.mjs imports this instead of
+ * keeping a second copy of the formula, so the runner and the stage cannot drift
+ * and point at different directories for the same work.
+ */
+export function renderCacheKey(plan, planSha256, projectSha256, config, frames = plannedFrames(plan)) {
+  const renderConfig = config.render ?? {};
+  const ffmpeg = config.ffmpeg ?? 'ffmpeg';
+  return hashObject({
+    version: RENDER_VERSION, planSha256, projectSha256, frames: frameListSignature(frames),
+    scalePercent: renderConfig.scalePercent ?? 100,
+    encoder: { ffmpeg, crf: renderConfig.crf ?? 18, preset: renderConfig.preset ?? 'medium' },
+    fps: plan.project.fps, resolution: { width: plan.project.width, height: plan.project.height }
+  });
 }
 
 function shotForFrame(plan, frame) {
@@ -114,6 +230,9 @@ export async function renderVideo(planPath, options = {}) {
   if (options.expectExecutable === true && plan.validation.executable !== true) {
     throw new WorkflowError('PLAN_NOT_EXECUTABLE', 'Rendering requires an executable scene plan.', { planPath: resolvedPlanPath });
   }
+  // Resolve and validate the frame selection first: a bad selection is a request
+  // error, and it should be reported before the scene file or the bridge is touched.
+  const { frames } = resolveFrames(plan, options);
   if (!options.projectPath) throw new WorkflowError('RENDER_PROJECT_REQUIRED', 'renderVideo requires the saved scene path.');
   const projectPath = absolutePath(options.projectPath);
   const project = await fileRecord(projectPath);
@@ -122,18 +241,8 @@ export async function renderVideo(planPath, options = {}) {
   const ffmpeg = options.ffmpeg ?? config.ffmpeg ?? 'ffmpeg';
   const ffprobe = options.ffprobe ?? config.ffprobe ?? 'ffprobe';
   const jobDirectory = options.jobDirectory ? absolutePath(options.jobDirectory) : deriveJobDirectory(resolvedPlanPath);
-  const renderedShots = options.shot ? plan.shots.filter(shot => shot.id === options.shot) : plan.shots;
-  if (renderedShots.length === 0) {
-    throw new WorkflowError('RENDER_SHOT_NOT_FOUND', `No planned shot with id ${options.shot}.`, { shot: options.shot });
-  }
-  const frames = options.frames ?? renderedShots.flatMap(shot =>
-    Array.from({ length: shot.endFrameExclusive - shot.startFrame }, (_, index) => shot.startFrame + index));
   const scalePercent = options.scalePercent ?? renderConfig.scalePercent ?? 100;
-  const key = hashObject({
-    version: RENDER_VERSION, planSha256: await hashFile(resolvedPlanPath), projectSha256: project.sha256,
-    frames: frames.length, scalePercent, encoder: { ffmpeg, crf: renderConfig.crf ?? 18, preset: renderConfig.preset ?? 'medium' },
-    fps: plan.project.fps, resolution: { width: plan.project.width, height: plan.project.height }
-  });
+  const key = renderCacheKey(plan, await hashFile(resolvedPlanPath), project.sha256, config, frames);
   const directory = path.join(jobDirectory, 'render', key);
   return withJobLock(jobDirectory, async () => {
     await fs.mkdir(directory, { recursive: true });
@@ -155,7 +264,9 @@ export async function renderVideo(planPath, options = {}) {
         status: 'partial', frames: [], updatedAt: new Date().toISOString()
       });
     }
-    const padding = paddedWidth(Math.max(...frames) + 1);
+    // Width comes from the plan, not the selection, so a partial range and the
+    // full sequence name the same frame identically (frame-028.png, not frame-28).
+    const padding = paddedWidth(plan.project.totalFrames);
     const adapter = new CavalryAdapter(config.mcp);
     const rendered = [];
     const errors = [];
@@ -190,16 +301,28 @@ export async function renderVideo(planPath, options = {}) {
         }
       }
       const restore = await adapter.setFrame(plan.shots[0].startFrame);
-      const encoded = await encodeSequence({
-        ffmpeg, framesDirectory, padding, frames, plan, renderConfig, outputDirectory
-      });
+      // Frames are ascending, so the ends of the list are its bounds.
+      const low = frames[0];
+      const high = frames[frames.length - 1];
+      let encoded = null;
+      if (high - low + 1 === frames.length) {
+        encoded = await encodeSequence({ ffmpeg, framesDirectory, padding, frames, plan, renderConfig, outputDirectory });
+      } else {
+        // A sparse selection is still a verified set of frames; refuse to encode
+        // rather than silently encoding the whole gap between the first and last.
+        errors.push({
+          code: 'RENDER_SEQUENCE_NONCONTIGUOUS',
+          message: `Frame selection covers ${frameListSignature(frames).runs}; encoding needs one contiguous run. Verified frames are kept, no video was encoded.`
+        });
+      }
       let probe = null;
       if (encoded) {
         probe = await probeVideo(ffprobe, encoded.path, { timeoutMs: renderConfig.processTimeoutMs ?? 300_000 });
         const videoErrors = validateVideoAgainstPlan(probe, plan, encoded.path, frames.length);
         for (const message of videoErrors) errors.push({ code: 'VIDEO_VALIDATION_FAILED', message });
       }
-      const manifestStatus = errors.length ? 'failed' : 'verified';
+      const onlySparse = errors.length > 0 && errors.every(error => error.code === 'RENDER_SEQUENCE_NONCONTIGUOUS');
+      const manifestStatus = errors.length === 0 ? 'verified' : (onlySparse ? 'partial' : 'failed');
       const manifest = {
         schemaVersion: 1, sourceHash: plan.sourceHash, projectPath, projectSha256: project.sha256,
         fps: { num: plan.project.fps.num, den: plan.project.fps.den },
@@ -213,14 +336,20 @@ export async function renderVideo(planPath, options = {}) {
       const manifestPath = path.join(outputDirectory, 'render-manifest.json');
       await writeJsonState(manifestPath, manifest);
       const markdownPath = path.join(outputDirectory, 'render-report.md');
-      await fs.writeFile(markdownPath, renderMarkdown(manifest, { plan, probe, encoded, sequenceResumedFrom, restoreFrame: restore.value?.frame ?? null }));
+      await fs.writeFile(markdownPath, renderMarkdown(manifest, {
+        plan, probe, encoded, sequenceResumedFrom, restoreFrame: restore.value?.frame ?? null,
+        frameSelection: frameListSignature(frames)
+      }));
       const state = {
         key, version: RENDER_VERSION, runDirectory: outputDirectory, projectPath, projectSha256: project.sha256,
         status: manifestStatus, frames: rendered, video: encoded, manifestPath, markdownPath,
         errors, updatedAt: new Date().toISOString()
       };
       await writeJsonState(cachePath, state);
-      return { ...state, reused: Boolean(prior), encodedFrames: rendered.filter(frame => !frame.reused).length };
+      return {
+        ...state, reused: Boolean(prior), encodedFrames: rendered.filter(frame => !frame.reused).length,
+        frameSelection: frameListSignature(frames)
+      };
     } catch (error) {
       const partial = {
         key, version: RENDER_VERSION, runDirectory: outputDirectory, projectPath, projectSha256: project.sha256,
@@ -236,8 +365,8 @@ export async function renderVideo(planPath, options = {}) {
 }
 
 async function encodeSequence({ ffmpeg, framesDirectory, padding, frames, plan, renderConfig, outputDirectory }) {
-  const first = Math.min(...frames);
-  const last = Math.max(...frames);
+  const first = frames[0];
+  const last = frames[frames.length - 1];
   const contiguous = last - first + 1 === frames.length;
   if (!contiguous) {
     throw new WorkflowError('RENDER_SEQUENCE_NONCONTIGUOUS', 'Encoding needs a contiguous frame range; render the full sequence first.', {
@@ -277,6 +406,7 @@ function renderMarkdown(manifest, context) {
   lines.push(`- Status: **${manifest.status}**`);
   lines.push(`- Scene: \`${manifest.projectPath}\` (sha256 \`${manifest.projectSha256}\`)`);
   lines.push(`- Frames rendered: ${manifest.frames.length} at ${manifest.fps.num}/${manifest.fps.den} fps, ${manifest.width}x${manifest.height}`);
+  lines.push(`- Frame selection: ${context.frameSelection.count} frame(s), runs \`${context.frameSelection.runs}\`.`);
   lines.push(`- Sequence resumed after ${context.sequenceResumedFrom} already-recorded frame(s).`);
   lines.push(`- Playhead restored to frame ${context.restoreFrame ?? '—'}.`);
   if (manifest.video) lines.push(`- Video: \`${manifest.video.path}\` (sha256 \`${manifest.video.sha256}\`, validated: ${manifest.video.validated})`);
