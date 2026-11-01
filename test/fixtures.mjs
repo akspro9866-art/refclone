@@ -45,6 +45,38 @@ export async function syntheticClip(directory, { width, height, frames, paint, f
 export const BLUE = [20, 25, 220], RED = [200, 30, 30], WHITE = [255, 255, 255];
 
 /**
+ * Minimal 5x7 bitmap font. Solid blocks cannot be registered vertically — every row of a
+ * rectangle carries the same ink, so a profile correlation has nothing to lock onto — and
+ * band/region measurement needs a fixture with structure on both axes, like real copy.
+ */
+export const GLYPHS = {
+  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  X: ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
+  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
+  N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001']
+};
+
+/** Paint `text` from (left, top): each glyph is a 5x7 cell scaled by `scale`, 1 px apart. */
+export function textLine(png, text, { left, top, color = RED, scale = 2 } = {}) {
+  for (let index = 0; index < text.length; index += 1) {
+    const glyph = GLYPHS[text[index]];
+    if (!glyph) continue;
+    for (let row = 0; row < 7; row += 1) {
+      for (let column = 0; column < 5; column += 1) {
+        if (glyph[row][column] !== '1') continue;
+        plate(png, color,
+          left + index * 6 * scale + column * scale, top + row * scale,
+          left + index * 6 * scale + column * scale + scale, top + row * scale + scale);
+      }
+    }
+  }
+  return png;
+}
+
+/**
  * The standard two-shot reference: sixteen 64x36 frames, a hard background change at
  * frame 8, a block translating right in shot one, and grouped bars plus a solid block
  * in shot two. Every expectation in the CV tests is derived from this picture.
@@ -82,7 +114,7 @@ export function genericConfig(directory) {
       review: { status: 'pending', notes: 'Agent-generated manifest only; review is required.' }
     },
     render: { mode: 'native-png-sequence', scalePercent: 100, crf: 18, overwrite: false, timeoutMs: 120000 },
-    qa: { thresholdsCalibrated: false, requireManualReview: true },
+    qa: { thresholdsCalibrated: false, requireManualReview: true, regions: { enabled: true, maxRegions: 24 } },
     correction: { maxIterations: 3, minimumConfidence: 0.9, automatic: false }
   };
 }
