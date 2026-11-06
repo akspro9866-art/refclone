@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import {
-  WorkflowError, absolutePath, canonical, hashObject, hashFile, readJson,
+  WorkflowError, absolutePath, canonical, hashObject, hashFile, readJson, removeTree,
   validateArtifact, writeJsonNew, writeJsonState, fileRecord, verifyFiles,
   withJobLock, runProcess
 } from '../src/core.mjs';
@@ -17,7 +17,7 @@ before(async () => { await fs.mkdir(testRoot, { recursive: true }); });
 async function sandbox(t) {
   const directory = await fs.mkdtemp(path.join(testRoot, 'core-'));
   // Only delete this test's unique directory, never a shared checkpoint or fixture.
-  t.after(async () => { await fs.rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { await removeTree(directory); });
   return directory;
 }
 

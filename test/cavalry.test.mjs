@@ -233,6 +233,72 @@ test('runScript parses JSON readback and preserves telemetry; inspect validates 
   await adapter.close();
 });
 
+test('runScript gates _mg scripts against the contract before dispatch', async () => {
+  const client = new FakeClient({ handler: () => textResult({ dispatched: true }) });
+  const adapter = new CavalryAdapter(config(), { client });
+  await adapter.start();
+
+  // A script that writes through the macro surface is strict by default: the
+  // dry run passes and the report travels with the result.
+  const valid = await adapter.runScript(`_mg.undoGroup({
+  id: "undo-probe",
+  name: "probe",
+  operations: () => {
+    _mg.keyframe({
+      element: "elem-1",
+      property: "x",
+      startFrame: 0,
+      endFrame: 20,
+      startValue: 0,
+      endValue: 100
+    });
+  }
+});
+__result = { script: "valid" };`);
+  assert.equal(valid.contractMode, 'strict');
+  assert.equal(valid.contract.ok, true);
+  assert.equal(valid.contract.version, '1.0.0');
+  assert.match(valid.contract.scriptHash, /^[a-f0-9]{64}$/);
+  assert.equal(client.calls.length, 1);
+
+  // The same macro written outside an undoGroup is the failure the runtime
+  // cannot undo. It is blocked before anything reaches the bridge.
+  await assert.rejects(
+    adapter.runScript(`_mg.keyframe({ element: "elem-1", property: "x", startFrame: 0, endFrame: 20, startValue: 0, endValue: 100 });
+__result = { script: "invalid" };`),
+    error => error.code === 'MG_CONTRACT_INVALID'
+      && error.details.codes.includes('MG_CONTRACT_NOT_ATOMIC')
+      && error.details.stage === 'pre_dispatch'
+  );
+  assert.equal(client.calls.length, 1, 'a blocked script must never be posted');
+
+  await assert.rejects(
+    adapter.runScript(`_mg.undoGroup({ id: "u", name: "g", operations: () => { _mg.notAHelper({ element: "e" }); } });`),
+    error => error.code === 'MG_CONTRACT_INVALID' && error.details.codes.includes('MG_CONTRACT_UNKNOWN_HELPER')
+  );
+  assert.equal(client.calls.length, 1);
+
+  // A raw ad-hoc script is reported, not blocked: it never claimed to satisfy
+  // the macro contract, and direct `api` use is exactly what it is for.
+  const raw = await adapter.runScript('__result = api.getFrame();');
+  assert.equal(raw.contractMode, 'warn');
+  assert.equal(raw.contract.ok, true);
+  assert.ok(raw.contract.counts.warning >= 1, 'direct api use must be reported');
+  assert.ok(raw.contract.violations.some(violation => violation.code === 'MG_CONTRACT_DIRECT_API_USE'));
+  assert.equal(client.calls.length, 2);
+
+  // Explicit modes: `off` skips the dry run entirely, an unknown mode is a
+  // parameter error rather than a silent fallback.
+  const off = await adapter.runScript('__result = 1;', { contractMode: 'off' });
+  assert.equal(off.contract, null);
+  assert.equal(client.calls.length, 3);
+  await assert.rejects(adapter.runScript('__result = 1;', { contractMode: 'block' }),
+    error => error.code === 'INVALID_PARAMETERS' && error.details.field === 'contractMode');
+  assert.equal(client.calls.length, 3);
+
+  await adapter.close();
+});
+
 test('inspectLayers builds one bounded read-only snapshot with per-path results', async () => {
   let generated = '';
   const client = new FakeClient({

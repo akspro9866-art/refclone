@@ -119,19 +119,59 @@ artifacts. The call graph is fixed:
    Cavalry MCP tools (`cavalry_run_script`, `cavalry_inspect`, `cavalry_run_preset`) are
    ever referenced — the `_mg` text is the argument to `cavalry_run_script`, not a
    fourth tool.
-4. **Stage 5 (perceptual diff gate):** `runPerceptualDiffGate` calls
+4. **Stage 3.5 (`_mg` contract gate):** `validateMgContract` in
+   `src/mg-contract.mjs` dry-runs the exact script Stage 4 produced inside a
+   `node:vm` whose `_mg` stubs record violations instead of throwing, then
+   `assertMgContract` fails the run with `MG_CONTRACT_INVALID` if any error was
+   recorded. It checks the published helper vocabulary (including internal
+   `__`-prefixed helpers and direct `api`/`_rb` use), atomicity, every macro's
+   argument shape, easing names that would silently fall back to
+   `SlowInSlowOut`, the `VERIFIED_PRESETS` catalog plus the configured
+   `proceduralPromotion.presets` allowlist, and Stage 3 ↔ Stage 4 drift (a
+   promotion that was never emitted, or a macro with nothing behind it). The
+   report travels with the compilation as `contract`;
+   `proceduralPromotion.mgContractValidation: false` skips only the dry run, for
+   reproducing an old artifact. Errors raised across the vm realm are classified
+   by `error.name`, never by `instanceof`.
+5. **Stage 5 (perceptual diff gate):** `runPerceptualDiffGate` calls
    `analyzeElementPerceptual` / `analyzeShotPerceptual` / `generateRefinementReport`
    from `src/perceptual.mjs`. Correction deltas (`position`, `scale`, `timing`,
    `opacity`) are fed back into the next iteration of Stages 3–4 until the gate passes
    or `maxRefinementIterations` is reached. The artifact validates against
    `schemas/perceptual-diff.schema.json` with `schemaVersion: 1`; non-finite metrics
    (e.g. `Infinity` timing when no rendered trajectory exists) are coerced to a
-   configured ceiling plus one so the artifact stays canonicalizable.
+   configured ceiling plus one so the artifact stays canonicalizable. An unmeasured
+   rendered trajectory is therefore reported as an unmeasured temporal channel, and
+   never turns into a timing correction. The appearance tier is fed the same way:
+   foreground/background contrast is measured inside each frame's box, and once the
+   silhouette has converged a normalized luma gap above 5% emits an `opacity` delta
+   (half the gap, clamped to ±0.5) — the only alpha evidence a composited frame
+   carries. A luma gap on a misaligned silhouette stays a geometry symptom.
+
+`runClosedLoopProceduralPipeline` refines through `src/convergence.mjs` rather than
+applying raw deltas: tier 1 (geometry) keeps 0.75 of its correction, tier 2 (timing)
+0.5 and tier 3 (appearance) 0.35, every tier halving while the score regresses down to
+a 0.15 floor; two consecutive *freshly measured* passes that move the perceptual score
+by less than 1.5% end the run (`stopReason: "plateau"`), and the best-scoring round's
+parameters are recompiled and delivered when the final round scored worse. Those ratios
+are `CONVERGENCE_DEFAULTS`, overridable through an optional `perceptualDiff.convergence`
+section — the shipped configs carry none, so the defaults are what a fresh clone runs
+with. Rounds that reused the previous comparison set are not evidence of a plateau and
+are labelled `measured: false`. The snapshot is an in-memory parameter restore — it does
+not undo anything inside Cavalry, and the adapter still reports `rollback` as unsupported.
+
+`CavalryAdapter.runScript` applies the Stage 3.5 gate at the dispatch boundary too:
+a script that writes through `_mg` is strict and a violating one is refused with
+`MG_CONTRACT_INVALID` before it reaches the bridge; a raw ad-hoc script is warn-only
+(direct `api` use is reported, not blocked); `contractMode: 'off'` skips the dry run.
+The result carries `contractMode` and the contract report.
 
 Every threshold is read from `config.json` sections `proceduralPromotion` and
-`perceptualDiff`. `config.generic-template.json` mirrors those sections byte-for-byte so
-`npm run verify` (config-parity) stays green. Do not hardcode thresholds in new call
-sites; extend `loadProceduralConfig` instead.
+`perceptualDiff` (convergence tuning is the optional `perceptualDiff.convergence`
+sub-section, resolved by `loadConvergenceConfig` and surfaced as
+`loadProceduralConfig(...).convergence`). `config.generic-template.json` mirrors those
+sections byte-for-byte so `npm run verify` (config-parity) stays green. Do not hardcode
+thresholds in new call sites; extend `loadProceduralConfig` instead.
 
 The end-to-end integration test in `test/procedural-pipeline.test.mjs` runs all five
 stages on synthetic observations and PNG frame comparisons and asserts that both

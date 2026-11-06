@@ -16,6 +16,10 @@ import { trackElement, trackShot, toPromotionInput, TRACKING_VERSION } from './t
 import { PNG } from 'pngjs';
 import { analyzeScenePromotion, compilePromotionToScript, PROMOTION_VERSION } from './promotion.mjs';
 import { compileShotScript, MG_COMPILER_VERSION, VERIFIED_PRESETS } from './mg-compiler.mjs';
+import { assertMgContract, validateMgContract, MG_CONTRACT_VERSION } from './mg-contract.mjs';
+import {
+  CONVERGENCE_VERSION, createConvergenceTracker, dampCorrectionDeltas, loadConvergenceConfig, perceptualScore
+} from './convergence.mjs';
 import { analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport, PERCEPTUAL_VERSION } from './perceptual.mjs';
 
 export const PROCEDURAL_PIPELINE_VERSION = '1.0.0';
@@ -43,7 +47,10 @@ export function loadProceduralConfig(config) {
         spring: ['spring-oscillator', 'spring-bounce', 'spring-snappy'],
         bezier: ['bezier-smooth', 'bezier-snap', 'bezier-glide'],
         duplicator: ['duplicator-stagger', 'duplicator-cascade', 'duplicator-wave']
-      }
+      },
+      // The gate is on by default; `mgContractValidation: false` skips the dry
+      // run only, and is meant for reproducing an old artifact, not for shipping.
+      mgContractValidation: promotion.mgContractValidation !== false
     },
     perceptual: {
       iouMin: perceptual.iouMin ?? 0.90,
@@ -51,7 +58,8 @@ export function loadProceduralConfig(config) {
       timingDeltaMaxFrames: perceptual.timingDeltaMaxFrames ?? 1,
       ssimMin: perceptual.ssimMin ?? 0.88,
       maxRefinementIterations: perceptual.maxRefinementIterations ?? 5
-    }
+    },
+    convergence: loadConvergenceConfig(perceptual.convergence ?? {})
   };
 }
 
@@ -215,13 +223,17 @@ export function runProceduralPromotion({ trackingAnalysis, config }) {
 /**
  * Stage 4: Compile promotion analysis to _mg DSL script.
  *
+ * Stage 3.5 rides the returned value: the compiled script is checked against
+ * the verified `_mg` contract before anything may dispatch it, and an error
+ * severity violation stops here rather than half-building a scene later.
+ *
  * @param {Object} params
  * @param {Object} params.promotionAnalysis - Output from runProceduralPromotion
  * @param {Object} params.trackingAnalysis - Tracking analysis for context
  * @param {string} params.shotId
  * @param {Object} params.capabilities - Adapter capabilities
  * @param {Object} params.config - Procedural config
- * @returns {Object} Compiled script with metadata
+ * @returns {Object} Compiled script with metadata and the `contract` report
  */
 export function compileProceduralScript({ promotionAnalysis, trackingAnalysis, shotId, capabilities, config }) {
   if (!promotionAnalysis) fail('PROCEDURAL_INVALID', 'promotionAnalysis is required.');
@@ -238,10 +250,21 @@ export function compileProceduralScript({ promotionAnalysis, trackingAnalysis, s
     }
   });
 
+  const contract = validateMgContract({
+    script: compilation.compiled?.script ?? '',
+    compiled: compilation.compiled,
+    promotion: promotionAnalysis,
+    presets: config?.promotion?.presets ?? null
+  });
+  if (config?.promotion?.mgContractValidation !== false) {
+    assertMgContract(contract, { shotId, scriptHash: compilation.compiled?.scriptHash ?? null });
+  }
+
   return {
     ...compilation,
     version: MG_COMPILER_VERSION,
-    promotionVersion: PROMOTION_VERSION
+    promotionVersion: PROMOTION_VERSION,
+    contract
   };
 }
 
@@ -478,7 +501,10 @@ export async function runProceduralPipeline({ shotId, observations, metadata, ca
         script: compilation.compiled?.script ?? null,
         scriptHash: compilation.compiled?.scriptHash ?? null,
         ready: compilation.ready ?? false,
-        presetBindings: compilation.compiled?.presetBindings ?? []
+        presetBindings: compilation.compiled?.presetBindings ?? [],
+        contractVersion: compilation.contract?.version ?? MG_CONTRACT_VERSION,
+        contractOk: compilation.contract?.ok ?? null,
+        contract: compilation.contract ?? null
       },
       perceptual: perceptualResult ? {
         version: PERCEPTUAL_VERSION,
@@ -494,6 +520,8 @@ export async function runProceduralPipeline({ shotId, observations, metadata, ca
       bezierPromotions: promotionAnalysis.summary?.bezierPromotions ?? 0,
       duplicatorGroups: promotionAnalysis.summary?.duplicatorGroups ?? 0,
       scriptReady: compilation.ready ?? false,
+      contractOk: compilation.contract?.ok ?? null,
+      contractErrors: compilation.contract?.counts?.error ?? 0,
       perceptualPass: perceptualResult?.artifact?.overallPass ?? null
     }
   };
@@ -619,6 +647,25 @@ export async function applyCorrectionDeltas(promotionArtifact, correctionDeltas)
  * gate fails, applies correction deltas and re-compiles the _mg script for up to
  * `maxIterations` rounds.
  *
+ * Each refinement round is damped, watched for a plateau, and snapshotted:
+ * - the aggregate correction is scaled per tier (geometry > timing > appearance,
+ *   see `src/convergence.mjs`) and the scale is decayed while the score regresses;
+ * - a round whose fresh measurement moves the score by less than
+ *   `convergence.minImprovementRatio` counts toward a plateau, and `plateauPasses`
+ *   of those in a row end the loop early. Rounds that reuse the previous
+ *   comparison set are not counted, because an unchanged measurement is not
+ *   evidence that the parameters have stopped improving;
+ * - the best-scoring round's promotion artifact is kept, and if the final round
+ *   scores worse than that snapshot, the returned `stages.promotion` and
+ *   `stages.compilation` are the snapshot's (recompiled from its parameters, so
+ *   the script and the artifact still describe each other). That is an in-memory
+ *   parameter restore: it does not undo anything inside Cavalry, and the adapter
+ *   keeps reporting `rollback` as unsupported.
+ *
+ * Every round also re-passes the Stage 3.5 `_mg` contract gate, so a refinement
+ * that would emit an uncompilable or non-conforming script fails here instead of
+ * at dispatch.
+ *
  * @param {Object} params
  * @param {string} params.shotId
  * @param {Array} params.observations
@@ -630,7 +677,8 @@ export async function applyCorrectionDeltas(promotionArtifact, correctionDeltas)
  *        { frameComparisons, renderedTrajectory } used to re-measure after each refinement.
  *        When omitted the loop reuses the initial frameComparisons.
  * @param {number} [params.maxIterations=2] - Maximum refinement rounds after the first pass
- * @returns {Object} Pipeline result with `iterations` history and final `converged` flag
+ * @returns {Object} Pipeline result with `iterations` history, a `convergence`
+ *   report (scores, damping, plateau, best snapshot) and the final `converged` flag
  */
 export async function runClosedLoopProceduralPipeline({
   shotId, observations, metadata, capabilities, config,
@@ -642,6 +690,8 @@ export async function runClosedLoopProceduralPipeline({
   const proceduralConfig = loadProceduralConfig(config);
   const configuredMax = Number(proceduralConfig.perceptual?.maxRefinementIterations ?? 5);
   const effectiveMax = Math.max(0, Math.min(Number(maxIterations ?? 0), configuredMax));
+  const convergenceConfig = proceduralConfig.convergence ?? loadConvergenceConfig({});
+  const tracker = createConvergenceTracker(convergenceConfig);
 
   // Iteration 0: baseline pass
   let currentPromotion = null;
@@ -650,6 +700,17 @@ export async function runClosedLoopProceduralPipeline({
   let currentComparisons = frameComparisons ?? [];
   let currentRenderedTrajectory = [];
   const iterations = [];
+  let stopReason = null;
+
+  /** Keep the diagnosable part of a contract report; the dry-run detail is noise per round. */
+  const contractDigest = report => (report ? {
+    version: report.version,
+    ok: report.ok,
+    evaluated: report.evaluated,
+    scriptHash: report.scriptHash,
+    counts: report.counts,
+    violations: report.violations
+  } : null);
 
   // Stage 2: Tracking (once)
   currentTracking = extractTrackingFromObservations({ shotId, observations, metadata, config: proceduralConfig });
@@ -679,6 +740,17 @@ export async function runClosedLoopProceduralPipeline({
     await validateArtifact('perceptual-diff', currentPerceptual.artifact);
   }
 
+  const baselineScore = perceptualScore(currentPerceptual?.artifact ?? null, convergenceConfig);
+  tracker.observe({
+    iteration: 0,
+    score: baselineScore,
+    measured: baselineScore.measured,
+    promotion: currentPromotion,
+    compilation: currentCompilation,
+    deltas: null,
+    tiers: null
+  });
+
   iterations.push({
     iteration: 0,
     promotion: currentPromotion,
@@ -686,13 +758,16 @@ export async function runClosedLoopProceduralPipeline({
       script: currentCompilation.compiled?.script ?? null,
       scriptHash: currentCompilation.compiled?.scriptHash ?? null,
       ready: currentCompilation.ready ?? false,
-      presetBindings: currentCompilation.compiled?.presetBindings ?? []
+      presetBindings: currentCompilation.compiled?.presetBindings ?? [],
+      contract: contractDigest(currentCompilation.contract)
     },
     perceptual: currentPerceptual ? {
       overallPass: currentPerceptual.artifact.overallPass,
       metrics: currentPerceptual.artifact.metrics,
       refinementNeeded: currentPerceptual.artifact.refinementNeeded ?? []
     } : null,
+    score: baselineScore.measured ? baselineScore.score : null,
+    improvementRatio: null,
     appliedDeltas: null
   });
 
@@ -701,32 +776,48 @@ export async function runClosedLoopProceduralPipeline({
   while (
     iteration < effectiveMax &&
     currentPerceptual &&
-    currentPerceptual.artifact.overallPass === false
+    currentPerceptual.artifact.overallPass === false &&
+    !tracker.plateau.detected
   ) {
     iteration += 1;
 
     // Aggregate correction deltas across failing elements
     const failing = (currentPerceptual.artifact.refinementNeeded ?? []);
-    if (failing.length === 0) break;
+    if (failing.length === 0) {
+      stopReason = 'no_refinement_items';
+      break;
+    }
 
-    const aggregate = failing.reduce((acc, item) => ({
+    const rawAggregate = failing.reduce((acc, item) => ({
       position: { x: acc.position.x + (item.deltas?.position?.x ?? 0), y: acc.position.y + (item.deltas?.position?.y ?? 0) },
       scale: { x: acc.scale.x * (item.deltas?.scale?.x ?? 1), y: acc.scale.y * (item.deltas?.scale?.y ?? 1) },
       timing: acc.timing + (item.deltas?.timing ?? 0),
       opacity: acc.opacity + (item.deltas?.opacity ?? 0)
     }), { position: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, timing: 0, opacity: 0 });
 
+    // Tier damping before anything is applied: the correction a metric implies
+    // is a linear-response guess, so each tier keeps a fraction of it and the
+    // fraction shrinks while the score has been going backwards.
+    const damping = dampCorrectionDeltas(rawAggregate, convergenceConfig, {
+      consecutiveRegressions: tracker.consecutiveRegressions
+    });
+    const aggregate = damping.damped;
+
     // Apply deltas to promotion artifact (re-validates)
     currentPromotion = await applyCorrectionDeltas(currentPromotion, aggregate);
 
     // Optional re-render hook: lets callers supply fresh frame comparisons after a real render
+    let measuredFresh = false;
     if (typeof renderEvaluator === 'function') {
       const evaluation = await renderEvaluator(currentPromotion, iteration);
-      if (evaluation?.frameComparisons) currentComparisons = evaluation.frameComparisons;
+      if (evaluation?.frameComparisons) {
+        currentComparisons = evaluation.frameComparisons;
+        measuredFresh = true;
+      }
       if (evaluation?.renderedTrajectory) currentRenderedTrajectory = evaluation.renderedTrajectory;
     }
 
-    // Stage 4: re-compile with refined promotion
+    // Stage 4: re-compile with refined promotion (and re-pass the contract gate)
     currentCompilation = compileProceduralScript({
       promotionAnalysis: currentPromotion,
       trackingAnalysis: currentTracking,
@@ -746,6 +837,18 @@ export async function runClosedLoopProceduralPipeline({
       await validateArtifact('perceptual-diff', currentPerceptual.artifact);
     }
 
+    const score = perceptualScore(currentPerceptual?.artifact ?? null, convergenceConfig);
+    const observed = tracker.observe({
+      iteration,
+      score,
+      // A reused comparison set measures nothing new, so it cannot show a stall.
+      measured: score.measured && measuredFresh,
+      promotion: currentPromotion,
+      compilation: currentCompilation,
+      deltas: { raw: rawAggregate, damped: aggregate },
+      tiers: damping.tiers
+    });
+
     iterations.push({
       iteration,
       promotion: currentPromotion,
@@ -753,18 +856,59 @@ export async function runClosedLoopProceduralPipeline({
         script: currentCompilation.compiled?.script ?? null,
         scriptHash: currentCompilation.compiled?.scriptHash ?? null,
         ready: currentCompilation.ready ?? false,
-        presetBindings: currentCompilation.compiled?.presetBindings ?? []
+        presetBindings: currentCompilation.compiled?.presetBindings ?? [],
+        contract: contractDigest(currentCompilation.contract)
       },
       perceptual: currentPerceptual ? {
         overallPass: currentPerceptual.artifact.overallPass,
         metrics: currentPerceptual.artifact.metrics,
         refinementNeeded: currentPerceptual.artifact.refinementNeeded ?? []
       } : null,
-      appliedDeltas: aggregate
+      score: score.measured ? score.score : null,
+      improvementRatio: observed.improvementRatio,
+      regression: observed.regression,
+      measured: score.measured && measuredFresh,
+      damping: { factor: damping.factor, tiers: damping.tiers },
+      appliedDeltas: aggregate,
+      rawDeltas: rawAggregate
     });
   }
 
+  const gatePassed = currentPerceptual?.artifact?.overallPass === true;
+  if (gatePassed) {
+    stopReason = 'converged';
+  } else if (!stopReason) {
+    if (tracker.plateau.detected) stopReason = 'plateau';
+    else if (!currentPerceptual) stopReason = 'not_measured';
+    else if (iteration >= effectiveMax) stopReason = 'max_iterations';
+    else stopReason = 'not_measured';
+  }
+
   const converged = currentPerceptual ? currentPerceptual.artifact.overallPass === true : true;
+
+  // Deliver the closest parameters the loop saw, not simply the last ones.
+  const finalScore = tracker.history.length > 0 ? tracker.history[tracker.history.length - 1].score : null;
+  const rollback = tracker.rollback(finalScore);
+  let delivered = {
+    promotion: currentPromotion,
+    compilation: currentCompilation,
+    score: finalScore,
+    iteration
+  };
+  if (rollback.rolledBackTo !== null && rollback.snapshot?.promotion) {
+    delivered = {
+      promotion: rollback.snapshot.promotion,
+      compilation: compileProceduralScript({
+        promotionAnalysis: rollback.snapshot.promotion,
+        trackingAnalysis: currentTracking,
+        shotId,
+        capabilities,
+        config: proceduralConfig
+      }),
+      score: rollback.snapshot.score,
+      iteration: rollback.snapshot.iteration
+    };
+  }
 
   return {
     version: PROCEDURAL_PIPELINE_VERSION,
@@ -773,6 +917,16 @@ export async function runClosedLoopProceduralPipeline({
     iterationsRun: iteration,
     maxIterations: effectiveMax,
     iterations,
+    convergence: {
+      ...tracker.summary(),
+      stopReason,
+      score: finalScore,
+      baselineScore: tracker.history[0]?.score ?? null,
+      deliveredScore: delivered.score,
+      deliveredIteration: delivered.iteration,
+      rolledBackTo: rollback.rolledBackTo,
+      rollbackReason: rollback.reason
+    },
     stages: {
       tracking: {
         version: TRACKING_VERSION,
@@ -782,15 +936,19 @@ export async function runClosedLoopProceduralPipeline({
       },
       promotion: {
         version: PROMOTION_VERSION,
-        analysis: currentPromotion,
-        summary: currentPromotion.summary
+        analysis: delivered.promotion,
+        summary: delivered.promotion.summary,
+        deliveredIteration: delivered.iteration
       },
       compilation: {
         version: MG_COMPILER_VERSION,
-        script: currentCompilation.compiled?.script ?? null,
-        scriptHash: currentCompilation.compiled?.scriptHash ?? null,
-        ready: currentCompilation.ready ?? false,
-        presetBindings: currentCompilation.compiled?.presetBindings ?? []
+        script: delivered.compilation.compiled?.script ?? null,
+        scriptHash: delivered.compilation.compiled?.scriptHash ?? null,
+        ready: delivered.compilation.ready ?? false,
+        presetBindings: delivered.compilation.compiled?.presetBindings ?? [],
+        contractVersion: delivered.compilation.contract?.version ?? MG_CONTRACT_VERSION,
+        contractOk: delivered.compilation.contract?.ok ?? null,
+        contract: delivered.compilation.contract ?? null
       },
       perceptual: currentPerceptual ? {
         version: PERCEPTUAL_VERSION,
@@ -802,11 +960,16 @@ export async function runClosedLoopProceduralPipeline({
     config: proceduralConfig,
     summary: {
       totalElements: currentTracking.elements?.length ?? 0,
-      springPromotions: currentPromotion.summary?.springPromotions ?? 0,
-      bezierPromotions: currentPromotion.summary?.bezierPromotions ?? 0,
-      duplicatorGroups: currentPromotion.summary?.duplicatorGroups ?? 0,
-      scriptReady: currentCompilation.ready ?? false,
+      springPromotions: delivered.promotion.summary?.springPromotions ?? 0,
+      bezierPromotions: delivered.promotion.summary?.bezierPromotions ?? 0,
+      duplicatorGroups: delivered.promotion.summary?.duplicatorGroups ?? 0,
+      scriptReady: delivered.compilation.ready ?? false,
+      contractOk: delivered.compilation.contract?.ok ?? null,
+      contractErrors: delivered.compilation.contract?.counts?.error ?? 0,
       perceptualPass: currentPerceptual?.artifact?.overallPass ?? null,
+      convergenceScore: delivered.score ?? null,
+      plateauDetected: tracker.plateau.detected,
+      rolledBackTo: rollback.rolledBackTo,
       converged,
       iterationsRun: iteration
     }

@@ -109,11 +109,15 @@ jobs:
 
   live-integration:
     name: Cavalry integration (manual, needs a real app)
-    # Runs only on dispatch, and only against a self-hosted runner that is a Windows machine
-    # with Cavalry 2.8 open and Scripts -> Stallion enabled. GitHub-hosted runners have no
-    # Cavalry, so this job can never be made green by a push; it is evidence, not a gate.
+    # Runs on dispatch, on a push whose message asks for it, and never on an ordinary push or a
+    # pull request. A self-hosted runner is a Windows machine with Cavalry 2.8 open and Scripts ->
+    # Stallion enabled; GitHub-hosted runners have no Cavalry, so this job can never be made green
+    # by a push — it is evidence, not a gate. The `push` guard is explicit because
+    # github.event.head_commit is absent on pull_request events and contains() over null fails the
+    # whole expression rather than returning false.
+    # Opt in per commit: `git commit -m "qa: exercise live bridge [live-cavalry]"`.
     runs-on: self-hosted
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[live-cavalry]'))
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

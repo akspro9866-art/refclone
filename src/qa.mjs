@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import {
-  WorkflowError, absolutePath, fileRecord, hashFile, hashObject, readJson, runProcess,
+  WorkflowError, absolutePath, fileRecord, hashFile, hashObject, readJson, removeTree, runProcess,
   validateArtifact, verifyFiles, withJobLock, writeJsonState
 } from './core.mjs';
 import { deriveJobDirectory } from './assets.mjs';
@@ -219,19 +219,35 @@ async function referenceFrames(jobDirectory, referencePath, referenceSha256, pla
   const total = plan.project.totalFrames;
   const padding = paddedWidth(total);
   const expected = Array.from({ length: total }, (_, frame) => path.join(framesDirectory, `frame-${String(frame).padStart(padding, '0')}.png`));
+  const cacheKeyFps = formatFps(plan.project.fps);
   try {
     const meta = await readJson(metaPath);
+    // `alignedTo` is part of the cache identity: a tree decoded under a different
+    // composition rate, or under the old passthrough policy, indexes its frames
+    // differently and must be rebuilt rather than silently reused.
     if (meta.referenceSha256 === referenceSha256 && meta.frames === total && meta.width === plan.project.width &&
-        meta.height === plan.project.height && await verifyFiles(expected.map(filePath => ({ path: absolutePath(filePath), sha256: meta.hashes?.[path.basename(filePath)] })))) {
+        meta.height === plan.project.height && meta.alignedTo === cacheKeyFps &&
+        await verifyFiles(expected.map(filePath => ({ path: absolutePath(filePath), sha256: meta.hashes?.[path.basename(filePath)] })))) {
       return { directory: framesDirectory, padding, count: total, cached: true, paths: expected };
     }
   } catch { /* First extraction or a stale cache: rebuild it below. */ }
-  await fs.rm(cacheDirectory, { recursive: true, force: true });
+  // The reference video's own frame rate is not the composition's. A screen capture is
+  // typically variable-frame-rate: `avg_frame_rate` differs from `r_frame_rate`, and the
+  // stream carries duplicate and dropped frames. Decoding it with `-fps_mode passthrough`
+  // preserves that timeline, so the number of PNGs written is the *source* frame count —
+  // which then fails the `files.length !== total` assertion below, or worse, succeeds with
+  // frames that no longer line up with the rendered sequence's indices. Frame k on disk has
+  // to be frame k of the composition, so the decode is resampled to the composition's own
+  // constant rate. `round=near` picks the source nearest each output slot, which is the
+  // `round=near` picks the source frame nearest each output slot, which is the
+  // least-distorting choice when the two rates are close.
+  await removeTree(cacheDirectory);
   await fs.mkdir(framesDirectory, { recursive: true });
   const ffmpeg = config.ffmpeg ?? 'ffmpeg';
   const result = await runProcess(ffmpeg, [
     '-hide_banner', '-loglevel', 'error', '-xerror', '-nostdin', '-n',
-    '-i', referencePath, '-map', '0:v:0', '-fps_mode', 'passthrough', '-start_number', '0',
+    '-i', referencePath, '-map', '0:v:0',
+    '-vf', `fps=${cacheKeyFps}:round=near`, '-fps_mode', 'cfr', '-start_number', '0',
     path.join(framesDirectory, `frame-%0${padding}d.png`)
   ], { timeoutMs: config.ingestion?.processTimeoutMs ?? 300_000 });
   if (result.exitCode !== 0) {
@@ -242,7 +258,8 @@ async function referenceFrames(jobDirectory, referencePath, referenceSha256, pla
   const files = (await fs.readdir(framesDirectory)).filter(name => name.endsWith('.png')).sort();
   if (files.length !== total) {
     throw new WorkflowError('QA_REFERENCE_FRAME_COUNT', 'Decoded reference frame count differs from the plan.', {
-      expected: total, actual: files.length
+      expected: total, actual: files.length, alignedTo: cacheKeyFps,
+      hint: 'Frames were resampled to the composition rate; a residual mismatch means the plan\'s fps and totalFrames disagree with the reference duration.'
     });
   }
   const hashes = {};
@@ -258,9 +275,32 @@ async function referenceFrames(jobDirectory, referencePath, referenceSha256, pla
   }
   await writeJsonState(metaPath, {
     schemaVersion: 1, referencePath, referenceSha256, frames: total, width: plan.project.width,
-    height: plan.project.height, padding, hashes, updatedAt: new Date().toISOString()
+    height: plan.project.height, padding, hashes, alignedTo: cacheKeyFps,
+    updatedAt: new Date().toISOString()
   });
   return { directory: framesDirectory, padding, count: total, cached: false, paths: expected };
+}
+
+/**
+ * A composition frame rate as the exact rational ffmpeg's `fps` filter expects.
+ *
+ * `plan.project.fps` is `{ num, den }`, and ffmpeg accepts `30000/1001` verbatim. Keeping
+ * it rational rather than converting to `29.97` matters: 29.97 is 2997/100, which is not
+ * 30000/1001, and a 1001-frame sequence resampled against the wrong rational drifts by a
+ * whole frame — precisely the rounding error this alignment step exists to remove.
+ *
+ * @param {{ num: number, den: number }} fps
+ * @returns {string} e.g. `"30/1"` or `"30000/1001"`
+ */
+export function formatFps(fps) {
+  const num = Number(fps?.num);
+  const den = Number(fps?.den);
+  if (!Number.isSafeInteger(num) || num < 1 || !Number.isSafeInteger(den) || den < 1) {
+    throw new WorkflowError('QA_REFERENCE_FPS_INVALID', 'Composition frame rate is not a positive rational.', {
+      fps: fps ?? null
+    });
+  }
+  return `${num}/${den}`;
 }
 
 function probeReference(ffprobe, referencePath, { timeoutMs }) {

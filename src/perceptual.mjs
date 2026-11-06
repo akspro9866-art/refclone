@@ -20,7 +20,10 @@
  *                 strokeWidth and trim bounds need dedicated measurements and
  *                 stay untouched until that evidence exists)
  * - temporal   -> beat frames / stagger offsets / Bézier weights + angles
- * - appearance -> fills / gradients / blend modes / blur + shadow radii
+ * - appearance -> fills / gradients / blend modes / blur + shadow radii, and
+ *                 opacity once the silhouette has converged (a foreground /
+ *                 background contrast gap is the only alpha evidence a frame
+ *                 carries)
  *
  * Emits structured numeric correction deltas for iterative parameter refinement.
  */
@@ -46,6 +49,14 @@ const IOU_TARGET = 0.90;
 const CENTROID_OFFSET_TARGET = 0.02;
 const TIMING_DELTA_TARGET = 1; // frames
 const SSIM_TARGET = 0.88;
+
+// Tier-3 appearance evidence. Opacity is not directly observable in a frame, so
+// it is inferred from the foreground/background contrast inside the measured
+// box. A normalized gap below the target is within compositing noise; the
+// emitted delta is capped so one wrong inference cannot wipe an element out.
+const OPACITY_LUMA_DELTA_TARGET = 0.05;
+const OPACITY_DELTA_MAX = 0.5;
+const OPACITY_GAIN = 0.5;
 
 // Per-channel pass gates for the 3-channel diff vector (all configurable via
 // options.thresholds on computeThreeChannelDiff).
@@ -162,6 +173,54 @@ function toGrayscale(png) {
     gray[idx] = 0.299 * png.data[i] + 0.587 * png.data[i + 1] + 0.114 * png.data[i + 2];
   }
   return gray;
+}
+
+/**
+ * Foreground-vs-background luminance inside a measured bounding box.
+ *
+ * A composite is the only thing a frame can show: an element rendered at half
+ * opacity over a background is indistinguishable from a fill colour halfway
+ * between the two. The one number that survives the blend is contrast — the
+ * mean luma inside the box minus the mean luma outside it, normalized to the
+ * 8-bit range. Calling it "luminance" (rather than alpha) is honest about the
+ * evidence: a fill change moves the same number, which is why the correction it
+ * drives is bounded and damped as the weakest tier.
+ *
+ * @param {PNG|Object} frame
+ * @param {{x: number, y: number, width: number, height: number}} [box]
+ * @returns {{foreground: number, background: number, contrast: number}|null}
+ *   `contrast` is `(foreground - background) / 255`; null when the frame has no
+ *   pixels or the box covers no pixel of it.
+ */
+function regionLumaStats(frame, box) {
+  if (!isPixelFrame(frame) || !box) return null;
+  const x0 = Math.max(0, Math.floor(box.x));
+  const y0 = Math.max(0, Math.floor(box.y));
+  const x1 = Math.min(frame.width, Math.ceil(box.x + box.width));
+  const y1 = Math.min(frame.height, Math.ceil(box.y + box.height));
+  if (x1 <= x0 || y1 <= y0) return null;
+
+  let insideSum = 0;
+  let insideCount = 0;
+  let outsideSum = 0;
+  let outsideCount = 0;
+  for (let y = 0; y < frame.height; y++) {
+    for (let x = 0; x < frame.width; x++) {
+      const src = (y * frame.width + x) * 4;
+      const luma = 0.299 * frame.data[src] + 0.587 * frame.data[src + 1] + 0.114 * frame.data[src + 2];
+      if (x >= x0 && x < x1 && y >= y0 && y < y1) {
+        insideSum += luma;
+        insideCount++;
+      } else {
+        outsideSum += luma;
+        outsideCount++;
+      }
+    }
+  }
+  if (insideCount === 0 || outsideCount === 0) return null;
+  const foreground = insideSum / insideCount;
+  const background = outsideSum / outsideCount;
+  return { foreground, background, contrast: (foreground - background) / 255 };
 }
 
 function mean(arr) {
@@ -472,15 +531,26 @@ export function computeThreeChannelDiff(referenceFrame, renderedFrame, options =
  * pivot/strokeWidth/trim bounds are geometry-driven parameters that no current
  * metric can sign, so they are deliberately left untouched here.
  *
+ * Tier 3 APPEARANCE: `opacity` is produced only when the silhouette has already
+ * converged (both legacy gates and, when measured, silhouette IoU / chamfer
+ * pass) and the normalized foreground/background contrast gap exceeds
+ * `thresholds.opacityLumaDelta` (default 0.05). A positive gap means the render
+ * is too faint and opacity must rise. The delta keeps a 0.5 factor of the gap
+ * and is clamped to +/-0.5; the convergence layer then dampens it by the tier-3
+ * fraction. A luma gap on a misaligned silhouette is a geometry symptom, so it
+ * is never routed to opacity.
+ *
  * @param {Object} metrics - Comparison metrics (legacy gates plus optional
  *   channel metrics: silhouetteIoU, chamfer, flowDelta, labHistogramDiff,
- *   failedChannels)
+ *   lumaContrastDelta, failedChannels)
  * @param {Object} params - Additional parameters (referenceBox, renderedBox,
- *   frameWidth, frameHeight, referenceLabMean, renderedLabMean, thresholds)
+ *   frameWidth, frameHeight, referenceLabMean, renderedLabMean, thresholds;
+ *   `thresholds.opacityLumaDelta` overrides the tier-3 luma target)
  * @returns {Object} Structured correction deltas with additive
  *   temporalDeltas / appearanceDeltas sub-objects
  */
 export function computeCorrectionDeltas(metrics, params = {}) {
+  const thresholds = { ...DEFAULT_CHANNEL_THRESHOLDS, ...(params.thresholds ?? {}) };
   const deltas = {
     position: { x: 0, y: 0 },
     scale: { x: 1, y: 1 },
@@ -517,13 +587,35 @@ export function computeCorrectionDeltas(metrics, params = {}) {
     }
   }
 
-  // Timing correction
-  if (metrics.timingDelta !== undefined && !metrics.timingPass) {
+  // Timing correction. `computeTimingDelta` returns Infinity when either
+  // trajectory is empty, which means "not measured" rather than "infinitely
+  // late" - correcting by an infinite amount would be a fabricated number.
+  if (metrics.timingDelta !== undefined && !metrics.timingPass
+    && Number.isFinite(metrics.timingDelta)) {
     deltas.timing = -metrics.timingDelta * 0.5; // Conservative timing adjustment
   }
 
+  // ---- Opacity (tier 3, appearance) ----
+  // Only after the silhouette has converged: on a misaligned element a luma
+  // gap is a geometry symptom (background showing through the wrong shape),
+  // not evidence about alpha. Positive `lumaContrastDelta` means the rendered
+  // foreground sits below the reference contrast, i.e. opacity must rise.
+  const spatiallyAligned = metrics.iouPass !== false
+    && metrics.centroidPass !== false
+    && (metrics.silhouetteIoU === undefined || metrics.silhouetteIoU === null
+      || metrics.silhouetteIoU >= thresholds.silhouetteIoU)
+    && (metrics.chamfer === undefined || metrics.chamfer === null
+      || metrics.chamfer <= thresholds.chamfer);
+  const contrastGap = Number.isFinite(metrics.lumaContrastDelta) ? metrics.lumaContrastDelta : 0;
+  const contrastTarget = Number.isFinite(thresholds.opacityLumaDelta)
+    ? thresholds.opacityLumaDelta
+    : OPACITY_LUMA_DELTA_TARGET;
+  if (spatiallyAligned && Math.abs(contrastGap) > contrastTarget) {
+    deltas.opacity = Math.min(OPACITY_DELTA_MAX,
+      Math.max(-OPACITY_DELTA_MAX, contrastGap * OPACITY_GAIN));
+  }
+
   // ---- Channel-routed deltas (v2, additive) ----
-  const thresholds = { ...DEFAULT_CHANNEL_THRESHOLDS, ...(params.thresholds ?? {}) };
   const failed = Array.isArray(metrics.failedChannels) ? metrics.failedChannels : [];
   const flowFailed = Number.isFinite(metrics.flowDelta) && metrics.flowDelta > thresholds.flowDelta;
   const labFailed = Number.isFinite(metrics.labHistogramDiff) && metrics.labHistogramDiff > thresholds.labHistogramDiff;
@@ -580,6 +672,12 @@ export function computeCorrectionDeltas(metrics, params = {}) {
  * by frame index) supply the next-frame pairs for the optical-flow channel.
  * `overallPass` now also requires no failed channel; all legacy metric names
  * and gates are unchanged.
+ *
+ * Tier-3 opacity evidence is measured per frame as the mean luma inside the
+ * comparison's measured box minus the mean luma outside it (normalized by the
+ * 8-bit range). `metrics.lumaContrastDelta` averages the reference-minus-rendered
+ * gap; a positive value means the render is too faint. The correction is only
+ * emitted once the silhouette passes its gates, and is clamped to +/-0.5.
  *
  * @param {Object} params
  * @param {string} params.elementId
@@ -650,6 +748,9 @@ export function analyzeElementPerceptual({
   const sumReferenceLab = [0, 0, 0];
   const sumRenderedLab = [0, 0, 0];
   let countLabMeans = 0;
+  let sumReferenceContrast = 0;
+  let sumRenderedContrast = 0;
+  let countContrast = 0;
 
   for (let index = 0; index < comparisons.length; index++) {
     const comparison = comparisons[index];
@@ -714,6 +815,17 @@ export function analyzeElementPerceptual({
       }
       countLabMeans++;
     }
+
+    // Appearance evidence for the tier-3 opacity producer: contrast measured
+    // inside each frame's own measured box, so a shifted box compares the
+    // element against its own surroundings rather than against a stale region.
+    const referenceLuma = regionLumaStats(comparison.reference, comparison.referenceBox);
+    const renderedLuma = regionLumaStats(comparison.rendered, comparison.renderedBox);
+    if (referenceLuma && renderedLuma) {
+      sumReferenceContrast += referenceLuma.contrast;
+      sumRenderedContrast += renderedLuma.contrast;
+      countContrast++;
+    }
   }
 
   const frameCount = frameMetrics.length;
@@ -726,6 +838,14 @@ export function analyzeElementPerceptual({
   const avgFlowDelta = countFlow > 0 ? sumFlow / countFlow : null;
   const avgLabHistogramDiff = countLabDiff > 0 ? sumLabDiff / countLabDiff : null;
   const avgChannelSsim = countChannelSsim > 0 ? sumChannelSsim / countChannelSsim : null;
+
+  // Positive when the rendered foreground sits below the reference contrast,
+  // i.e. the render is too faint for its surroundings. Null when no frame pair
+  // carried decodable pixels and boxes, so an unmeasured signal never becomes a
+  // correction.
+  const avgReferenceContrast = countContrast > 0 ? sumReferenceContrast / countContrast : null;
+  const avgRenderedContrast = countContrast > 0 ? sumRenderedContrast / countContrast : null;
+  const lumaContrastDelta = countContrast > 0 ? avgReferenceContrast - avgRenderedContrast : null;
 
   // Timing comparison
   const timingMetrics = compareTrajectories({
@@ -777,13 +897,19 @@ export function analyzeElementPerceptual({
       chamfer: avgChamfer,
       flowDelta: avgFlowDelta,
       labHistogramDiff: avgLabHistogramDiff,
+      lumaContrastDelta,
       failedChannels
     },
     {
       frameWidth,
       frameHeight,
-      referenceBox: frameMetrics[0]?.referenceBox,
-      renderedBox: frameMetrics[0]?.renderedBox,
+      thresholds: thresholds3ch,
+      // The geometry correction needs the measured boxes. They live on the
+      // incoming comparisons: `compareFrames` returns metrics only, so reading
+      // them off `frameMetrics[0]` always yielded undefined and silently turned
+      // every position/scale correction into a no-op.
+      referenceBox: comparisons[0]?.referenceBox,
+      renderedBox: comparisons[0]?.renderedBox,
       referenceLabMean: countLabMeans > 0 ? [
         sumReferenceLab[0] / countLabMeans,
         sumReferenceLab[1] / countLabMeans,
@@ -806,7 +932,10 @@ export function analyzeElementPerceptual({
       averageCentroidOffset: avgCentroid,
       averageSSIM: avgSSIM,
       timingDelta: timingMetrics.timingDelta,
-      frameCount
+      frameCount,
+      // Tier-3 evidence: normalized foreground/background contrast gap.
+      // null when no frame pair carried decodable pixels and boxes.
+      lumaContrastDelta
     },
     thresholds: {
       iou: IOU_TARGET,

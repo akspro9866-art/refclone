@@ -30,5 +30,29 @@ export { PROMOTION_VERSION, analyzeScenePromotion, analyzeElement, compilePromot
 export { MG_COMPILER_VERSION, VERIFIED_PRESETS, compileShotScript } from './mg-compiler.mjs';
 export { PERCEPTUAL_VERSION, analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport } from './perceptual.mjs';
 
+// Stage 3.5: the _mg contract gate, run between compile and dispatch
+export {
+  MG_CONTRACT_VERSION,
+  MG_PUBLISHED_HELPERS,
+  MG_EMITTABLE_MACROS,
+  MG_PROPERTY_ALIASES,
+  resolveMgProperty,
+  resolveMgEasing,
+  normalizePresetAllowlist,
+  validateMgContract,
+  assertMgContract
+} from './mg-contract.mjs';
+
+// Convergence control for the refinement loop
+export {
+  CONVERGENCE_VERSION,
+  CONVERGENCE_TIERS,
+  CONVERGENCE_DEFAULTS,
+  loadConvergenceConfig,
+  perceptualScore,
+  dampCorrectionDeltas,
+  createConvergenceTracker
+} from './convergence.mjs';
+
 // CLI dispatcher (programmatic invocation)
 export { main as cliMain } from './cli.mjs';

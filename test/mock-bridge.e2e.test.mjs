@@ -231,3 +231,146 @@ test(
   })
   }
 )
+
+test(
+  'path-shaped introspection, semantic-id patch idempotency and snapshot loopback',
+  skipReason ? { skip: skipReason } : {},
+  async () => {
+  await withStack(async ({ client, baseUrl }) => {
+    const getJson = async (search) => (await fetch(`${baseUrl}${search}`)).json()
+
+    // A scene with three top-level layers: enough that paging has a real
+    // remainder, and enough that semantic ids must disambiguate.
+    const setup = await runScript(client, `
+      _mg.comp(160, 90, 24, 24, "#0a0a12");
+      var card = _mg.shape("rectangle", "Card", { "generator.dimensions": [40, 40], "material.materialColor": "#3399FF", position: [0, 0] });
+      var badge = _mg.shape("ellipse", "Badge", { "generator.dimensions": [20, 20], "material.materialColor": "#FFCC33", position: [30, 20] });
+      var mark = _mg.shape("rectangle", "Mark", { "generator.dimensions": [10, 10], "material.materialColor": "#FF4477", position: [-30, 20] });
+      _mg.keyframe({ element: card, property: "x", startFrame: 0, endFrame: 24, startValue: -20, endValue: 20 });
+      return { card: card, badge: badge, mark: mark };
+    `)
+    const card = setup.parsed.card
+    assert.ok(card, `setup failed: ${setup.text}`)
+
+    // ---- GET /state: a path-shaped readback of the write the _mg macro made ----
+    const at0 = await getJson('/state?frame=0&attrs=position.x,position.y')
+    assert.equal(at0.kind, 'state')
+    assert.equal(at0.ok, true, `readback failed: ${JSON.stringify(at0)}`)
+    assert.equal(at0.frame, 0)
+    const cardRow = at0.layers.find((row) => row.id === card)
+    assert.ok(cardRow, `/state did not describe the card layer: ${JSON.stringify(at0.layers).slice(0, 400)}`)
+    assert.equal(cardRow.attrs['position.x'], -20, 'the keyframe written through _mg must read back at its frame')
+    assert.equal(typeof cardRow.semanticId, 'string')
+    assert.match(cardRow.semanticId, /^card_\d+$/, 'semantic ids are slug + comp index')
+    const semanticId = cardRow.semanticId
+
+    // The same request at the other endpoint, and the playhead must be restored.
+    const playhead = async () => (await runScript(client, 'return { frame: api.getFrame() };')).parsed.frame
+    const before = await playhead()
+    const at24 = await getJson('/state?frame=24&attrs=position.x')
+    assert.equal(at24.layers.find((row) => row.id === card).attrs['position.x'], 20)
+    const mid = await getJson('/state?frame=12&attrs=position.x')
+    const midValue = mid.layers.find((row) => row.id === card).attrs['position.x']
+    assert.ok(midValue > -20 && midValue < 20, `frame 12 must interpolate, got ${midValue}`)
+    assert.equal(await playhead(), before, 'a readback must leave the playhead where it found it')
+
+    // ---- GET /layers: the paging contract, not just "everything" ----
+    const total = (await getJson('/layers?limit=1000')).total
+    assert.ok(total >= 3, `expected the three shapes to be listed, got total ${total}`)
+    const firstPage = await getJson('/layers?limit=1')
+    assert.equal(firstPage.kind, 'layers')
+    assert.equal(firstPage.offset, 0)
+    assert.equal(firstPage.returned, 1)
+    assert.equal(firstPage.truncated, true)
+    assert.equal(firstPage.nextOffset, 1)
+    const tail = await getJson(`/layers?offset=1&limit=${total}`)
+    assert.equal(tail.returned, total - 1)
+    assert.equal(tail.truncated, false)
+    assert.equal(tail.nextOffset, -1, 'a complete tail advertises no more work')
+    const ids = [...firstPage.layers.map((row) => row.id), ...tail.layers.map((row) => row.id)]
+    assert.equal(new Set(ids).size, total, 'pages must not overlap or drop layers')
+
+    // ---- _mg.patch addressed by the id /state just reported ----
+    const patch = async (spec) => (await runScript(client, `return _mg.patch(${JSON.stringify(spec)});`)).parsed
+    const written = await patch({ semantics: semanticId, attrs: { 'scale.x': 150 } })
+    assert.equal(written.patched, 1)
+    assert.equal(written.skipped.length, 0)
+    assert.equal(written.changes[0].id, card, 'the semantic id from /state must resolve to the same layer')
+    assert.equal(written.changes[0].semantic, semanticId, 'and report the id it resolved through')
+
+    const repeated = await patch({ semantics: semanticId, attrs: { 'scale.x': 150 } })
+    assert.equal(repeated.patched, 0, 're-applying an identical spec must not write twice')
+    assert.equal(repeated.skipped[0].reason, 'unchanged')
+    assert.equal(repeated.skipped[0].id, card)
+
+    // The value landed on the scene the readback walks, and a static write
+    // invented no keyframes.
+    const afterPatch = await getJson('/state?attrs=scale.x')
+    assert.equal(afterPatch.layers.find((row) => row.id === card).attrs['scale.x'], 150)
+    const staticTimes = await runScript(client, `return { times: api.getKeyframeTimes("${card}", "scale.x") };`)
+    assert.equal(staticTimes.parsed.times.length, 0, 'a diff-skipped static write must not keyframe the attribute')
+
+    // Frame-targeted writes always land (there is no value-at-frame getter to
+    // compare against) and must splice into the existing curve, not double it.
+    const framed = await patch({ semantics: semanticId, attrs: { 'position.x': 5 }, frame: 12 })
+    assert.equal(framed.patched, 1)
+    const framedTimes = await runScript(client, `return { times: api.getKeyframeTimes("${card}", "position.x") };`)
+    assert.deepEqual(framedTimes.parsed.times, [0, 12, 24])
+    await patch({ semantics: semanticId, attrs: { 'position.x': 5 }, frame: 12 })
+    assert.deepEqual(
+      (await runScript(client, `return { times: api.getKeyframeTimes("${card}", "position.x") };`)).parsed.times,
+      [0, 12, 24],
+      'a replayed frame write must not add keyframes'
+    )
+
+    // An unknown semantic id is a hard error, not a silent no-op: a refinement
+    // pass that patched nothing would otherwise report success.
+    const unknown = await client.callTool({
+      name: 'cavalry_run_script',
+      arguments: { code: `return _mg.patch({ semantics: "no_such_layer_99", attrs: { "scale.x": 1 } });` },
+    })
+    assert.ok(unknown.isError, 'patching an unresolvable semantic id must fail loudly')
+    assert.match(unknown.content.map((i) => i.text ?? '').join(''), /no layer in the active comp matches/)
+
+    // ---- /snapshot: render, verify in the same call, restore the playhead ----
+    const snapshot = await getJson('/snapshot?frame=12&fileName=refclone-e2e-a')
+    assert.equal(snapshot.kind, 'snapshot')
+    assert.equal(snapshot.ok, true, `snapshot failed: ${snapshot.error ?? JSON.stringify(snapshot).slice(0, 300)}`)
+    assert.equal(snapshot.frame, 12)
+    assert.equal(snapshot.exists, true)
+    assert.ok(snapshot.sizeBytes > 0, 'the file must be verified non-empty in the same call that wrote it')
+    assert.match(String(snapshot.contentHash), /^[0-9a-f]{64}$/, 'the mock hashes the bytes it wrote')
+    assert.equal(snapshot.restoredFrame, before, 'the snapshot must hand the playhead back')
+    assert.equal(await playhead(), before, 'and really did restore it')
+    assert.ok(snapshot.pngBase64, 'the mock returns pixels inline so callers need not poll the disk')
+
+    const inline = decodePng(snapshot.pngBase64)
+    assert.equal(inline.width, 160)
+    assert.equal(inline.height, 90)
+
+    // Same frame through the batch renderer: the two routes must agree exactly.
+    const renderAck = await (await fetch(`${baseUrl}/post`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'render-frames', seq: 'e2e-snapshot-check', frames: [12], resolutionScale: 1, format: 'png_buffer' }),
+    })).json()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const served = await getJson('/get')
+    const batch = served.kind === 'render-frames' ? served : renderAck
+    const batchFrame = decodePng(batch.rendered[0].bufferBase64)
+    assert.equal(meanAbsoluteError(batchFrame, inline), 0, '/snapshot and render-frames must render the same frame identically')
+
+    // Determinism across requests: the scene fingerprint of frame 12 repeats,
+    // and a different frame produces a different one.
+    const again = await getJson('/snapshot?frame=12&fileName=refclone-e2e-b')
+    assert.equal(again.frameHash, snapshot.frameHash, 'the same frame must fingerprint identically')
+    const other = await getJson('/snapshot?frame=6&fileName=refclone-e2e-c')
+    assert.notEqual(other.frameHash, snapshot.frameHash, 'a different frame of an animated comp must not collide')
+
+    // A snapshot without a frame is a typed error, not a 500.
+    const malformed = await getJson('/snapshot')
+    assert.equal(malformed.ok, false)
+    assert.equal(malformed.code, 'STALLION_NO_FRAME')
+  })
+  }
+)

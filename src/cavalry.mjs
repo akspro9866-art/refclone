@@ -6,6 +6,7 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import {
   WorkflowError, absolutePath, canonical, fileRecord, hashObject, readJson, writeJsonState
 } from './core.mjs';
+import { assertMgContract, validateMgContract } from './mg-contract.mjs';
 
 export const ADAPTER_VERSION = '1.0.0';
 
@@ -27,6 +28,7 @@ const MCP_ENV_KEYS = new Set([
   'CAVALRY_RESULT_PATH', 'CAVALRY_STATE_PATH'
 ]);
 const INSPECT_MODES = Object.freeze(['selection', 'roots']);
+const CONTRACT_MODES = Object.freeze(['strict', 'warn', 'off']);
 const PRIMITIVE_TYPES = Object.freeze(['rectangle']);
 const MAGIC_EASING_NAMES = Object.freeze([
   'SlowIn', 'SlowOut', 'SlowInSlowOut', 'VerySlowIn', 'VerySlowOut', 'VerySlowInVerySlowOut',
@@ -51,6 +53,32 @@ function requireString(value, label, { allowEmpty = false } = {}) {
 function requireOptionalString(value, label) {
   if (value === undefined || value === null) return null;
   return requireString(value, label);
+}
+
+/**
+ * How much `_mg` contract authority a dispatched script gets.
+ *
+ * A script that writes through the `_mg` macro surface is held to the same
+ * pre-flight contract the compiled promotion scripts pass (strict), because a
+ * violation there means a half-built scene or a silent easing substitution.
+ * A raw ad-hoc script is reported but never blocked (warn): it is not claiming
+ * to satisfy the macro contract, and its author is inspecting the report.
+ * `off` exists for scripts already covered by another gate.
+ *
+ * @param {string} script
+ * @param {string} [requested] - explicit `contractMode`
+ * @returns {'strict'|'warn'|'off'}
+ */
+function resolveContractMode(script, requested) {
+  if (requested === undefined || requested === null) {
+    return /_mg\./.test(script) ? 'strict' : 'warn';
+  }
+  if (!CONTRACT_MODES.includes(requested)) {
+    throw new WorkflowError('INVALID_PARAMETERS',
+      `contractMode must be one of ${CONTRACT_MODES.join(', ')}.`,
+      { field: 'contractMode', contractMode: requested });
+  }
+  return requested;
 }
 
 function requirePlainObject(value, label, { nonEmpty = false } = {}) {
@@ -1093,6 +1121,21 @@ export class CavalryAdapter {
         throw new WorkflowError('INVALID_PARAMETERS', 'Script exceeds the 1 MB adapter limit.');
       }
       if (!isPlainObject(options)) throw new WorkflowError('INVALID_PARAMETERS', 'Script options must be a plain object.');
+
+      // Stage 3.5 at the dispatch boundary: an agent-authored _mg script gets
+      // the same dry run the compiled promotion scripts pass, before anything
+      // reaches Cavalry's main thread. Only error-severity violations block a
+      // strict script; warnings (e.g. direct `api` use) are carried in the
+      // result so the author can read them without a failed run.
+      const contractMode = resolveContractMode(code, options.contractMode);
+      let contract = null;
+      if (contractMode !== 'off') {
+        contract = validateMgContract({ script: code });
+        if (contractMode === 'strict') {
+          assertMgContract(contract, { operation: 'runScript', contractMode, stage: 'pre_dispatch' });
+        }
+      }
+
       const call = await this._callTool(MCP_TOOL_NAMES.runScript, { code }, {
         timeoutMs: options.timeoutMs ?? this.config.timeoutMs,
         readOnly: options.readOnly === true
@@ -1105,7 +1148,9 @@ export class CavalryAdapter {
         text: call.text,
         parsed: call.parsed,
         telemetry: call.telemetry,
-        durationMs: call.durationMs
+        durationMs: call.durationMs,
+        contractMode,
+        contract
       };
     });
   }

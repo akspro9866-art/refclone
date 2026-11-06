@@ -307,6 +307,70 @@ describe('perceptual: correction deltas', () => {
   });
 });
 
+describe('perceptual: tier 3 opacity correction', () => {
+  const box = { x: 16, y: 16, width: 32, height: 32 };
+  const background = { r: 20, g: 20, b: 20 };
+  const scene = (foreground, foregroundBox = box) => makeFrame(64, 64, (x, y) => (
+    x >= foregroundBox.x && x < foregroundBox.x + foregroundBox.width
+      && y >= foregroundBox.y && y < foregroundBox.y + foregroundBox.height
+      ? foreground
+      : background
+  ));
+
+  const analyze = (reference, rendered, renderedBox = box) => analyzeElementPerceptual({
+    elementId: 'opacity-element',
+    frameComparisons: [{ frame: 0, reference, rendered, referenceBox: box, renderedBox }],
+    referenceTrajectory: [{ frame: 0, value: 0 }],
+    renderedTrajectory: [{ frame: 0, value: 0 }],
+    frameWidth: 64,
+    frameHeight: 64,
+    fps: 24
+  });
+
+  it('turns a contrast gap on an aligned silhouette into a bounded opacity delta', () => {
+    const result = analyze(scene({ r: 220, g: 220, b: 220 }), scene({ r: 120, g: 120, b: 120 }));
+
+    // Contrast gap: (220 - 20)/255 - (120 - 20)/255 = 100/255.
+    assert.ok(Math.abs(result.metrics.lumaContrastDelta - 100 / 255) < 1e-12);
+    // The correction takes half the gap and stays well inside the +/-0.5 bound.
+    assert.ok(Math.abs(result.correctionDeltas.opacity - 50 / 255) < 1e-12);
+    assert.ok(result.correctionDeltas.opacity > 0, 'a faint render must raise opacity');
+    assert.deepEqual(result.correctionDeltas.position, { x: 0, y: 0 });
+    assert.equal(result.correctionDeltas.scale.x, 1);
+    assert.equal(result.channels.failedChannels.includes('geometry'), false);
+  });
+
+  it('emits nothing when the two frames share the same contrast', () => {
+    const reference = scene({ r: 220, g: 220, b: 220 });
+    const result = analyze(reference, scene({ r: 220, g: 220, b: 220 }));
+
+    assert.equal(result.metrics.lumaContrastDelta, 0);
+    assert.equal(result.correctionDeltas.opacity, 0);
+  });
+
+  it('keeps a luma gap on a misaligned silhouette out of the opacity channel', () => {
+    const result = analyze(
+      scene({ r: 220, g: 220, b: 220 }),
+      scene({ r: 120, g: 120, b: 120 }),
+      { x: 40, y: 16, width: 32, height: 32 }
+    );
+
+    assert.ok(result.metrics.lumaContrastDelta > 0.05, 'the luma gap is still measured');
+    assert.equal(result.correctionDeltas.opacity, 0, 'geometry misalignment is not an alpha symptom');
+  });
+
+  it('clamps the direct delta to +/-0.5 and ignores a sub-threshold gap', () => {
+    const aligned = { iouPass: true, centroidPass: true };
+    assert.equal(computeCorrectionDeltas({ ...aligned, lumaContrastDelta: 5 }, {}).opacity, 0.5);
+    assert.equal(computeCorrectionDeltas({ ...aligned, lumaContrastDelta: -5 }, {}).opacity, -0.5);
+    assert.equal(computeCorrectionDeltas({ ...aligned, lumaContrastDelta: 0.04 }, {}).opacity, 0);
+    assert.equal(
+      computeCorrectionDeltas({ iouPass: false, centroidPass: true, lumaContrastDelta: 0.4 }, {}).opacity,
+      0
+    );
+  });
+});
+
 describe('perceptual: element analysis', () => {
   it('analyzes perceptual quality across frames', () => {
     const reference = createTestPNG(100, 100, { r: 128, g: 128, b: 128 });
@@ -368,6 +432,72 @@ describe('perceptual: element analysis', () => {
 
     assert.equal(result.metrics.frameCount, 0);
     assert.equal(result.metrics.averageIoU, 0);
+  });
+
+  it('routes the measured boxes into the geometry correction', () => {
+    const reference = createTestPNG(100, 100, { r: 128, g: 128, b: 128 });
+    const rendered = createTestPNG(100, 100, { r: 128, g: 128, b: 128 });
+
+    // The same silhouette, displaced by 20px on both axes: equal areas, so the
+    // scale correction is identity and any position correction can only come
+    // from the boxes on the comparison. `compareFrames` returns metrics only, so
+    // reading the boxes back off frameMetrics silently produced a no-op.
+    const result = analyzeElementPerceptual({
+      elementId: 'offset-element',
+      frameComparisons: [
+        {
+          frame: 0,
+          reference,
+          rendered,
+          referenceBox: { x: 10, y: 10, width: 80, height: 80 },
+          renderedBox: { x: 30, y: 30, width: 80, height: 80 }
+        }
+      ],
+      referenceTrajectory: [{ frame: 0, value: 0 }, { frame: 10, value: 10 }],
+      renderedTrajectory: [{ frame: 0, value: 0 }, { frame: 10, value: 10 }],
+      frameWidth: 1920,
+      frameHeight: 1080,
+      fps: 24
+    });
+
+    assert.equal(result.metrics.averageCentroidOffset > 0.02, true, 'the fixture must miss the centroid gate');
+    assert.deepEqual(result.correctionDeltas.position, { x: -10, y: -10 }, 'half the centroid displacement');
+    assert.deepEqual(result.correctionDeltas.scale, { x: 1, y: 1 }, 'equal areas cannot imply a scale change');
+  });
+
+  it('does not turn an unmeasured trajectory into an infinite timing correction', () => {
+    const reference = createTestPNG(100, 100, { r: 128, g: 128, b: 128 });
+    const rendered = createTestPNG(100, 100, { r: 128, g: 128, b: 128 });
+
+    // `computeTimingDelta` returns Infinity when either trajectory is empty.
+    // That reads as "no render was measured", so the gate must report no
+    // correction rather than an unbounded one the caller would clamp silently.
+    const result = analyzeElementPerceptual({
+      elementId: 'unmeasured-timing',
+      frameComparisons: [
+        {
+          frame: 0,
+          reference,
+          rendered,
+          referenceBox: { x: 10, y: 10, width: 80, height: 80 },
+          renderedBox: { x: 10, y: 10, width: 80, height: 80 }
+        }
+      ],
+      referenceTrajectory: [{ frame: 0, value: 0 }, { frame: 10, value: 10 }],
+      renderedTrajectory: [],
+      frameWidth: 1920,
+      frameHeight: 1080,
+      fps: 24
+    });
+
+    assert.equal(result.metrics.timingDelta, Infinity);
+    assert.equal(result.needsRefinement, true);
+    assert.equal(result.correctionDeltas.timing, 0);
+    assert.equal(Number.isFinite(result.correctionDeltas.timing), true);
+    // The channel-routed temporal delta is derived from the same lag, so it has
+    // nothing to work from either.
+    assert.equal(Math.abs(result.correctionDeltas.temporalDeltas.beatFrames), 0);
+    assert.equal(Math.abs(result.correctionDeltas.temporalDeltas.staggerOffset), 0);
   });
 });
 

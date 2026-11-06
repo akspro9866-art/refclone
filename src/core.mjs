@@ -252,6 +252,40 @@ export async function fileRecord(filePath) {
   return { path: resolved, sha256: await hashFile(resolved) };
 }
 
+/**
+ * Remove a scratch or cache tree, tolerating the Windows handle locks that make a
+ * plain `fs.rm` throw.
+ *
+ * Two things hold a decoded PNG open here: ffmpeg may still be in the middle of
+ * closing its own descriptors even though `runProcess` resolved on `close`, and an
+ * antivirus scanner opens freshly written files asynchronously. Both refusals are
+ * transient. `EBUSY`/`EPERM` from a *cache rebuild* is not a pipeline failure — the
+ * cache is derived data that the next stage regenerates — so spend a bounded budget
+ * on retries instead. A tree that is already gone is success.
+ *
+ * This is deliberately for derived trees only. Durable job state is never removed as
+ * a fallback; `replaceStateFile` above retries an atomic rename and refuses to unlink
+ * the destination, which is the correct asymmetry.
+ *
+ * @param {string} directory tree to remove
+ * @param {{ maxRetries?: number, retryDelay?: number }} [options]
+ * @returns {Promise<number>} attempts used (1 means it went cleanly)
+ */
+export async function removeTree(directory, { maxRetries = 5, retryDelay = 150 } = {}) {
+  const transient = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY', 'EAGAIN', 'ETIMEDOUT', 'UNKNOWN']);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await fs.rm(directory, { recursive: true, force: true, maxRetries, retryDelay });
+      return attempt + 1;
+    } catch (error) {
+      if (error?.code === 'ENOENT') return attempt + 1;
+      if (!transient.has(error?.code)) throw error;
+      if (attempt >= maxRetries) throw error;
+      await delay(retryDelay);
+    }
+  }
+}
+
 export async function verifyFiles(records) {
   if (!Array.isArray(records)) return false;
   for (const record of records) {

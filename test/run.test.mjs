@@ -6,12 +6,12 @@ import path from 'node:path';
 import {
   RUN_VERSION, discoverBuiltScene, buildCacheKey, renderCacheKey, listStageEntries, runPipeline
 } from '../src/run.mjs';
-import { hashFile, hashObject, writeJsonState } from '../src/core.mjs';
+import { hashFile, hashObject, removeTree, writeJsonState } from '../src/core.mjs';
 import { RENDER_VERSION } from '../src/render.mjs';
 
 async function temporaryDirectory(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'refclone-run-'));
-  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  t.after(() => removeTree(directory));
   return directory;
 }
 
