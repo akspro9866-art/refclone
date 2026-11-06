@@ -36,15 +36,23 @@ const GENERIC_SURFACE = [
   'docs/TROUBLESHOOTING.md', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md'
 ];
 const SKIP_DIRECTORIES = new Set(['.git', 'node_modules', 'jobs', '.test-work', 'assets']);
+// Machine-local output of the live integration run. The directory is gitignored,
+// and its whole point is to record this machine's absolute paths, so scanning it
+// can only fail on the contributor's own evidence trail.
+const SKIP_PATHS = new Set(['integration/evidence']);
 // This file necessarily spells the patterns out; scanning it would be self-referential.
 const SELF = '.github/scripts/privacy-scan.mjs';
 
+const relativePosix = value => value.replaceAll(path.sep, '/');
 const walk = async (directory, files = []) => {
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (!SKIP_DIRECTORIES.has(entry.name)) await walk(path.join(directory, entry.name), files);
+      if (SKIP_DIRECTORIES.has(entry.name)) continue;
+      if (SKIP_PATHS.has(relativePosix(path.relative('.', entryPath)))) continue;
+      await walk(entryPath, files);
     } else if (/\.(mjs|cjs|js|json|md|toml|jsonc|ya?ml|yml|sh)$/i.test(entry.name)) {
-      files.push(path.join(directory, entry.name));
+      files.push(entryPath);
     }
   }
   return files;
