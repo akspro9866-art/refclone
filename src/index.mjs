@@ -22,12 +22,12 @@ export {
   runClosedLoopProceduralPipeline,
   applyCorrectionDeltas,
   generateProceduralReport
-} from './procedural-pipeline.mjs';
+} from './procedural/procedural-pipeline.mjs';
 
 // Individual stage modules (re-exported for granular use)
 export {
   TRACKING_VERSION, trackElement, trackShot, toPromotionInput, normalizeElementLayout
-} from './tracking.mjs';
+} from './vision/tracking.mjs';
 export {
   CRITICAL_FRAMES_VERSION,
   CRITICAL_FRAME_ROLES,
@@ -35,10 +35,10 @@ export {
   analyzeCriticalTrajectory,
   analyzeElementCriticalFrames,
   detectCriticalFrames
-} from './critical-frames.mjs';
-export { PROMOTION_VERSION, analyzeScenePromotion, analyzeElement, compilePromotionToScript } from './promotion.mjs';
-export { MG_COMPILER_VERSION, VERIFIED_PRESETS, compileShotScript, compileLayoutToMgDSL } from './mg-compiler.mjs';
-export { PERCEPTUAL_VERSION, analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport } from './perceptual.mjs';
+} from './vision/critical-frames.mjs';
+export { PROMOTION_VERSION, analyzeScenePromotion, analyzeElement, compilePromotionToScript } from './cavalry/promotion.mjs';
+export { MG_COMPILER_VERSION, VERIFIED_PRESETS, compileShotScript, compileLayoutToMgDSL } from './cavalry/mg-compiler.mjs';
+export { PERCEPTUAL_VERSION, analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport } from './vision/perceptual.mjs';
 
 // Stage 3.5: the _mg contract gate, run between compile and dispatch
 export {
@@ -51,7 +51,7 @@ export {
   normalizePresetAllowlist,
   validateMgContract,
   assertMgContract
-} from './mg-contract.mjs';
+} from './cavalry/mg-contract.mjs';
 
 // Convergence control for the refinement loop
 export {
@@ -62,7 +62,7 @@ export {
   perceptualScore,
   dampCorrectionDeltas,
   createConvergenceTracker
-} from './convergence.mjs';
+} from './vision/convergence.mjs';
 
 // 120-preset catalog index and deterministic Stage 3 matching report
 export {
@@ -83,7 +83,7 @@ export {
   loadPresetManifest,
   tryLoadPresetManifest,
   clearPresetManifestCache
-} from './preset-index.mjs';
+} from './cavalry/preset-index.mjs';
 
 // Read-only Stallion client for Stage 5 evidence (snapshot-batch + decoding)
 export {
@@ -94,7 +94,7 @@ export {
   decodeSnapshotFrame,
   decodeSnapshotBatch,
   captureCriticalFrames
-} from './stallion-batch.mjs';
+} from './cavalry/stallion-batch.mjs';
 
 // Zero-token atomic Stage 5 gate and deterministic _mg.patch correction
 export {
@@ -110,7 +110,7 @@ export {
   buildAtomicPatchScript,
   runAtomicConvergence,
   createStage5Adapters
-} from './atomic-convergence.mjs';
+} from './vision/atomic-convergence.mjs';
 
 // CLI dispatcher (programmatic invocation)
 export { main as cliMain } from './cli.mjs';

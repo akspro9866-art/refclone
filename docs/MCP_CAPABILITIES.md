@@ -21,8 +21,8 @@ Real success and deliberate non-mutating error responses were recorded during th
 ## Source and transport
 
 - `<CAVALRY_MCP>/src/index.ts:22–51`: registration, stdio transport; response/error wrapping at 12–18.
-- `<CAVALRY_MCP>/src/stallion.ts:206–232`: `runScriptWithExecution`, actual HTTP bridge, UUID correlation and state snapshots.
-- `<CAVALRY_MCP>/src/stallion.ts:99–122`: POST payload; `182–198`: GET result correlation; `65–70`: per-process queue; `53–54`: default timeouts.
+- `<CAVALRY_MCP>/src/bridge/stallion.ts:206–232`: `runScriptWithExecution`, actual HTTP bridge, UUID correlation and state snapshots.
+- `<CAVALRY_MCP>/src/bridge/stallion.ts:99–122`: POST payload; `182–198`: GET result correlation; `65–70`: per-process queue; `53–54`: default timeouts.
 - `<CAVALRY_MCP>/src/runtime/atomic.ts`: one Undo group and helper injection, not rollback.
 - `<STALLION>/src/cavalry/modules/Callbacks.ts`: native Cavalry WebServer dispatch and results.
 

@@ -2,14 +2,15 @@
 // actually produces. A suite claim is a promise to the person deciding whether to trust
 // this engine, so it is checked here rather than remembered by whoever edited a README.
 //
-// Discovery is scoped to test/*.test.mjs (the same pattern `npm test` uses): a bare
+// Discovery walks the grouped test/ tree (the same set `npm test` runs): a bare
 // `node --test` would recurse into the checked-out sibling stack in CI and count
-// its tests too. With this pattern every runner entry is a real test file, so the
-// honest number is the runner's total as-is.
+// its tests too. With this discovery every runner entry is a real test file, so
+// the honest number is the runner's total as-is.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { discoverTests } from '../../test/discover.mjs';
 
 const repo = path.resolve(import.meta.dirname, '..', '..');
 
@@ -32,9 +33,9 @@ async function walk(directory) {
 
 function runSuite() {
   return new Promise((resolve, reject) => {
-    // The runner expands the glob itself (Node >= 22), so quoted-file names
-    // cannot leak through the shell on any platform.
-    const child = spawn(process.execPath, ['--test', '--test-reporter=tap', 'test/*.test.mjs'], { cwd: repo, env: { ...process.env } });
+    // Explicit files keep the invocation independent of shell glob semantics.
+    const testFiles = discoverTests(path.join(repo, 'test'));
+    const child = spawn(process.execPath, ['--test', '--test-reporter=tap', ...testFiles], { cwd: repo, env: { ...process.env } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; });

@@ -12,7 +12,7 @@ node src/cli.mjs plan <shot-spec.json> --manifest <asset-manifest.json> --tokens
 
 The shot-spec review must be confirmed. All three inputs must share the source
 hash, and design validation must have zero errors. The default capability source
-is the adapter catalog (`src/cavalry.mjs`); a supplied report is recorded as
+is the adapter catalog (`src/cavalry/cavalry.mjs`); a supplied report is recorded as
 `capability_report`. The default target rate is the source rate.
 
 ## Timeline model
@@ -103,6 +103,6 @@ that job's history as evidence of the pre-correction state.
 16-frame two-shot clip, runs the CV pass, confirms both gates and compiles
 `design-generic`/`plan-generic` artifacts, asserting that the plan validates against
 `schemas/scene-plan.schema.json` and that an untranscribed, font-less reference stays
-blocked instead of being guessed (see `test/generic-run.test.mjs`,
-`test/generic.test.mjs`). That is the only planning claim in this repository you can verify
+blocked instead of being guessed (see `test/pipeline/generic-run.test.mjs`,
+`test/design/generic.test.mjs`). That is the only planning claim in this repository you can verify
 without supplying footage.

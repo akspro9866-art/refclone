@@ -46,9 +46,9 @@ npm test                     # the whole suite, no Cavalry required
 npm run verify:docs          # the test counts quoted in the docs still match the runner
 ```
 
-`npm test` uses `node --test`, which discovers every file in `test/`.
-`test/fixtures.mjs` is a shared helper module, so the runner also lists it as a
-file-level entry: one extra line in the summary is expected, not a hidden test.
+`npm test` uses `node test/run-tests.mjs`, which recursively collects every `*.test.mjs`
+under the grouped `test/` tree. Shared helpers such as `test/helpers/fixtures.mjs` are
+imported by suites, not executed as their own entries.
 
 Tests build synthetic videos with FFmpeg instead of shipping footage, so they
 need `ffmpeg` and `ffprobe` on `PATH` — `choco install ffmpeg -y`, the same route

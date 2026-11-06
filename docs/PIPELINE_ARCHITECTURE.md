@@ -11,18 +11,18 @@ The configured server remains `<CAVALRY_MCP>/dist/index.js`. A single client inv
 | Module | Responsibility |
 |---|---|
 | `src/core.mjs` | Structured errors, canonical JSON/hash, subprocess argument arrays/timeouts, atomic versioned artifacts, validation and exclusive job lock |
-| `src/media.mjs` | ffprobe metadata/frame timestamps, FFmpeg scene candidates, bounded keyframe sampling, contact sheets, optional audio-energy artifact and deterministic cache |
-| `src/analysis.mjs` | Image measurements and evidence-backed review import; never infer exact fonts/easing or silently fill missing copy |
-| `src/assets.mjs` | File/font metadata, hashes, source and license status, requirements/missing assets, replacement validation |
-| `src/design.mjs` | Named evidence-backed tokens, only required components, verified animation presets |
-| `src/planner.mjs` | Pure deterministic compile of approved specification/assets/tokens/capabilities into a validated scene plan, rational frame mapping, dry-run report and content-hash cache |
-| `src/cavalry.mjs` | Existing MCP discovery/validation, serialized script execution, structured errors, readback, unique checkpoint paths, stable layer identities |
-| `src/build.mjs` | Static composition before animation; checkpointed idempotent per-shot operation batches; reconcile instead of blindly retrying |
-| `src/render.mjs` | Native Cavalry frame requests into new directories, completion/decode/hash checks, frame-index manifest, external FFmpeg encoding |
-| `src/qa.mjs` | Timestamp-aligned image/layout/color/timing checks, explicit discrepancy evidence and configurable calibrated thresholds |
+| `src/ingest/media.mjs` | ffprobe metadata/frame timestamps, FFmpeg scene candidates, bounded keyframe sampling, contact sheets, optional audio-energy artifact and deterministic cache |
+| `src/ingest/analysis.mjs` | Image measurements and evidence-backed review import; never infer exact fonts/easing or silently fill missing copy |
+| `src/design/assets.mjs` | File/font metadata, hashes, source and license status, requirements/missing assets, replacement validation |
+| `src/design/design.mjs` | Named evidence-backed tokens, only required components, verified animation presets |
+| `src/design/planner.mjs` | Pure deterministic compile of approved specification/assets/tokens/capabilities into a validated scene plan, rational frame mapping, dry-run report and content-hash cache |
+| `src/cavalry/cavalry.mjs` | Existing MCP discovery/validation, serialized script execution, structured errors, readback, unique checkpoint paths, stable layer identities |
+| `src/pipeline/build.mjs` | Static composition before animation; checkpointed idempotent per-shot operation batches; reconcile instead of blindly retrying |
+| `src/pipeline/render.mjs` | Native Cavalry frame requests into new directories, completion/decode/hash checks, frame-index manifest, external FFmpeg encoding |
+| `src/pipeline/qa.mjs` | Timestamp-aligned image/layout/color/timing checks, explicit discrepancy evidence and configurable calibrated thresholds |
 | `src/correction.mjs` | Highest-priority high-confidence minimal patches, preconditions, iteration/history, affected-shot rerender and regression checks |
-| `src/export.mjs` | Save final editable scene, probe real output, expected shots/streams/frame count/dimensions/duration, black/empty segment review and final QA |
-| `src/pipeline.mjs`, `src/cli.mjs` | Configuration, stage DAG, persistence/resume, stage and shot controls, dry-run without scene edits |
+| `src/pipeline/export.mjs` | Save final editable scene, probe real output, expected shots/streams/frame count/dimensions/duration, black/empty segment review and final QA |
+| `src/pipeline/run.mjs`, `src/cli.mjs` | Configuration, stage DAG, persistence/resume, stage and shot controls, dry-run without scene edits |
 
 Modules not implemented yet are planned interfaces, not working commands. Do not add a placeholder that returns success.
 

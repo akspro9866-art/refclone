@@ -87,7 +87,7 @@ jobs:
       - name: npm test
         run: npm test
         env:
-          # With the sibling stack built, test/mock-bridge.e2e.test.mjs runs as
+          # With the sibling stack built, test/e2e/mock-bridge.e2e.test.mjs runs as
           # a hard gate; without it the e2e skips deterministically.
           STALLION_PATH: ${{ github.workspace }}/stack/stallion
           CAVALRY_MCP_PATH: ${{ github.workspace }}/stack/cavalry-mcp

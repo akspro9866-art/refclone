@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ingest } from './media.mjs';
-import { analyzeReference } from './analysis.mjs';
-import { registerAssets } from './assets.mjs';
-import { registerResolvedInputs } from './resolve.mjs';
-import { registerDesign } from './design.mjs';
-import { registerScenePlan, parseFps } from './planner.mjs';
-import { autoAnalyze } from './autoanalyze.mjs';
-import { registerGenericDesign, registerGenericScenePlan } from './generic-planner.mjs';
-import { buildScene } from './build.mjs';
-import { renderVideo } from './render.mjs';
-import { runQa } from './qa.mjs';
-import { exportFinal } from './export.mjs';
-import { runPipeline } from './run.mjs';
+import { ingest } from './ingest/media.mjs';
+import { analyzeReference } from './ingest/analysis.mjs';
+import { registerAssets } from './design/assets.mjs';
+import { registerResolvedInputs } from './pipeline/resolve.mjs';
+import { registerDesign } from './design/design.mjs';
+import { registerScenePlan, parseFps } from './design/planner.mjs';
+import { autoAnalyze } from './ingest/autoanalyze.mjs';
+import { registerGenericDesign, registerGenericScenePlan } from './design/generic-planner.mjs';
+import { buildScene } from './pipeline/build.mjs';
+import { renderVideo } from './pipeline/render.mjs';
+import { runQa } from './pipeline/qa.mjs';
+import { exportFinal } from './pipeline/export.mjs';
+import { runPipeline } from './pipeline/run.mjs';
 import { readJson, WorkflowError } from './core.mjs';
 import {
   runProceduralPipeline, runClosedLoopProceduralPipeline,
   applyCorrectionDeltas, generateProceduralReport
-} from './procedural-pipeline.mjs';
+} from './procedural/procedural-pipeline.mjs';
 
 const HELP = `refclone - reference-faithful video cloning (qualified commands only)
 

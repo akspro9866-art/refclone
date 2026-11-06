@@ -7,17 +7,22 @@ import { execFileSync } from 'node:child_process';
 
 const roots = ['src', 'test', 'tools', 'integration', '.github/scripts'];
 const files = [];
-for (const root of roots) {
+
+async function walk(root) {
   let entries;
   try {
     entries = await fs.readdir(root, { withFileTypes: true });
   } catch {
-    continue;
+    return;
   }
   for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith('.mjs')) files.push(path.join(root, entry.name));
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) await walk(full);
+    else if (entry.isFile() && entry.name.endsWith('.mjs')) files.push(full);
   }
 }
+
+for (const root of roots) await walk(root);
 if (files.length === 0) {
   console.error('syntax-check: found no modules to check');
   process.exit(1);

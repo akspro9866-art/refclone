@@ -175,5 +175,5 @@ Include, in this order:
 
 Do **not** attach the reference video, extracted frames, renders or `.cv` projects: they are
 somebody else's work, and the hashes plus reports are normally enough to find the fault. If a
-maintainer genuinely needs a frame, reproduce it with the synthetic clip in `test/fixtures.mjs`
+maintainer genuinely needs a frame, reproduce it with the synthetic clip in `test/helpers/fixtures.mjs`
 first — most gate and planning bugs reproduce there without any real footage.

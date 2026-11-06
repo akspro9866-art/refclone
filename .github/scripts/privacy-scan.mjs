@@ -31,7 +31,8 @@ const BRAND = [
 // Reference-agnostic: what a fresh clone uses for any video.
 const GENERIC_SURFACE = [
   'config.json', 'config.generic-template.json',
-  'src/catalog.mjs', 'src/autoanalyze.mjs', 'src/generic-design.mjs', 'src/generic-planner.mjs',
+  'src/design/catalog.mjs', 'src/ingest/autoanalyze.mjs',
+  'src/design/generic-design.mjs', 'src/design/generic-planner.mjs',
   '.qoder/skills/generic-clone/SKILL.md', 'docs/WORKFLOW.md', 'docs/IDE_SETUP.md',
   'docs/TROUBLESHOOTING.md', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md'
 ];

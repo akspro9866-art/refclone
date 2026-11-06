@@ -17,8 +17,8 @@ no animation preset claims an unverified Cavalry behavior.
 - Token run: `jobs/<source-hash-16>/design/<key>/<run>/` (legacy profile) or
   `…/design-generic/<key>/<run>/` (generic profile), holding `design-tokens.json`,
   `design-validation.json` and the cache `index.json`.
-- Generator: `src/design.mjs` and `src/generic-design.mjs`; schema:
-  `schemas/design-tokens.schema.json`; tests: `test/design.test.mjs`, `test/generic.test.mjs`.
+- Generator: `src/design/design.mjs` and `src/design/generic-design.mjs`; schema:
+  `schemas/design-tokens.schema.json`; tests: `test/design/design.test.mjs`, `test/design/generic.test.mjs`.
 
 ## Design tokens (49)
 

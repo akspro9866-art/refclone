@@ -18,19 +18,19 @@
 The pipeline transforms reference videos into editable Cavalry scenes through procedural promotion rather than frame-baked keyframes.
 
 ### Stage 1: Temporal Beat & Cut Segmentation
-- **Module**: `src/media.mjs`, `src/autoanalyze.mjs`
+- **Module**: `src/ingest/media.mjs`, `src/ingest/autoanalyze.mjs`
 - **Purpose**: Normalize input to CFR, compute optical flow deltas, segment motion into semantic beats
 - **Output**: `shot-boundaries` artifact with candidate cuts and reviewed shots
 - **Key Functions**: `ingestMedia()`, `detectShotBoundaries()`, `sampleKeyframes()`
 
 ### Stage 2: Decoupled Static Layout & Kinematic Tracking
-- **Module**: `src/tracking.mjs`, `src/analysis.mjs`
+- **Module**: `src/vision/tracking.mjs`, `src/ingest/analysis.mjs`
 - **Purpose**: Extract static layer hierarchy at rest frames; extract normalized trajectories (x, y, scale_x, scale_y, rotation, opacity)
 - **Output**: Tracking analysis with static layout and motion trajectories
 - **Key Functions**: `extractStaticLayout()`, `extractTrajectories()`, `segmentMotionBeats()`, `trackElement()`, `trackShot()`
 
 ### Stage 3: Procedural Promotion Solver
-- **Module**: `src/promotion.mjs`
+- **Module**: `src/cavalry/promotion.mjs`
 - **Purpose**: Fit trajectories to procedural behaviors instead of raw keyframes
 - **Promotions**:
   - **Cubic-Bezier**: Smooth monotonic transitions (RMSE <= 0.015)
@@ -40,7 +40,7 @@ The pipeline transforms reference videos into editable Cavalry scenes through pr
 - **Key Functions**: `normalizeTrajectory()`, `fitCubicBezier()`, `fitDampedSpring()`, `detectDuplicatorPattern()`, `analyzeTrajectory()`, `analyzeScenePromotion()`
 
 ### Stage 4: _mg DSL Compilation & Atomic Undo
-- **Module**: `src/mg-compiler.mjs`
+- **Module**: `src/cavalry/mg-compiler.mjs`
 - **Purpose**: Compile promoted graph into Cavalry `_mg` DSL expressions bound to verified presets
 - **Features**:
   - 120 verified presets (spring, bezier, duplicator categories)
@@ -50,7 +50,7 @@ The pipeline transforms reference videos into editable Cavalry scenes through pr
 - **Key Functions**: `compilePromotionScript()`, `findMatchingPreset()`, `wrapAtomicUndo()`, `compileShotScript()`
 
 ### Stage 5: Closed-Loop Perceptual Diff Gate
-- **Module**: `src/perceptual.mjs`
+- **Module**: `src/vision/perceptual.mjs`
 - **Purpose**: Compare rendered frames against reference on 4 metrics
 - **Metrics**:
   - Bounding-Box IoU (target >= 0.90)
@@ -67,47 +67,47 @@ The pipeline transforms reference videos into editable Cavalry scenes through pr
 |--------|----------------|
 | `src/core.mjs` | Structured errors, canonical JSON/hash, atomic artifacts, job locks, subprocess control |
 | `src/cli.mjs` | Command-line interface, argument parsing, help system |
-| `src/run.mjs` | Pipeline orchestration, stage DAG, resume-first execution |
+| `src/pipeline/run.mjs` | Pipeline orchestration, stage DAG, resume-first execution |
 
 ### Media & Analysis
 | Module | Responsibility |
 |--------|----------------|
-| `src/media.mjs` | FFprobe metadata, FFmpeg scene detection, keyframe sampling, audio analysis |
-| `src/analysis.mjs` | Raster measurements, evidence-backed review import, draft specification |
-| `src/autoanalyze.mjs` | Automated CV first-pass, shot-spec proposal generation |
+| `src/ingest/media.mjs` | FFprobe metadata, FFmpeg scene detection, keyframe sampling, audio analysis |
+| `src/ingest/analysis.mjs` | Raster measurements, evidence-backed review import, draft specification |
+| `src/ingest/autoanalyze.mjs` | Automated CV first-pass, shot-spec proposal generation |
 
 ### Tracking & Promotion (5-Stage Pipeline)
 | Module | Responsibility |
 |--------|----------------|
-| `src/tracking.mjs` | **Stage 2**: Kinematic tracking, trajectory extraction, motion beat segmentation |
-| `src/promotion.mjs` | **Stage 3**: Procedural promotion solver (bezier, spring, duplicator) |
-| `src/mg-compiler.mjs` | **Stage 4**: _mg DSL compilation, preset binding, atomic undo |
-| `src/perceptual.mjs` | **Stage 5**: Perceptual diff gate, SSIM, IoU, correction deltas |
-| `src/procedural-pipeline.mjs` | **Orchestrator**: Wires Stages 1→5 into a single closed-loop call graph |
+| `src/vision/tracking.mjs` | **Stage 2**: Kinematic tracking, trajectory extraction, motion beat segmentation |
+| `src/cavalry/promotion.mjs` | **Stage 3**: Procedural promotion solver (bezier, spring, duplicator) |
+| `src/cavalry/mg-compiler.mjs` | **Stage 4**: _mg DSL compilation, preset binding, atomic undo |
+| `src/vision/perceptual.mjs` | **Stage 5**: Perceptual diff gate, SSIM, IoU, correction deltas |
+| `src/procedural/procedural-pipeline.mjs` | **Orchestrator**: Wires Stages 1→5 into a single closed-loop call graph |
 
 ### Wired procedural call graph
 
-`src/procedural-pipeline.mjs` is the single entry point that chains the five stages. The
+`src/procedural/procedural-pipeline.mjs` is the single entry point that chains the five stages. The
 flow is fixed and every artifact is schema-validated before it leaves the orchestrator:
 
 ```
 media/autoanalyze observations
         │
         ▼
-extractTrackingFromObservations()  ── calls trackShot() from src/tracking.mjs
+extractTrackingFromObservations()  ── calls trackShot() from src/vision/tracking.mjs
         │                            (motion beats, inflection frames, trajectories)
         ▼
 runProceduralPromotion()           ── calls toPromotionInput() + analyzeScenePromotion()
-        │                            from src/promotion.mjs; validates against
+        │                            from src/cavalry/promotion.mjs; validates against
         │                            schemas/procedural-promotion.schema.json
         ▼
-compileProceduralScript()          ── calls compileShotScript() from src/mg-compiler.mjs
+compileProceduralScript()          ── calls compileShotScript() from src/cavalry/mg-compiler.mjs
         │                            (atomic _mg.undoGroup("procedural-<shotId>"),
         │                             preset bindings from frozen VERIFIED_PRESETS)
         ▼
 runPerceptualDiffGate()            ── calls analyzeElementPerceptual() /
         │                            analyzeShotPerceptual() / generateRefinementReport()
-        │                            from src/perceptual.mjs; validates against
+        │                            from src/vision/perceptual.mjs; validates against
         │                            schemas/perceptual-diff.schema.json
         ▼
 correctionDeltas (position, scale, timing, opacity) feed the next Stage 3→4 iteration
@@ -127,30 +127,30 @@ read them — never hardcode a threshold at a new call site.
 ### Design & Planning
 | Module | Responsibility |
 |--------|----------------|
-| `src/design.mjs` | Design tokens, component verification, preset validation |
-| `src/generic-design.mjs` | Reference-agnostic design token generation |
-| `src/planner.mjs` | Scene plan compilation (legacy saas profile) |
-| `src/generic-planner.mjs` | Scene plan compilation (generic profile) |
-| `src/catalog.mjs` | Component catalog, preset matching, derived catalogs |
+| `src/design/design.mjs` | Design tokens, component verification, preset validation |
+| `src/design/generic-design.mjs` | Reference-agnostic design token generation |
+| `src/design/planner.mjs` | Scene plan compilation (legacy saas profile) |
+| `src/design/generic-planner.mjs` | Scene plan compilation (generic profile) |
+| `src/design/catalog.mjs` | Component catalog, preset matching, derived catalogs |
 
 ### Assets & Build
 | Module | Responsibility |
 |--------|----------------|
-| `src/assets.mjs` | Asset manifest, font registry, file hashing, validation |
-| `src/build.mjs` | Scene construction, checkpointed batches, Cavalry operations |
-| `src/cavalry.mjs` | MCP adapter, tool discovery, script execution, layer management |
+| `src/design/assets.mjs` | Asset manifest, font registry, file hashing, validation |
+| `src/pipeline/build.mjs` | Scene construction, checkpointed batches, Cavalry operations |
+| `src/cavalry/cavalry.mjs` | MCP adapter, tool discovery, script execution, layer management |
 
 ### Render & QA
 | Module | Responsibility |
 |--------|----------------|
-| `src/render.mjs` | Frame rendering, FFmpeg encoding, render manifest |
-| `src/qa.mjs` | Quality assurance, frame comparison, discrepancy detection |
-| `src/export.mjs` | Final export, project save, validation |
+| `src/pipeline/render.mjs` | Frame rendering, FFmpeg encoding, render manifest |
+| `src/pipeline/qa.mjs` | Quality assurance, frame comparison, discrepancy detection |
+| `src/pipeline/export.mjs` | Final export, project save, validation |
 
 ### Resolution
 | Module | Responsibility |
 |--------|----------------|
-| `src/resolve.mjs` | Path resolution, configuration loading, profile selection |
+| `src/pipeline/resolve.mjs` | Path resolution, configuration loading, profile selection |
 
 ## Schema Contracts
 

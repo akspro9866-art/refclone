@@ -2,9 +2,10 @@
 
 Status: implemented and shipped in this repository. The design was written before the
 generic code existed, so §12 records what was actually built and where it deviates from
-that plan. Test baseline: `npm test` runs 551 tests green; the runner discovers
-`test/*.test.mjs` only, so that is the number the count gate compares against, and the two
-cross-repo mock-bridge files skip when the sibling repos are not built.
+that plan. Test baseline: `npm test` runs 551 tests green; `test/run-tests.mjs` discovers
+every `*.test.mjs` under the grouped `test/` tree, so that is the number the count gate
+compares against, and the two cross-repo mock-bridge files skip when the sibling repos are
+not built.
 
 ## 1. Goal
 
@@ -95,7 +96,7 @@ reference specifics removed) and make profile selection explicit:
 this sketch:** in this repository `config.json` and `config.generic-template.json` are
 byte-identical generic templates, so a fresh clone has one obvious file to edit and no
 reference of its own. The legacy branch is still reachable — a config without
-`cloneMode` selects it, and `src/design.mjs`, `src/planner.mjs` and `src/resolve.mjs` are
+`cloneMode` selects it, and `src/design/design.mjs`, `src/design/planner.mjs` and `src/pipeline/resolve.mjs` are
 unchanged — but it ships without the config, the recorded measurements or the footage of
 the job it was built for. See `README.md` for what that means in practice.
 
@@ -143,13 +144,13 @@ The catalog is the single source of truth that replaces coupling points 1, 2, 4,
   unless they reuse an operation already runtime-verified (rect/text/image create,
   keyframe, timing). Nothing is claimed `runtime_verified` without evidence.
 
-New module: `src/catalog.mjs` exporting `loadCatalog(config)`,
+New module: `src/design/catalog.mjs` exporting `loadCatalog(config)`,
 `deriveCatalog(spec)`, `componentFor(element, catalog)`, `presetFor(event, catalog)`.
 The legacy hardcoded functions remain as the `saas-reference` branch.
 
 ## 6. CV auto-analysis first pass (capability B)
 
-New module: `src/autoanalyze.mjs`. It runs **after** ingest/boundary detection and
+New module: `src/ingest/autoanalyze.mjs`. It runs **after** ingest/boundary detection and
 **before** the human spec review, producing a *draft* spec that the agent/human edits
 at the existing gate. It never confirms a review.
 
@@ -224,20 +225,20 @@ invented capabilities, evidence before fidelity claims, unresolved stays null/bl
 ## 9. Implementation plan (additive; no legacy rewrites)
 
 New files:
-- `src/catalog.mjs` — load/derive catalog, `componentFor`, `presetFor`.
-- `src/autoanalyze.mjs` — CV first-pass draft spec + report.
+- `src/design/catalog.mjs` — load/derive catalog, `componentFor`, `presetFor`.
+- `src/ingest/autoanalyze.mjs` — CV first-pass draft spec + report.
 - `config.generic-template.json` — reference-agnostic profile.
 - `schemas/component-catalog.schema.json` — validate hand-authored catalogs.
-- `test/catalog.test.mjs`, `test/autoanalyze.test.mjs` — synthetic fixtures only
-  (no live Cavalry/ffmpeg), same discipline as `test/qa.test.mjs`.
+- `test/design/catalog.test.mjs`, `test/ingest/autoanalyze.test.mjs` — synthetic fixtures only
+  (no live Cavalry/ffmpeg), same discipline as `test/pipeline/qa.test.mjs`.
 - `SKILL.generic-clone.md` — new-chat runbook.
 
 Branched (not rewritten) files — add a profile switch that calls the generic sibling
 and leaves the legacy branch byte-identical:
-- `src/planner.mjs` — `componentIdFor`, preset mapping, `elementParameters`.
-- `src/design.mjs` — `selectReference`, catalog builders.
-- `src/assets.mjs` — move brand notes to config; keep generic font candidates.
-- `src/run.mjs` — read `catalog`/`autoAnalysis`, invoke autoanalyze, pass catalog to
+- `src/design/planner.mjs` — `componentIdFor`, preset mapping, `elementParameters`.
+- `src/design/design.mjs` — `selectReference`, catalog builders.
+- `src/design/assets.mjs` — move brand notes to config; keep generic font candidates.
+- `src/pipeline/run.mjs` — read `catalog`/`autoAnalysis`, invoke autoanalyze, pass catalog to
   design/plan.
 - `src/cli.mjs` — `--profile generic` help text; `autoanalyze` subcommand.
 
@@ -271,7 +272,7 @@ scope decision ("add the generic template alongside"), so three points changed:
 
 | Planned | Shipped | Why |
 |---|---|---|
-| Branch `planner.mjs` / `design.mjs` in place behind a profile switch | New siblings `src/generic-design.mjs` and `src/generic-planner.mjs`; `planner.mjs`/`design.mjs` unchanged | In-place branching would have put the verified legacy artifacts at risk for no functional gain. `validateScenePlan` was already generic, so the generic builder only needs to emit schema-valid input and reuse it. |
+| Branch `planner.mjs` / `design.mjs` in place behind a profile switch | New siblings `src/design/generic-design.mjs` and `src/design/generic-planner.mjs`; `planner.mjs`/`design.mjs` unchanged | In-place branching would have put the verified legacy artifacts at risk for no functional gain. `validateScenePlan` was already generic, so the generic builder only needs to emit schema-valid input and reuse it. |
 | `--profile generic` | `cloneMode: "generic"` in the config; `--profile` stays a free-form label | The mode is a property of the profile file, so the whole generic route is one `--config` argument and is copy-pasteable in a rerun command. |
 | Move brand-specific notes out of `assets.mjs` into config | Legacy `assets.mjs` still owns the manifest logic; only the two human-facing `limitations` sentences in its missing-asset **report** were rewritten to reference-agnostic wording for this distribution | The coupling was cosmetic: the manifest and validation that feed design and plan never carried that vocabulary. Editing two report strings is not the same as editing the legacy code path, so it was done here rather than shipped as a known wart. |
 
@@ -284,16 +285,16 @@ overwritten. `findIndexByPath` accepts `['plan','plan-generic']` for the resume-
 
 - `config.generic-template.json` — reference-agnostic profile; `reference: null`, no brand
   vocabulary, `autoAnalysis` defaults, `catalog: {source:"derived",catalogPath:null}`.
-- `src/catalog.mjs` + `schemas/component-catalog.schema.json` — derive/authored catalog,
+- `src/design/catalog.mjs` + `schemas/component-catalog.schema.json` — derive/authored catalog,
   `eventKind` families, `componentFor`/`presetFor`, structural rules the schema cannot express.
-- `src/autoanalyze.mjs` + `schemas/auto-analysis.schema.json` — CV draft pass: modal background,
+- `src/ingest/autoanalyze.mjs` + `schemas/auto-analysis.schema.json` — CV draft pass: modal background,
   connected components, track association, motion families, transition proposals, pending
   shot-spec draft, annotated HTML report, sampling basis, cache.
-- `src/generic-design.mjs` — token catalog from the reviewed spec; claims verification only from
+- `src/design/generic-design.mjs` — token catalog from the reviewed spec; claims verification only from
   the capability contract; skips the dense-evidence rule for `transition`/`appearance`.
-- `src/generic-planner.mjs` — `registerGenericDesign`/`registerGenericScenePlan` (cache-first,
+- `src/design/generic-planner.mjs` — `registerGenericDesign`/`registerGenericScenePlan` (cache-first,
   own stage directories, reuses `validateScenePlan` and the shared adapter operations).
-- `src/run.mjs` — `cloneMode` branch: generic manual dependencies/limitations, CV draft attached
+- `src/pipeline/run.mjs` — `cloneMode` branch: generic manual dependencies/limitations, CV draft attached
   to the existing analysis gate, resolve skipped, generic design/plan, rerun commands that repeat
   `--config`. `src/cli.mjs` — `autoanalyze`, `design-generic`, `plan-generic`, `ingest` returns
   `indexPath`, `run` returns `cloneMode`, and a `requireReference` guard that names the missing
@@ -303,21 +304,21 @@ overwritten. `findIndexByPath` accepts `['plan','plan-generic']` for the resume-
 
 ### Evidence
 
-- `test/catalog.test.mjs` — family classification incl. the `generic` fallback, label slugs that
+- `test/design/catalog.test.mjs` — family classification incl. the `generic` fallback, label slugs that
   share one preset, cut vocabulary from a single-shot transition, every `validateCatalogShape`
   branch, authored-catalog resolution relative to the config, `sourceHash: null` templates,
   null-instead-of-substitute lookups.
-- `test/generic.test.mjs` — catalog/design/plan unit behavior incl. an executable dense plan
+- `test/design/generic.test.mjs` — catalog/design/plan unit behavior incl. an executable dense plan
   (`toAdapterOperations` + `previewAdapterBatch` compile) and blocked sparse/typography/asset
   cases that emit no animation operations.
-- `test/autoanalyze.test.mjs` — measurement units plus a real ffmpeg-generated reference through
+- `test/ingest/autoanalyze.test.mjs` — measurement units plus a real ffmpeg-generated reference through
   ingest → draft → report → cache, and the guards (`VFR_UNSUPPORTED`, `INPUT_INTEGRITY`).
-- `test/generic-run.test.mjs` — the whole gate chain on a synthetic clip with a temp-rooted
+- `test/pipeline/generic-run.test.mjs` — the whole gate chain on a synthetic clip with a temp-rooted
   config: boundary gate → CV-drafted spec gate → cached reuse → confirmed review → assets →
   resolve skipped → design-generic → plan-generic blocked with named codes → cached resume; and
   proof that no `design/`, `plan/` or `resolve/` directory is created, and that a config without
   `cloneMode` keeps legacy-profile behavior with no CV pass.
-- `test/cli.test.mjs` — help/whitelist agreement, parser rejections, generic usage errors, the
+- `test/pipeline/cli.test.mjs` — help/whitelist agreement, parser rejections, generic usage errors, the
   reference-less config failing as `CLI_USAGE`, and `ingest → autoanalyze` chaining with numeric
   overrides honoured in the sampling record.
 

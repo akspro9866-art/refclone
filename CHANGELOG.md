@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- **Stage 3.5 — the `_mg` contract gate** (`src/mg-contract.mjs`). The compiled
+- **Stage 3.5 — the `_mg` contract gate** (`src/cavalry/mg-contract.mjs`). The compiled
   script a promotion produced was only ever proved wrong at dispatch, and a macro
   that threw part-way left a half-built scene with no record of which macro did
   it. The gate now dry-runs the exact dispatch payload under stubs that mirror the
@@ -19,7 +19,7 @@ All notable changes to this project are documented here. The format follows
   Cavalry. `proceduralPromotion.mgContractValidation: false` skips only the dry
   run, for reproducing an old artifact.
 - **Convergence control for the closed-loop refinement pass**
-  (`src/convergence.mjs`). Correction deltas are damped down a tier hierarchy
+  (`src/vision/convergence.mjs`). Correction deltas are damped down a tier hierarchy
   (geometry keeps 0.75 of its delta, timing 0.5, appearance 0.35, and every tier
   decays by half while the score regresses, floored at 0.15); the loop tracks one
   comparable score per round; two consecutive measured passes that move the score
@@ -47,10 +47,10 @@ All notable changes to this project are documented here. The format follows
   half-build a scene; a raw ad-hoc script is warn-only (direct `api` use is reported,
   not blocked); `contractMode: 'off'` skips the dry run. The result carries
   `contractMode` and the contract report.
-- Coverage for both: `test/mg-contract.test.mjs` (35 cases, including a clean real
+- Coverage for both: `test/cavalry/mg-contract.test.mjs` (35 cases, including a clean real
   Stage-4 compilation and every violation the stubs can raise) and
-  `test/convergence.test.mjs` (29 cases, seven of them end-to-end through the closed
-  loop). `test/mock-bridge.e2e.test.mjs` gained a cross-repo case that walks
+  `test/vision/convergence.test.mjs` (29 cases, seven of them end-to-end through the closed
+  loop). `test/e2e/mock-bridge.e2e.test.mjs` gained a cross-repo case that walks
   `/state`, `/layers` and `/snapshot` and proves a `_mg.patch` addressed by the
   semantic id `/state` reported lands on the layer refclone created — twice, the
   second time as a no-op.

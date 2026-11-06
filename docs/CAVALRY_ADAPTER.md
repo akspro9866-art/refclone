@@ -8,8 +8,8 @@ or explicitly marked otherwise.
 
 | Item | Path |
 |---|---|
-| Adapter | `src/cavalry.mjs` |
-| Unit tests | `test/cavalry.test.mjs` |
+| Adapter | `src/cavalry/cavalry.mjs` |
+| Unit tests | `test/cavalry/cavalry.test.mjs` |
 | Live integration runner | `integration/cavalry.integration.mjs` |
 
 The audit that produced this adapter recorded a SHA-256 for every artifact above and for

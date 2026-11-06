@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import {
   CavalryAdapter, SceneLedger, ADAPTER_VERSION, buildCapabilityReport
-} from '../src/cavalry.mjs';
+} from '../src/cavalry/cavalry.mjs';
 import { absolutePath, fileRecord, hashObject, readJson, runProcess, writeJsonNew } from '../src/core.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));

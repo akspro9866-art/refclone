@@ -1,6 +1,6 @@
 # Asset discovery, validation and replacement
 
-Status: implemented by `src/assets.mjs` and exercised both against the release reference and
+Status: implemented by `src/design/assets.mjs` and exercised both against the release reference and
 against synthetic references in `npm test`. Assets that have not been supplied stay
 unresolved or missing, so the build gate remains blocked - that is the intended result.
 Nothing in this workflow downloads fonts, edits a Cavalry scene or approves an asset on

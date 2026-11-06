@@ -76,6 +76,24 @@ is the thing that would make its output dishonest.
 feed in. The pipeline is a measurement and construction tool; it does not acquire, host, or ship
 anybody's footage, music, fonts, or brand assets.
 
+## Repository layout
+
+```
+src/
+  cli.mjs, index.mjs, core.mjs   command entry, public exports, shared primitives
+  ingest/                        ffprobe/FFmpeg evidence, image analysis, CV draft pass
+  design/                        assets, component catalog, tokens, scene-plan compilation
+  cavalry/                       MCP adapter, Stallion batch client, _mg compiler/contract, promotion
+  pipeline/                      run/build/resolve/render/qa/export stages
+  vision/                        pixels, optical flow, tracking, perceptual diff, convergence
+  procedural/                    closed-loop procedural orchestrator
+schemas/                         17 JSON schemas validated at every artifact write
+docs/                            architecture, stage contracts and troubleshooting
+examples/                        MCP client configs and review JSON examples
+tools/                           standalone measurement and review helpers
+test/                            grouped suites mirroring src/; `test/run-tests.mjs` discovers them
+```
+
 ## Requirements
 
 **This is a Windows project.** Windows 10 or 11 is the platform it is developed, tested and
@@ -94,7 +112,7 @@ flipping the declaration to `"darwin"` and watching `npm ci` reject it on this W
 | The three npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`) | schema validation, PNG decode, MCP client | `npm ci` (installs 96 packages, no global installs) |
 | **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for `build`, `render`, `export`, and the live integration run | live MCP round-trips, see [`docs/MCP_CAPABILITIES.md`](docs/MCP_CAPABILITIES.md) |
 | A **`cavalry-mcp` 3.x** checkout, built | the MCP server this project talks to; the adapter audits its tool schemas at connect time | `node C:\path\to\cavalry-mcp\dist\index.js` |
-| The [Stallion fork](https://github.com/akspro9866-art/stallion) bridge | the readback/snapshot message types Stage 5 uses come from the fork, not upstream v0.8 | `docs/CREDITS.md`, `src/stallion-batch.mjs` |
+| The [Stallion fork](https://github.com/akspro9866-art/stallion) bridge | the readback/snapshot message types Stage 5 uses come from the fork, not upstream v0.8 | `docs/CREDITS.md`, `src/cavalry/stallion-batch.mjs` |
 
 The repository carries **17 JSON schemas** under `schemas/`, and every artifact a stage emits is
 validated against the matching schema before a later stage is allowed to read it.
@@ -282,11 +300,11 @@ node src/cli.mjs procedural jobs\<hash>\analysis\<key>\<run>\observations.json -
 
 | Stage | Module | What it does |
 |---|---|---|
-| 2 — tracking | `src/tracking.mjs` (`2.0.0`) | per-element trajectories from frame states. With decoded pixels it adds optical-flow velocity, per-layer beat grids, motion classification and stationary-edge mask hints; without pixels it falls back to bounding-box differences. |
-| 3 — promotion | `src/promotion.mjs` (`1.0.0`) | classifies each element's motion as a spring, a bezier or a duplicator/stagger group, using measured fit statistics and the thresholds in `config.proceduralPromotion`. Also attaches an advisory match against the 120-preset manifest. |
-| 4 — `_mg` compilation | `src/mg-compiler.mjs` (`1.0.0`) | emits the JavaScript string that would build the animation through the verified `_mg` macro surface, plus a script hash and readiness flag. It compiles; it does not dispatch. |
-| 3.5 — contract gate | `src/mg-contract.mjs` (`1.0.0`) | scans the text for forbidden constructs (`eval`, `Function`, `debugger`), then dry-runs it in a `node:vm` context whose `_mg` is a recording stub. It checks that every macro is published, every mutation sits inside an undo group, every bound preset is in the verified catalog and the configured allowlist, and the emitted macro set matches the promotions the artifact describes. Violations carry `error`, `warning` or `info`; only `error` fails the gate. |
-| 5 — perceptual / atomic convergence | `src/perceptual.mjs` (`2.0.0`), `src/critical-frames.mjs`, `src/atomic-convergence.mjs` (`1.0.0`) | compares rendered frames against the reference at the element's critical frames, measures SSIM, IoU, centroid offset and timing drift, and — when pixels are available — emits one `_mg.patch` correction payload per round. |
+| 2 — tracking | `src/vision/tracking.mjs` (`2.0.0`) | per-element trajectories from frame states. With decoded pixels it adds optical-flow velocity, per-layer beat grids, motion classification and stationary-edge mask hints; without pixels it falls back to bounding-box differences. |
+| 3 — promotion | `src/cavalry/promotion.mjs` (`1.0.0`) | classifies each element's motion as a spring, a bezier or a duplicator/stagger group, using measured fit statistics and the thresholds in `config.proceduralPromotion`. Also attaches an advisory match against the 120-preset manifest. |
+| 4 — `_mg` compilation | `src/cavalry/mg-compiler.mjs` (`1.0.0`) | emits the JavaScript string that would build the animation through the verified `_mg` macro surface, plus a script hash and readiness flag. It compiles; it does not dispatch. |
+| 3.5 — contract gate | `src/cavalry/mg-contract.mjs` (`1.0.0`) | scans the text for forbidden constructs (`eval`, `Function`, `debugger`), then dry-runs it in a `node:vm` context whose `_mg` is a recording stub. It checks that every macro is published, every mutation sits inside an undo group, every bound preset is in the verified catalog and the configured allowlist, and the emitted macro set matches the promotions the artifact describes. Violations carry `error`, `warning` or `info`; only `error` fails the gate. |
+| 5 — perceptual / atomic convergence | `src/vision/perceptual.mjs` (`2.0.0`), `src/vision/critical-frames.mjs`, `src/vision/atomic-convergence.mjs` (`1.0.0`) | compares rendered frames against the reference at the element's critical frames, measures SSIM, IoU, centroid offset and timing drift, and — when pixels are available — emits one `_mg.patch` correction payload per round. |
 
 ### Critical frames
 
@@ -320,7 +338,7 @@ When the loop has rendered evidence, Stage 5 is deterministic and model-free:
 - **Budget:** at most **3** correction rounds, `positionGain`/`scaleGain` 1.0, per-round scale
   clamped to 0.5–2.0, residuals below 0.25 px ignored, and stop reasons
   `gate_passed`, `max_iterations`, `no_corrections`, `snapshot_failed`, `patch_failed`.
-- **Refinement tracking:** `src/convergence.mjs` keeps the best-scoring round, applies tiered
+- **Refinement tracking:** `src/vision/convergence.mjs` keeps the best-scoring round, applies tiered
   damping (0.75 / 0.5 / 0.35), halves the step after a regression, stops after two plateau
   passes, and weights the composite score IoU 0.35, SSIM 0.30, centroid 0.20, timing 0.15.
 
@@ -380,7 +398,7 @@ half-built scene or a silent easing substitution, so it is stopped before it rea
 
 Stage 5 is the one place that reads the bridge directly, and it is read-only:
 
-- `src/stallion-batch.mjs` posts an operation with a caller-chosen `seq` to `POST /post` and polls
+- `src/cavalry/stallion-batch.mjs` posts an operation with a caller-chosen `seq` to `POST /post` and polls
   `GET /get` until the payload carrying that `seq` arrives. It understands the `status`, `result`,
   `state`, `layers`, `snapshot`, `snapshot-batch` and `render-frames` envelopes.
 - `snapshot-batch` renders the critical frames at 100% scale; `layers` and `state` read back
@@ -422,15 +440,15 @@ artifacts in the command output, writes only the optional `--report` markdown, a
 | Selected by | `cloneMode: "generic"` in the config | a config **without** `cloneMode` |
 | Config | `config.json` = `config.generic-template.json`, `reference: null` | not shipped — the original config, job cache and footage stay private |
 | CV draft pass | yes, joins gate 2 | no |
-| Design / plan | `design-generic` / `plan-generic` (data-driven catalog) | `design` / `plan` (`src/design.mjs`, `src/planner.mjs`) |
+| Design / plan | `design-generic` / `plan-generic` (data-driven catalog) | `design` / `plan` (`src/design/design.mjs`, `src/design/planner.mjs`) |
 | `resolve` stage | skipped | used |
 | Written under | `auto-analysis/`, `design-generic/`, `plan-generic/` | `design/`, `plan/`, `resolve/` |
 
 Why the second row exists: this engine was built to reproduce one specific commissioned reference,
 and its legacy profile still carries that job's vocabulary in component identifiers and hard-coded
-font approximations inside `src/design.mjs`, `src/planner.mjs` and `src/resolve.mjs`.
+font approximations inside `src/design/design.mjs`, `src/design/planner.mjs` and `src/pipeline/resolve.mjs`.
 Those modules are kept intact — they are what the majority of the regression tests exercise, and
-`validateScenePlan` in `src/planner.mjs` is shared with the generic route. A CI privacy scan
+`validateScenePlan` in `src/design/planner.mjs` is shared with the generic route. A CI privacy scan
 guarantees that this vocabulary never appears in anything the generic path shows a user: the shipped
 configs, the generic modules, the skills, the README, or any report you would hand to somebody else.
 
@@ -467,7 +485,7 @@ your reference), and its output is not redistributed — reproduce it on your ow
   from a human transcription decision. The CV pass proposes geometry, not words.
 - **Fonts are not identified from pixels.** `font.family` stays `null` until you resolve it against
   fonts you already have. The pipeline will never invent a substitute.
-- **Installed-font discovery is a Windows registry read.** `src/assets.mjs` queries HKLM/HKCU under
+- **Installed-font discovery is a Windows registry read.** `src/design/assets.mjs` queries HKLM/HKCU under
   `SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts`; directories you list in
   `assets.fontDirectories` are still scanned. This is the platform the tool is built for, and the
   skip path for other systems is documented rather than silently worked around.
@@ -554,9 +572,9 @@ npm publish --access public     # prepublishOnly runs the verify + test gate aut
 - [`SECURITY.md`](SECURITY.md) — prompt-injection surface, copyrighted evidence, no-rollback guarantee
 
 The procedural lane is documented in this README and in the module headers under
-`src/tracking.mjs`, `src/promotion.mjs`, `src/mg-compiler.mjs`, `src/mg-contract.mjs`,
-`src/critical-frames.mjs`, `src/perceptual.mjs`, `src/convergence.mjs` and
-`src/atomic-convergence.mjs`.
+`src/vision/tracking.mjs`, `src/cavalry/promotion.mjs`, `src/cavalry/mg-compiler.mjs`, `src/cavalry/mg-contract.mjs`,
+`src/vision/critical-frames.mjs`, `src/vision/perceptual.mjs`, `src/vision/convergence.mjs` and
+`src/vision/atomic-convergence.mjs`.
 
 ## License and third-party parts
 
