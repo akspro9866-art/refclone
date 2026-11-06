@@ -93,5 +93,12 @@
     "timingDeltaMaxFrames": 1,
     "ssimMin": 0.88,
     "maxRefinementIterations": 5
+  },
+  "atomicConvergence": {
+    "ssimMin": 0.985,
+    "bboxDriftPxMax": 1.0,
+    "colorDeltaMax": 0.02,
+    "maxIterations": 3,
+    "snapshotScale": 100
   }
 }

@@ -19,6 +19,7 @@
       "items": { "$ref": "#/definitions/duplicatorGroup" }
     },
     "duplicatorDetection": { "$ref": "#/definitions/duplicatorDetection" },
+    "presetMatches": { "$ref": "#/definitions/presetMatches" },
     "summary": { "$ref": "#/definitions/summary" },
     "thresholds": { "$ref": "#/definitions/thresholds" }
   },
@@ -52,7 +53,8 @@
             "bezierCount": { "type": "integer", "minimum": 0 },
             "keyframeCount": { "type": "integer", "minimum": 0 }
           }
-        }
+        },
+        "layout": { "$ref": "#/definitions/layout" }
       }
     },
     "propertyPromotion": {
@@ -174,6 +176,45 @@
         "totalElements": { "type": "integer", "minimum": 0 },
         "groupedElements": { "type": "integer", "minimum": 0 },
         "reason": { "type": "string" }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "description": "Optional static layout descriptor. Stage 4 emits _mg.fromRaster for raster coordinates and _mg.fitToBounds for bounded text/card layers before animation is written.",
+      "additionalProperties": false,
+      "required": ["coordinateSpace", "targetBounds"],
+      "properties": {
+        "alias": { "type": "string", "minLength": 1 },
+        "elementType": { "type": "string", "enum": ["textShape", "uiCard", "shape", "unknown"] },
+        "coordinateSpace": { "type": "string", "enum": ["raster", "comp"] },
+        "targetBounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "compWidth": { "type": "number", "exclusiveMinimum": 0 },
+        "compHeight": { "type": "number", "exclusiveMinimum": 0 },
+        "sourceFrame": { "$ref": "common.schema.json#/definitions/frameIndex" },
+        "tolerance": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.5 }
+      }
+    },
+    "presetMatches": {
+      "type": "object",
+      "description": "Advisory Stage 3 lookup into the shipped 120-preset catalog. Stage 4 may bind a match only when the catalog id is also in VERIFIED_PRESETS.",
+      "additionalProperties": false,
+      "required": ["version", "manifest", "elements", "duplicatorGroups", "summary"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "manifest": { "type": "object" },
+        "elements": { "type": "array" },
+        "duplicatorGroups": { "type": "array" },
+        "summary": { "type": "object" }
       }
     },
     "summary": {

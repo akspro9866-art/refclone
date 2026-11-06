@@ -20,6 +20,7 @@ import { WorkflowError, hashObject } from './core.mjs';
 import {
   blockFlow, accelerationZeroCrossings, fitContourBezier, solvePivot, toGrayScale
 } from './optical.mjs';
+import { analyzeElementCriticalFrames } from './critical-frames.mjs';
 
 export const TRACKING_VERSION = '2.0.0';
 
@@ -329,6 +330,78 @@ function bboxInPixels(bbox, frameWidth, frameHeight) {
     };
   }
   return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
+}
+
+const LAYOUT_ELEMENT_TYPES = ['textShape', 'uiCard', 'shape', 'unknown'];
+const LAYOUT_TOLERANCE_MAX = 0.5;
+
+/**
+ * Normalize the optional static-layout descriptor Stage 3 carries into Stage 4.
+ *
+ * `coordinateSpace` is the trigger: without it there is no layout contract, so
+ * the function returns null and the compiler emits nothing. A missing
+ * `targetBounds` is derived from the tracker's measured static bbox — pixels
+ * pass through, normalized boxes are scaled by the frame dimensions. Raster
+ * bounds stay in top-left y-down video coordinates; Stage 4 converts them with
+ * `_mg.fromRaster` before fitting. Tolerance is capped at 0.5 px because Stage 5
+ * starts from this layout and a looser fit would show up as gate drift.
+ *
+ * @param {Object} layout - { alias?, elementType?, coordinateSpace, targetBounds?, compWidth?, compHeight?, sourceFrame?, tolerance? }
+ * @param {Object} [context]
+ * @param {Object} [context.staticLayout] - trackElement's static layout
+ * @param {number} [context.frameWidth]
+ * @param {number} [context.frameHeight]
+ * @returns {Object|null} Normalized layout, or null when none was requested
+ */
+export function normalizeElementLayout(layout, { staticLayout, frameWidth, frameHeight } = {}) {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) return null;
+  const coordinateSpace = layout.coordinateSpace === 'raster'
+    ? 'raster'
+    : layout.coordinateSpace === 'comp' ? 'comp' : null;
+  if (!coordinateSpace) return null;
+
+  const finite = value => Number.isFinite(Number(value));
+  let raw = layout.targetBounds;
+  if (!raw && staticLayout?.bbox) {
+    raw = bboxInPixels(staticLayout.bbox, frameWidth, frameHeight);
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const targetBounds = {
+    x: Number(raw.x),
+    y: Number(raw.y),
+    width: Number(raw.width),
+    height: Number(raw.height)
+  };
+  if (![targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height].every(Number.isFinite)
+    || targetBounds.width <= 0 || targetBounds.height <= 0) {
+    return null;
+  }
+
+  const positive = (value, fallback) => {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return n;
+    return Number.isFinite(fallback) && fallback > 0 ? fallback : null;
+  };
+  const compWidth = positive(layout.compWidth, frameWidth);
+  const compHeight = positive(layout.compHeight, frameHeight);
+  if (coordinateSpace === 'raster' && (compWidth === null || compHeight === null)) return null;
+
+  const elementType = LAYOUT_ELEMENT_TYPES.includes(layout.elementType) ? layout.elementType : 'unknown';
+  const tolerance = Math.min(
+    LAYOUT_TOLERANCE_MAX,
+    Math.max(0.001, finite(layout.tolerance) ? Number(layout.tolerance) : LAYOUT_TOLERANCE_MAX)
+  );
+  const normalized = {
+    elementType,
+    coordinateSpace,
+    targetBounds,
+    tolerance
+  };
+  if (typeof layout.alias === 'string' && layout.alias.trim()) normalized.alias = layout.alias.trim();
+  if (compWidth !== null) normalized.compWidth = compWidth;
+  if (compHeight !== null) normalized.compHeight = compHeight;
+  if (finite(layout.sourceFrame)) normalized.sourceFrame = Math.round(Number(layout.sourceFrame));
+  return normalized;
 }
 
 /**
@@ -981,10 +1054,12 @@ export function inferMasks(states, frames, options = {}) {
  * @param {number} params.frameHeight
  * @param {number} params.fps
  * @param {Array<Object>} [params.frames] - Decoded RGBA frames (optional)
+ * @param {Object} [params.layout] - Optional static-layout descriptor; see
+ *   normalizeElementLayout. Only present in the output when it normalizes.
  * @param {Object} [params.options] - {classify, masks} overrides for the new analyses
  * @returns {Object} Complete tracking analysis
  */
-export function trackElement({ elementId, states, frameWidth, frameHeight, fps, frames, options }) {
+export function trackElement({ elementId, states, frameWidth, frameHeight, fps, frames, layout, options }) {
   if (!elementId) {
     fail('TRACKING_INVALID', 'elementId is required.');
   }
@@ -997,18 +1072,42 @@ export function trackElement({ elementId, states, frameWidth, frameHeight, fps, 
     options?.classify ?? {}
   );
   const masks = inferMasks(states, frames, { frameWidth, frameHeight, ...(options?.masks ?? {}) });
+  // Critical frames carry normalized boxes, so a normalized [0..1] input
+  // (autoanalyze convention) is converted to pixels first — otherwise the
+  // normalisation in critical-frames.mjs would divide it a second time.
+  const safeWidth = Number.isFinite(frameWidth) && frameWidth > 0 ? frameWidth : 1920;
+  const safeHeight = Number.isFinite(frameHeight) && frameHeight > 0 ? frameHeight : 1080;
+  const pixelStates = sortedStatesOf(states).map(state => ({
+    frame: state.frame,
+    bbox: bboxInPixels(state.bbox, frameWidth, frameHeight)
+  }));
+  const criticalFrames = analyzeElementCriticalFrames({
+    elementId,
+    trajectories,
+    states: pixelStates,
+    frameWidth: safeWidth,
+    frameHeight: safeHeight,
+    options: options?.criticalFrames ?? {}
+  });
   const centerSamples = sortedStatesOf(states).map(state => ({
     x: state.bbox.x + state.bbox.width / 2,
     y: state.bbox.y + state.bbox.height / 2,
     ...(Number.isFinite(state.rotation) ? { angle: state.rotation } : {})
   }));
   const pivot = centerSamples.length >= 1 ? solvePivot(centerSamples) : null;
+  const normalizedLayout = normalizeElementLayout(layout, {
+    staticLayout,
+    frameWidth: safeWidth,
+    frameHeight: safeHeight
+  });
 
   return {
     elementId,
     version: TRACKING_VERSION,
     staticLayout,
+    ...(normalizedLayout ? { layout: normalizedLayout } : {}),
     trajectories,
+    criticalFrames,
     motionBeats: beats,
     beatGrid,
     motionClass,
@@ -1024,7 +1123,8 @@ export function trackElement({ elementId, states, frameWidth, frameHeight, fps, 
       beatCount: beats.length,
       beatGridSource: beatGrid.source,
       motionKind: motionClass.kind,
-      maskHintCount: masks.maskHints.length
+      maskHintCount: masks.maskHints.length,
+      criticalFrameCount: criticalFrames.frames.length
     }
   };
 }
@@ -1057,6 +1157,7 @@ export function trackShot({ shotId, elements, frameWidth, frameHeight, fps, fram
       frameHeight,
       fps,
       frames: element.frames ?? frames,
+      layout: element.layout,
       options: element.options
     });
     elementTracks.push(track);
@@ -1068,6 +1169,10 @@ export function trackShot({ shotId, elements, frameWidth, frameHeight, fps, fram
     fps,
     frameDimensions: { width: frameWidth, height: frameHeight },
     elements: elementTracks,
+    // Additive shot-level evidence: every element's critical frames unioned.
+    // The `summary` object stays byte-compatible with pre-critical-frame
+    // callers, which assert its exact shape.
+    criticalFrames: [...new Set(elementTracks.flatMap(e => e.criticalFrames?.frames ?? []))].sort((a, b) => a - b),
     summary: {
       elementCount: elementTracks.length,
       motionElementCount: elementTracks.filter(e => e.hasMotion).length,
@@ -1096,6 +1201,8 @@ export function toPromotionInput(trackingAnalysis) {
       opacity: element.trajectories?.opacity ?? []
     },
     staticLayout: element.staticLayout,
-    motionBeats: element.motionBeats
+    motionBeats: element.motionBeats,
+    criticalFrames: element.criticalFrames ?? null,
+    ...(element.layout ? { layout: element.layout } : {})
   }));
 }

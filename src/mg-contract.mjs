@@ -49,14 +49,17 @@ export const MG_PUBLISHED_HELPERS = Object.freeze([
   'duplicator', 'stagger', 'kf', 'rig', 'ease', 'patch', 'patchSelected', 'patchKeyframeSafe',
   'svg', 'theme', 'applyTheme', 'modulate', 'connectDynamic', 'semantic', 'semantics', 'find',
   'presetRoots', 'syncToFrames', 'undoGroup', 'keyframe', 'keyframes', 'behavior',
-  'trim', 'mask', 'blend', 'typography', 'filter', 'corner', 'selection', 'sel'
+  'trim', 'mask', 'blend', 'typography', 'filter', 'corner', 'selection', 'sel',
+  'fromRaster', 'fitToBounds'
 ]);
 
 /** Read-only tables a script may legitimately read off `_mg`. */
 export const MG_PUBLISHED_TABLES = Object.freeze(['EASE_CURVES', 'EASE_ALIASES']);
 
 /** The macros refclone's Stage 4 compiler is allowed to emit. */
-export const MG_EMITTABLE_MACROS = Object.freeze(['undoGroup', 'keyframe', 'keyframes', 'behavior', 'duplicator']);
+export const MG_EMITTABLE_MACROS = Object.freeze([
+  'undoGroup', 'keyframe', 'keyframes', 'behavior', 'duplicator', 'fromRaster', 'fitToBounds'
+]);
 
 /** Macros that change the scene, so they must be inside an undo group. */
 export const MG_MUTATION_MACROS = Object.freeze(['keyframe', 'keyframes', 'behavior', 'duplicator']);
@@ -490,6 +493,80 @@ export function validateMgContract({ script, compiled, promotion, presets, optio
   };
 
   const stubs = {
+    fromRaster(x, y, compWidth, compHeight) {
+      bump('fromRaster');
+      let rx = x;
+      let ry = y;
+      let cw = compWidth;
+      let ch = compHeight;
+      if (x && typeof x === 'object') {
+        if (Array.isArray(x)) { rx = x[0]; ry = x[1]; } else { rx = x.x; ry = x.y; }
+        cw = y;
+        ch = compWidth;
+      }
+      const px = Number(rx);
+      const py = Number(ry);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) {
+        record({
+          severity: 'error',
+          code: 'MG_CONTRACT_FROMRASTER_INVALID',
+          message: '_mg.fromRaster needs finite x/y video pixels; a NaN would silently move the layer.',
+          macro: 'fromRaster'
+        });
+        return { x: 0, y: 0 };
+      }
+      const width = Number(cw) > 0 ? Number(cw) : 1920;
+      const height = Number(ch) > 0 ? Number(ch) : 1080;
+      return { x: px - width / 2, y: height / 2 - py };
+    },
+    fitToBounds(layerId, targetBox, options) {
+      bump('fitToBounds');
+      const handle = String(layerId == null ? '' : layerId);
+      const entry = note('fitToBounds', null, { element: handle });
+      entry.space = isPlainObject(options) ? String(options.space ?? 'comp') : 'comp';
+      atomicCheck('fitToBounds');
+      const opts = isPlainObject(options) ? options : {};
+      let spec = targetBox;
+      if (Array.isArray(spec)) spec = { x: spec[0], y: spec[1], width: spec[2], height: spec[3] };
+      const width = Number(spec?.width);
+      const height = Number(spec?.height);
+      if (!isNonEmptyString(handle)) {
+        record({
+          severity: 'error',
+          code: 'MG_CONTRACT_FITTOBOUNDS_INVALID',
+          message: '_mg.fitToBounds needs a non-empty layer id or alias.',
+          macro: 'fitToBounds'
+        });
+      }
+      if (!isPlainObject(spec) || !(width > 0) || !(height > 0)) {
+        record({
+          severity: 'error',
+          code: 'MG_CONTRACT_FITTOBOUNDS_INVALID',
+          message: '_mg.fitToBounds needs a target box with positive width and height.',
+          macro: 'fitToBounds'
+        });
+      }
+      if (opts.tolerance !== undefined) {
+        const tolerance = Number(opts.tolerance);
+        if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 0.5) {
+          record({
+            severity: 'error',
+            code: 'MG_CONTRACT_LAYOUT_TOLERANCE',
+            message: 'Layout tolerance is capped at 0.5 px; a looser fit starts Stage 5 outside its bbox gate.',
+            macro: 'fitToBounds',
+            details: { tolerance: opts.tolerance }
+          });
+        }
+      }
+      return {
+        ok: true,
+        layerId: handle,
+        space: opts.space ?? 'comp',
+        target: spec && typeof spec === 'object'
+          ? { x: Number(spec.x), y: Number(spec.y), width, height }
+          : null
+      };
+    },
     undoGroup(spec) {
       bump('undoGroup');
       if (!isPlainObject(spec) || typeof spec.operations !== 'function') {
@@ -1026,6 +1103,10 @@ function finish({ violations, calls, helpers, macros, presets, atomic, evaluated
     presets,
     atomic,
     drift,
+    layout: {
+      ops: macros.filter(entry => entry.macro === 'fitToBounds').length,
+      rasterConversions: calls.fromRaster ?? 0
+    },
     counts,
     violations
   };

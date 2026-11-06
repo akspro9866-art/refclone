@@ -21,6 +21,8 @@ import {
   CONVERGENCE_VERSION, createConvergenceTracker, dampCorrectionDeltas, loadConvergenceConfig, perceptualScore
 } from './convergence.mjs';
 import { analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport, PERCEPTUAL_VERSION } from './perceptual.mjs';
+import { matchPromotionPresetsIfAvailable } from './preset-index.mjs';
+import { loadAtomicConvergenceConfig } from './atomic-convergence.mjs';
 
 export const PROCEDURAL_PIPELINE_VERSION = '1.0.0';
 
@@ -59,7 +61,10 @@ export function loadProceduralConfig(config) {
       ssimMin: perceptual.ssimMin ?? 0.88,
       maxRefinementIterations: perceptual.maxRefinementIterations ?? 5
     },
-    convergence: loadConvergenceConfig(perceptual.convergence ?? {})
+    convergence: loadConvergenceConfig(perceptual.convergence ?? {}),
+    // Stage 5's deterministic gate: 0.985 global SSIM, 1 px per-layer bbox
+    // drift, at most three _mg.patch correction rounds.
+    atomicConvergence: loadAtomicConvergenceConfig(config ?? {})
   };
 }
 
@@ -82,9 +87,13 @@ export function loadProceduralConfig(config) {
  *   ({frame, data, width, height} or {frame, png}); overrides observation paths.
  * @param {boolean} [params.decodeFrames=false] - Decode observation `path`
  *   PNGs synchronously (capped by config.proceduralPromotion.maxOpticalFrames).
+ * @param {Object} [params.layout] - Optional static-layout descriptor applied to
+ *   the tracked foreground element (metadata.layout is the fallback).
  * @returns {Object} Tracking analysis conforming to tracking.mjs output
  */
-export function extractTrackingFromObservations({ shotId, observations, metadata, config, frames, decodeFrames = false }) {
+export function extractTrackingFromObservations({
+  shotId, observations, metadata, config, frames, decodeFrames = false, layout = null
+}) {
   if (!shotId) fail('PROCEDURAL_INVALID', 'shotId is required.');
   if (!Array.isArray(observations)) fail('PROCEDURAL_INVALID', 'observations array is required.');
 
@@ -139,7 +148,8 @@ export function extractTrackingFromObservations({ shotId, observations, metadata
 
     elements.push({
       id: `${shotId}-foreground`,
-      states
+      states,
+      ...(layout ?? metadata?.layout ? { layout: layout ?? metadata.layout } : {})
     });
   }
 
@@ -233,9 +243,13 @@ export function runProceduralPromotion({ trackingAnalysis, config }) {
  * @param {string} params.shotId
  * @param {Object} params.capabilities - Adapter capabilities
  * @param {Object} params.config - Procedural config
+ * @param {Object|null} [params.presetMatches] - Advisory Stage 3 catalog report;
+ *   defaults to `promotionAnalysis.presetMatches` when already attached.
  * @returns {Object} Compiled script with metadata and the `contract` report
  */
-export function compileProceduralScript({ promotionAnalysis, trackingAnalysis, shotId, capabilities, config }) {
+export function compileProceduralScript({
+  promotionAnalysis, trackingAnalysis, shotId, capabilities, config, presetMatches = null
+}) {
   if (!promotionAnalysis) fail('PROCEDURAL_INVALID', 'promotionAnalysis is required.');
   if (!shotId) fail('PROCEDURAL_INVALID', 'shotId is required.');
 
@@ -246,7 +260,8 @@ export function compileProceduralScript({ promotionAnalysis, trackingAnalysis, s
     capabilities,
     options: {
       groupName: `procedural-${shotId}`,
-      autoBindPresets: true
+      autoBindPresets: true,
+      presetMatches: presetMatches ?? promotionAnalysis.presetMatches ?? null
     }
   });
 
@@ -453,6 +468,12 @@ export async function runProceduralPipeline({ shotId, observations, metadata, ca
     config: proceduralConfig
   });
 
+  // Advisory 120-preset catalog match. It is an optional schema field so it is
+  // first-class in the artifact, and null when no shipped manifest is
+  // discoverable; the deterministic promotion data itself is unchanged.
+  const presetMatches = matchPromotionPresetsIfAvailable(promotionAnalysis);
+  if (presetMatches) promotionAnalysis.presetMatches = JSON.parse(JSON.stringify(presetMatches));
+
   // Validate promotion artifact
   await validateArtifact('procedural-promotion', promotionAnalysis);
 
@@ -462,7 +483,8 @@ export async function runProceduralPipeline({ shotId, observations, metadata, ca
     trackingAnalysis,
     shotId,
     capabilities,
-    config: proceduralConfig
+    config: proceduralConfig,
+    presetMatches
   });
 
   // Stage 5: Perceptual (if frame comparisons provided)
@@ -494,7 +516,8 @@ export async function runProceduralPipeline({ shotId, observations, metadata, ca
       promotion: {
         version: PROMOTION_VERSION,
         analysis: promotionAnalysis,
-        summary: promotionAnalysis.summary
+        summary: promotionAnalysis.summary,
+        presetMatches
       },
       compilation: {
         version: MG_COMPILER_VERSION,
@@ -522,7 +545,8 @@ export async function runProceduralPipeline({ shotId, observations, metadata, ca
       scriptReady: compilation.ready ?? false,
       contractOk: compilation.contract?.ok ?? null,
       contractErrors: compilation.contract?.counts?.error ?? 0,
-      perceptualPass: perceptualResult?.artifact?.overallPass ?? null
+      perceptualPass: perceptualResult?.artifact?.overallPass ?? null,
+      presetMatched: presetMatches?.summary?.matched ?? null
     }
   };
 }
@@ -718,13 +742,16 @@ export async function runClosedLoopProceduralPipeline({
 
   // Stage 3: Promotion (baseline)
   currentPromotion = runProceduralPromotion({ trackingAnalysis: currentTracking, config: proceduralConfig });
+  const presetMatches = matchPromotionPresetsIfAvailable(currentPromotion);
+  if (presetMatches) currentPromotion.presetMatches = JSON.parse(JSON.stringify(presetMatches));
   await validateArtifact('procedural-promotion', currentPromotion);
 
   // Stage 4: Compilation (baseline)
   let currentCompilation = compileProceduralScript({
     promotionAnalysis: currentPromotion,
     trackingAnalysis: currentTracking,
-    shotId, capabilities, config: proceduralConfig
+    shotId, capabilities, config: proceduralConfig,
+    presetMatches
   });
 
   // Stage 5: Perceptual gate (baseline)
@@ -938,7 +965,8 @@ export async function runClosedLoopProceduralPipeline({
         version: PROMOTION_VERSION,
         analysis: delivered.promotion,
         summary: delivered.promotion.summary,
-        deliveredIteration: delivered.iteration
+        deliveredIteration: delivered.iteration,
+        presetMatches
       },
       compilation: {
         version: MG_COMPILER_VERSION,
@@ -971,7 +999,8 @@ export async function runClosedLoopProceduralPipeline({
       plateauDetected: tracker.plateau.detected,
       rolledBackTo: rollback.rolledBackTo,
       converged,
-      iterationsRun: iteration
+      iterationsRun: iteration,
+      presetMatched: presetMatches?.summary?.matched ?? null
     }
   };
 }

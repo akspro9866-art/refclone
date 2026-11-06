@@ -25,9 +25,19 @@ export {
 } from './procedural-pipeline.mjs';
 
 // Individual stage modules (re-exported for granular use)
-export { TRACKING_VERSION, trackElement, trackShot, toPromotionInput } from './tracking.mjs';
+export {
+  TRACKING_VERSION, trackElement, trackShot, toPromotionInput, normalizeElementLayout
+} from './tracking.mjs';
+export {
+  CRITICAL_FRAMES_VERSION,
+  CRITICAL_FRAME_ROLES,
+  CRITICAL_FRAMES_DEFAULTS,
+  analyzeCriticalTrajectory,
+  analyzeElementCriticalFrames,
+  detectCriticalFrames
+} from './critical-frames.mjs';
 export { PROMOTION_VERSION, analyzeScenePromotion, analyzeElement, compilePromotionToScript } from './promotion.mjs';
-export { MG_COMPILER_VERSION, VERIFIED_PRESETS, compileShotScript } from './mg-compiler.mjs';
+export { MG_COMPILER_VERSION, VERIFIED_PRESETS, compileShotScript, compileLayoutToMgDSL } from './mg-compiler.mjs';
 export { PERCEPTUAL_VERSION, analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport } from './perceptual.mjs';
 
 // Stage 3.5: the _mg contract gate, run between compile and dispatch
@@ -53,6 +63,54 @@ export {
   dampCorrectionDeltas,
   createConvergenceTracker
 } from './convergence.mjs';
+
+// 120-preset catalog index and deterministic Stage 3 matching report
+export {
+  PRESET_INDEX_VERSION,
+  PRESET_MANIFEST_FORMAT,
+  PRESET_MOTION_TOKENS,
+  PRESET_EASING_TOKENS,
+  PRESET_SCORE_WEIGHTS,
+  parsePresetManifest,
+  tokenizeSignature,
+  normalizePresetRequest,
+  scorePresetMatch,
+  matchPresets,
+  matchPreset,
+  presetRequestForPromotion,
+  matchPromotionPresets,
+  matchPromotionPresetsIfAvailable,
+  loadPresetManifest,
+  tryLoadPresetManifest,
+  clearPresetManifestCache
+} from './preset-index.mjs';
+
+// Read-only Stallion client for Stage 5 evidence (snapshot-batch + decoding)
+export {
+  STALLION_BATCH_VERSION,
+  DEFAULT_STALLION_URL,
+  STALLION_PAYLOAD_KINDS,
+  createStallionClient,
+  decodeSnapshotFrame,
+  decodeSnapshotBatch,
+  captureCriticalFrames
+} from './stallion-batch.mjs';
+
+// Zero-token atomic Stage 5 gate and deterministic _mg.patch correction
+export {
+  ATOMIC_CONVERGENCE_VERSION,
+  ATOMIC_CONVERGENCE_STOP_REASONS,
+  ATOMIC_CONVERGENCE_DEFAULTS,
+  loadAtomicConvergenceConfig,
+  normalizeReferenceFrames,
+  normalizeExpectedLayers,
+  expectedLayersFromCriticalFrames,
+  evaluateAtomicSnapshot,
+  buildAtomicCorrections,
+  buildAtomicPatchScript,
+  runAtomicConvergence,
+  createStage5Adapters
+} from './atomic-convergence.mjs';
 
 // CLI dispatcher (programmatic invocation)
 export { main as cliMain } from './cli.mjs';

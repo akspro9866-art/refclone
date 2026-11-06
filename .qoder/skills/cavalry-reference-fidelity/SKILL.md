@@ -148,6 +148,24 @@ artifacts. The call graph is fixed:
    (half the gap, clamped to ±0.5) — the only alpha evidence a composited frame
    carries. A luma gap on a misaligned silhouette stays a geometry symptom.
 
+**Stage 5 runtime convergence (`src/atomic-convergence.mjs`)** is the zero-token
+scene-space loop that runs after the compiled script is executed. `runAtomicConvergence`
+takes the critical frames plus per-layer boxes (`expectedLayersFromCriticalFrames` from
+the Stage 2 shot report), captures one `/snapshot-batch` per round through
+`createStage5Adapters({ stallionClient, cavalryAdapter })`, and compares global SSIM and
+per-layer bbox drift against `config.atomicConvergence` (SSIM >= 0.985, drift <= 1 px,
+at most three rounds). Every correction is a single `_mg.patch` array sent through
+`CavalryAdapter.runScript` in strict contract mode: residuals measured at an existing
+keyframe boundary (`frame_start`/`frame_settle`) are written with `frame`-targeted
+absolute values, mid-curve residuals (`frame_max_velocity`/`frame_overshoot_peak`) emit a
+magic-easing adjustment on the segment's boundary keyframe instead of adding a keyframe,
+and static layers use `delta`/`multiply`. Colour deltas are
+reported, never gated. The loop stops with `gate_passed`, `no_corrections`,
+`max_iterations`, `snapshot_failed` or `patch_failed`, and never creates layers. It
+requires a Stallion build whose status advertises `snapshot-batch`; check that
+capability first and report it missing instead of silently falling back to per-layer
+reads.
+
 `runClosedLoopProceduralPipeline` refines through `src/convergence.mjs` rather than
 applying raw deltas: tier 1 (geometry) keeps 0.75 of its correction, tier 2 (timing)
 0.5 and tier 3 (appearance) 0.35, every tier halving while the score regresses down to

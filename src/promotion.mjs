@@ -947,9 +947,10 @@ function checkMonotonic(values) {
  * @param {number} params.fps - Frame rate for timing calculations
  * @param {number} [params.pixelScale] - Source pixels per normalized unit (enables the pixel gate)
  * @param {number} [params.bezierRmseMaxPx] - Per-frame pixel gate (default 1.5)
+ * @param {Object} [params.layout] - Normalized layout descriptor from Stage 2
  * @returns {Object} Element promotion plan
  */
-export function analyzeElement({ elementId, trajectories, fps, pixelScale, bezierRmseMaxPx }) {
+export function analyzeElement({ elementId, trajectories, fps, pixelScale, bezierRmseMaxPx, layout }) {
   if (!elementId) {
     fail('PROMOTION_INVALID', 'elementId is required.');
   }
@@ -981,6 +982,7 @@ export function analyzeElement({ elementId, trajectories, fps, pixelScale, bezie
     overallPromotion,
     promotions,
     promotionTypes: [...promotionTypes],
+    ...(layout ? { layout: { ...layout } } : {}),
     metrics: {
       propertyCount: promotions.length,
       springCount: promotions.filter(p => p.promotion === 'damped_spring').length,
@@ -1247,7 +1249,8 @@ export function analyzeScenePromotion({ elements, fps, capabilities, pixelScale,
       trajectories: element.trajectories ?? {},
       fps,
       pixelScale,
-      bezierRmseMaxPx
+      bezierRmseMaxPx,
+      layout: element.layout
     });
     elementAnalyses.push(analysis);
 

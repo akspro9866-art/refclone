@@ -102,7 +102,9 @@ describe('mg-contract: vocabulary tables', () => {
       assert.ok(MG_PUBLISHED_HELPERS.includes(macro), `${macro} must be a published helper`);
     }
     assert.ok(!MG_PUBLISHED_HELPERS.some(name => name.startsWith('__')), 'internals are not part of the published surface');
-    assert.deepEqual(MG_EMITTABLE_MACROS, ['undoGroup', 'keyframe', 'keyframes', 'behavior', 'duplicator']);
+    assert.deepEqual(MG_EMITTABLE_MACROS, [
+      'undoGroup', 'keyframe', 'keyframes', 'behavior', 'duplicator', 'fromRaster', 'fitToBounds'
+    ]);
   });
 
   it('resolves property aliases exactly as __propertyAttrs does', () => {

@@ -28,7 +28,7 @@ const fail = (code, message, details = {}) => {
  * Dependency tiers for emitted _mg operations. Operations are emitted in
  * strict tier order so the runtime never sees an operation that references
  * state a previous tier has not created:
- * 1. create     — node/layer creation & pivots
+ * 1. create     — node/layer creation, pivots & static layout fits
  * 2. deformer   — deformers & falloffs (duplicator/stagger/falloff/bevel)
  * 3. connection — graph connections & masks (behaviors bind dynamics in)
  * 4. keyframe   — keyframe values
@@ -36,11 +36,15 @@ const fail = (code, message, details = {}) => {
  */
 export const MG_OPERATION_TIERS = Object.freeze({
   create: 1,
+  layout: 1,
   deformer: 2,
   connection: 3,
   keyframe: 4,
   tangent: 5
 });
+
+const LAYOUT_FITTABLE_TYPES = new Set(['textShape', 'uiCard', 'shape']);
+const LAYOUT_TOLERANCE_MAX = 0.5;
 
 /**
  * Classify an emitted operation into its dependency tier.
@@ -208,6 +212,120 @@ export function isValidPreset(presetId) {
   return presetId !== null && presetId !== undefined && VERIFIED_PRESETS.hasOwnProperty(presetId);
 }
 
+const numericLiteral = value => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0';
+  return String(Math.round(n * 1e6) / 1e6);
+};
+
+/** Resolve the `_mg.fitToBounds` handle: `@alias` wins, then the live element id. */
+function layoutHandle(element, layout) {
+  if (layout?.alias != null && String(layout.alias).trim()) {
+    const alias = String(layout.alias).trim();
+    return alias.startsWith('@') ? alias : `@${alias}`;
+  }
+  const id = element?.elementId ?? element?.id;
+  return id != null && String(id).trim() ? String(id).trim() : null;
+}
+
+/**
+ * Compile an element's optional static-layout descriptor to one fit operation.
+ *
+ * Only bounded layer types are fitted: a text run or a card is expected to hold
+ * a target box, while an unbounded artwork layer's natural size is not a
+ * contract. Raster bounds (top-left, y-down video pixels) go through
+ * `_mg.fromRaster`; the box's bottom edge is the comp-space min corner, so the
+ * conversion point is `y + height`. Composition-space bounds are emitted
+ * verbatim. The fit runs at tier 1, before animation is written, and tolerance
+ * is capped at 0.5 px so Stage 5 starts from an aligned layout.
+ *
+ * @param {Object} element - Promotion artifact element
+ * @param {Object} layout - Normalized layout descriptor
+ * @param {Object} [options]
+ * @param {number} [options.index=0] - Unique index for the emitted const
+ * @returns {{dsl: string, undoGroup: string, presetBinding: null, op: Object, binding: Object}|null}
+ */
+export function compileLayoutToMgDSL(element, layout, options = {}) {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) return null;
+  if (!LAYOUT_FITTABLE_TYPES.has(layout.elementType)) return null;
+
+  const bounds = layout.targetBounds;
+  if (!bounds || typeof bounds !== 'object') return null;
+  const x = Number(bounds.x);
+  const y = Number(bounds.y);
+  const width = Number(bounds.width);
+  const height = Number(bounds.height);
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+
+  const handle = layoutHandle(element, layout);
+  if (!handle) return null;
+  const elementId = String(element?.elementId ?? element?.id ?? handle);
+  const tolerance = Math.min(
+    LAYOUT_TOLERANCE_MAX,
+    Math.max(0.001, Number.isFinite(Number(layout.tolerance)) ? Number(layout.tolerance) : LAYOUT_TOLERANCE_MAX)
+  );
+  const box = `{ x: ${numericLiteral(x)}, y: ${numericLiteral(y)}, width: ${numericLiteral(width)}, height: ${numericLiteral(height)} }`;
+  const fitOptions = `{ space: "comp", tolerance: ${numericLiteral(tolerance)} }`;
+
+  let dsl;
+  if (layout.coordinateSpace === 'raster') {
+    const compWidth = Number(layout.compWidth);
+    const compHeight = Number(layout.compHeight);
+    if (!(compWidth > 0) || !(compHeight > 0)) return null;
+    const target = `layoutTarget${Math.max(0, Math.round(Number(options.index) || 0))}`;
+    dsl = `// Layout fit: ${elementId} (${layout.elementType}, raster→comp)
+const ${target} = _mg.fromRaster(${numericLiteral(x)}, ${numericLiteral(y + height)}, ${numericLiteral(compWidth)}, ${numericLiteral(compHeight)});
+_mg.fitToBounds(${JSON.stringify(handle)}, { x: ${target}.x, y: ${target}.y, width: ${numericLiteral(width)}, height: ${numericLiteral(height)} }, ${fitOptions});`;
+  } else if (layout.coordinateSpace === 'comp') {
+    dsl = `// Layout fit: ${elementId} (${layout.elementType}, comp)
+_mg.fitToBounds(${JSON.stringify(handle)}, ${box}, ${fitOptions});`;
+  } else {
+    return null;
+  }
+
+  return {
+    dsl,
+    undoGroup: `layout-${elementId}`,
+    presetBinding: null,
+    op: { kind: 'layout', element: elementId },
+    binding: {
+      elementId,
+      alias: handle.startsWith('@') ? handle : null,
+      elementType: layout.elementType,
+      coordinateSpace: layout.coordinateSpace,
+      targetBounds: { x, y, width, height },
+      tolerance
+    }
+  };
+}
+
+/** Find the advisory catalog match for one promoted property. */
+function catalogMatchFor(presetMatches, elementId, property) {
+  if (!presetMatches || !Array.isArray(presetMatches.elements)) return null;
+  const element = presetMatches.elements.find(entry => String(entry?.elementId) === String(elementId));
+  const match = (element?.matches ?? []).find(entry => String(entry?.property) === String(property));
+  const presetId = match?.preset?.id;
+  if (presetId == null || String(presetId) === '') return null;
+  return {
+    presetId: String(presetId),
+    score: Number.isFinite(Number(match.score)) ? Number(match.score) : null,
+    reasons: Array.isArray(match.reasons) ? match.reasons.slice() : []
+  };
+}
+
+/** Find the advisory catalog match for one duplicator group. */
+function catalogDuplicatorMatch(presetMatches, baseElementId) {
+  if (!presetMatches || !Array.isArray(presetMatches.duplicatorGroups)) return null;
+  const match = presetMatches.duplicatorGroups.find(entry => String(entry?.baseElementId) === String(baseElementId));
+  const presetId = match?.preset?.id;
+  if (presetId == null || String(presetId) === '') return null;
+  return {
+    presetId: String(presetId),
+    score: Number.isFinite(Number(match.score)) ? Number(match.score) : null,
+    reasons: Array.isArray(match.reasons) ? match.reasons.slice() : []
+  };
+}
+
 /**
  * Compile a promotion analysis to executable _mg DSL script.
  *
@@ -216,10 +334,15 @@ export function isValidPreset(presetId) {
  * @param {string} params.groupName - Name for the atomic undo group
  * @param {Object} [params.capabilities] - Adapter capabilities for validation
  * @param {boolean} [params.autoBindPresets=true] - Automatically bind matching presets
+ * @param {Object|null} [params.presetMatches] - Stage 3 advisory catalog report;
+ *   a catalog preset replaces the heuristic binding only when it is also in
+ *   VERIFIED_PRESETS, so the contract gate never sees an unproven id.
  * @returns {Object} Compiled script with metadata, including per-operation tiers
  *     (`expressions[].tier`) and the `tiers` count summary
  */
-export function compilePromotionScript({ analysis, groupName, capabilities, autoBindPresets = true }) {
+export function compilePromotionScript({
+  analysis, groupName, capabilities, autoBindPresets = true, presetMatches = null
+}) {
   if (!analysis || !analysis.elements) {
     fail('MG_COMPILE_INVALID', 'Valid promotion analysis is required.');
   }
@@ -232,26 +355,61 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
   const ops = [];
   const presetBindings = [];
   const unboundPromotions = [];
+  const layoutBindings = [];
+  const catalogBindings = {
+    available: Boolean(presetMatches),
+    applied: 0,
+    rejectedUnverified: []
+  };
 
-  // Compile element promotions
-  for (const element of analysis.elements) {
-    for (const promotion of element.promotions) {
+  // Compile element promotions. The layout fit is emitted first: it runs at
+  // tier 1 and must align the layer before any keyframe or behavior reads it.
+  for (const [elementIndex, element] of analysis.elements.entries()) {
+    const layoutCompiled = compileLayoutToMgDSL(element, element.layout, { index: elementIndex });
+    if (layoutCompiled) {
+      expressions.push(layoutCompiled);
+      ops.push(layoutCompiled.op);
+      layoutBindings.push({ ...layoutCompiled.binding, tier: MG_OPERATION_TIERS.layout });
+    }
+
+    for (const promotion of element.promotions ?? []) {
       if (promotion.promotion === 'none' || promotion.promotion === 'static') {
         continue;
       }
 
-      // Auto-bind preset if requested
+      // Auto-bind preset if requested. The catalog is advisory evidence, so it
+      // wins only when its id is verified; otherwise the deterministic
+      // heuristic still binds and the rejected catalog id is recorded.
       let presetId = null;
+      let bindingSource = null;
+      let catalogMatch = null;
       if (autoBindPresets) {
-        presetId = findMatchingPreset(promotion);
-        if (presetId && !isValidPreset(presetId)) {
-          unboundPromotions.push({
-            elementId: element.elementId,
-            property: promotion.property,
-            reason: 'preset_not_verified',
-            attemptedPreset: presetId
-          });
-          presetId = null;
+        catalogMatch = catalogMatchFor(presetMatches, element.elementId, promotion.property);
+        if (catalogMatch && isValidPreset(catalogMatch.presetId)) {
+          presetId = catalogMatch.presetId;
+          bindingSource = 'catalog';
+          catalogBindings.applied += 1;
+        } else {
+          if (catalogMatch) {
+            catalogBindings.rejectedUnverified.push({
+              elementId: element.elementId,
+              property: promotion.property,
+              presetId: catalogMatch.presetId,
+              reason: 'preset_not_verified'
+            });
+          }
+          presetId = findMatchingPreset(promotion);
+          bindingSource = presetId ? 'heuristic' : null;
+          if (presetId && !isValidPreset(presetId)) {
+            unboundPromotions.push({
+              elementId: element.elementId,
+              property: promotion.property,
+              reason: 'preset_not_verified',
+              attemptedPreset: presetId
+            });
+            presetId = null;
+            bindingSource = null;
+          }
         }
       }
 
@@ -270,7 +428,12 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
           elementId: element.elementId,
           property: promotion.property,
           presetId: compiled.presetBinding,
-          promotionType: promotion.promotion
+          promotionType: promotion.promotion,
+          ...(bindingSource ? { source: bindingSource } : {}),
+          ...(catalogMatch ? {
+            catalogPresetId: catalogMatch.presetId,
+            catalogScore: catalogMatch.score
+          } : {})
         });
       } else {
         unboundPromotions.push({
@@ -285,15 +448,33 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
 
   // Compile duplicator groups
   for (const group of analysis.duplicatorGroups ?? []) {
-    const compiled = compileDuplicatorToMgDSL(group, { presetId: 'duplicator-stagger' });
+    const catalogMatch = catalogDuplicatorMatch(presetMatches, group.baseElementId);
+    const catalogPresetId = catalogMatch && isValidPreset(catalogMatch.presetId)
+      ? catalogMatch.presetId
+      : null;
+    if (catalogMatch && !catalogPresetId) {
+      catalogBindings.rejectedUnverified.push({
+        baseElementId: group.baseElementId,
+        presetId: catalogMatch.presetId,
+        reason: 'preset_not_verified'
+      });
+    }
+    if (catalogPresetId) catalogBindings.applied += 1;
+    const presetId = catalogPresetId ?? 'duplicator-stagger';
+    const compiled = compileDuplicatorToMgDSL(group, { presetId });
     expressions.push(compiled);
     ops.push(compiled.op);
 
     presetBindings.push({
       elementIds: group.elementIds,
       baseElementId: group.baseElementId,
-      presetId: 'duplicator-stagger',
-      promotionType: 'duplicator'
+      presetId,
+      promotionType: 'duplicator',
+      source: catalogPresetId ? 'catalog' : 'default',
+      ...(catalogMatch ? {
+        catalogPresetId: catalogMatch.presetId,
+        catalogScore: catalogMatch.score
+      } : {})
     });
   }
 
@@ -318,6 +499,7 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
     groupName,
     expressionCount: expressions.length,
     presetBindings: presetBindings.length,
+    layoutOps: layoutBindings.length,
     script
   });
 
@@ -336,9 +518,12 @@ export function compilePromotionScript({ analysis, groupName, capabilities, auto
     })),
     presetBindings,
     unboundPromotions,
+    layoutBindings,
+    presetMatches: catalogBindings,
     tiers,
     summary: {
       totalExpressions: expressions.length,
+      layoutOps: layoutBindings.length,
       boundPresets: presetBindings.length,
       unboundPromotions: unboundPromotions.length,
       springPromotions: presetBindings.filter(p => p.promotionType === 'damped_spring').length,
@@ -423,6 +608,7 @@ export function generateExecutionMetadata(compiled, options = {}) {
     requiresCheckpoint: true,
     atomicUndoEnabled: compiled.atomicUndo.enabled,
     presetBindings: compiled.presetBindings.map(b => b.presetId),
+    layoutFits: compiled.layoutBindings?.length ?? 0,
     timeout: options.timeoutMs ?? 60000,
     retryPolicy: {
       maxRetries: options.maxRetries ?? 2,
@@ -462,7 +648,8 @@ export function compileShotScript({ trackingAnalysis, promotionAnalysis, shotId,
     analysis: promotionAnalysis,
     groupName,
     capabilities,
-    autoBindPresets: options.autoBindPresets ?? true
+    autoBindPresets: options.autoBindPresets ?? true,
+    presetMatches: options.presetMatches ?? promotionAnalysis.presetMatches ?? null
   });
 
   const validation = validateCompiledScript(compiled, capabilities);
@@ -493,6 +680,7 @@ export function generateCompilationReport(compilation) {
 
   report += `## Summary\n\n`;
   report += `- **Total expressions:** ${compiled.summary.totalExpressions}\n`;
+  report += `- **Layout fits:** ${compiled.summary.layoutOps ?? 0}\n`;
   report += `- **Bound presets:** ${compiled.summary.boundPresets}\n`;
   const tiers = compiled.tiers ?? {};
   report += `- **Operation tiers:** ${[1, 2, 3, 4, 5].map(t => `T${t}:${tiers[t] ?? 0}`).join(' ')}\n`;

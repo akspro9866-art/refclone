@@ -21,7 +21,7 @@ that your video is bad. Most reports of "it won't run" are one of the four in th
 ```powershell
 npm ci
 npm run verify     # syntax-check + config parity + skill parity + privacy scan
-npm test           # 491 tests; exercises FFmpeg, never Cavalry
+npm test           # 551 tests; exercises FFmpeg, never Cavalry
 node --version     # must be 24+
 ffmpeg -version
 ffprobe -version
