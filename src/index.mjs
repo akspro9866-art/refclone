@@ -112,5 +112,62 @@ export {
   createStage5Adapters
 } from './vision/atomic-convergence.mjs';
 
+// Zero-slop pipeline: deterministic assets/solvers + one-shot LLM rig + gate
+export {
+  ZERO_SLOP_PIPELINE_VERSION,
+  ZERO_SLOP_DEFAULTS,
+  decodeFrame,
+  runStage1Deconstruction,
+  searchPresetsForMotion,
+  buildRigPrompt,
+  parseManifestAnswer,
+  runStage3Compile,
+  postBatchStep,
+  runStage4Alignment,
+  meanGeometryIoU,
+  meanRenderedSsim,
+  runStage5Gate,
+  runZeroSlopPipeline,
+  sampleFramesFromTracks
+} from './pipeline/zero-slop-pipeline.mjs';
+
+// Deterministic asset extractors (TypeScript, erasable syntax; Node 24+)
+export { extractSvg, foregroundMask, traceContours, simplifyContour, contourToPathData } from './assets/svgExtractor.ts';
+export {
+  dominantPalette,
+  estimateCornerRadius,
+  estimateDropShadow,
+  estimateTypography,
+  extractStyleSpec
+} from './assets/styleSpecExtractor.ts';
+export {
+  ASSET_BINDER_VERSION,
+  bindAssets,
+  buildAssetImportScript,
+  toSceneUri
+} from './assets/stallionAssetBinder.ts';
+
+// Deterministic solvers (TypeScript, erasable syntax; Node 24+)
+export {
+  fitEasing,
+  fitEasingFromTrack,
+  normalizeTrajectory,
+  cubicBezierAt
+} from './solver/bezierCurveFitter.ts';
+export {
+  solveBboxTrajectory,
+  solveBboxTrajectories,
+  alignmentToMgOp,
+  boxIoU
+} from './solver/bboxTrajectorySolver.ts';
+export {
+  optimizeCoordinateDescent,
+  compositeLoss,
+  LOSS_WEIGHTS
+} from './solver/coordinateDescentOptimizer.ts';
+
+// cavalry-mcp direct library loader (no MCP stdio anywhere)
+export { loadCavalryLib, cavalryLibAvailable } from './cavalry/cavalry-lib.mjs';
+
 // CLI dispatcher (programmatic invocation)
 export { main as cliMain } from './cli.mjs';

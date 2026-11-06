@@ -72,7 +72,9 @@ async function withStack(fn) {
   const baseUrl = `http://${bridge.host}:${bridge.port}`
   // Strip the node:test runner markers: cavalry-mcp skips main() when it sees
   // NODE_TEST_CONTEXT, which would close stdio before the handshake.
-  const childEnv = { ...process.env, STALLION_URL: baseUrl }
+  // The e2e exercises the granular CRUD tools (cavalry_run_script et al.),
+  // which the compact 3-tool default hides — opt in for the spawned server.
+  const childEnv = { ...process.env, STALLION_URL: baseUrl, CAVALRY_MCP_LEGACY_CRUD: '1' }
   delete childEnv.NODE_TEST_CONTEXT
   delete childEnv.NODE_V8_COVERAGE
   const transport = new StdioClientTransport({

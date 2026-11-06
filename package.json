@@ -34,7 +34,8 @@
     "verify": "node .github/scripts/syntax-check.mjs && node .github/scripts/config-parity.mjs && node .github/scripts/skill-parity.mjs && node .github/scripts/privacy-scan.mjs",
     "verify:docs": "node .github/scripts/test-count.mjs",
     "test:integration": "node integration/cavalry.integration.mjs",
-    "prepublishOnly": "npm run verify && npm test"
+    "prepublishOnly": "npm run verify && npm test",
+    "test:zero-slop": "node --test test/pipeline/zero-slop-pipeline.test.ts"
   },
   "files": [
     "src",
@@ -71,6 +72,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "ajv": "8.20.0",
+    "cavalry-mcp": "file:../cavalry-mcp",
     "pngjs": "7.0.0"
   }
 }

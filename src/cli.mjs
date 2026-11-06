@@ -14,6 +14,7 @@ import { renderVideo } from './pipeline/render.mjs';
 import { runQa } from './pipeline/qa.mjs';
 import { exportFinal } from './pipeline/export.mjs';
 import { runPipeline } from './pipeline/run.mjs';
+import { runZeroSlopPipeline } from './pipeline/zero-slop-pipeline.mjs';
 import { readJson, WorkflowError } from './core.mjs';
 import {
   runProceduralPipeline, runClosedLoopProceduralPipeline,
@@ -38,6 +39,7 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs qa <scene-plan.json> --render <render-manifest.json> [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs export <scene-plan.json> --project <saved-scene> --render <render-manifest.json> --qa <qa-report.json> [--build <build-report.json>] [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs procedural <observations.json> --shot <shot-id> [--metadata <media-metadata.json>] [--config <json>] [--max-iterations <n>] [--report <path>]
+  node src/cli.mjs zero-slop --plan <pipeline-plan.json> [--job <directory>] [--base-url <url>]
   node src/cli.mjs --help
 
 Run is the one-command, resume-first pipeline. It reuses a complete verified
@@ -119,8 +121,9 @@ cavalry_run_script.
 export async function main(args) {
   if (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]))) return { help: HELP };
   const [command, reference, ...rest] = args;
-  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
-  if (!reference || reference.startsWith('--')) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
+  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural', 'zero-slop'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
+    // zero-slop is plan-driven: the pipeline plan carries the reference evidence.
+  if (command !== 'zero-slop' && (!reference || reference.startsWith('--'))) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
   const flags = {};
   const allowed = command === 'run' ? ['--config', '--jobs', '--job', '--profile', '--boundary-review', '--analysis-review']
     : command === 'ingest' ? ['--config', '--jobs', '--review']
@@ -136,6 +139,7 @@ export async function main(args) {
     : command === 'qa' ? ['--render', '--reference', '--config', '--job']
     : command === 'export' ? ['--project', '--render', '--qa', '--build', '--reference', '--config', '--job']
     : command === 'procedural' ? ['--shot', '--metadata', '--config', '--max-iterations', '--report']
+    : command === 'zero-slop' ? ['--plan', '--job', '--base-url']
     : ['--manifest', '--job'];
   for (let i = 0; i < rest.length; i += 2) {
     const key = rest[i];
@@ -229,7 +233,7 @@ export async function main(args) {
     };
   }
   if (command === 'assets') {
-    const { config, configPath } = await loadConfig(flags['--config']);
+  const { config, configPath } = await loadConfig(flags['--config']);
     const assetConfig = config.assets ?? {};
     const result = await registerAssets(path.resolve(reference), {
       jobDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined,
@@ -521,6 +525,30 @@ export async function main(args) {
         'The compiled _mg script must be executed through cavalry_run_script at a later build gate.',
         'Without rendered frame comparisons the perceptual gate is skipped and converged reports null.'
       ]
+    };
+  }
+  if (command === 'zero-slop') {
+    if (!flags['--plan']) throw new WorkflowError('CLI_USAGE', 'zero-slop requires --plan <pipeline-plan.json>');
+    const plan = await readJson(path.resolve(flags['--plan']));
+    const result = await runZeroSlopPipeline({
+    ...plan,
+    runDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined,
+    baseUrl: flags['--base-url'] ?? plan.baseUrl,
+    });
+    return {
+    status: result.blocked ? 'blocked' : (result.complete ? 'complete' : 'below-gate'),
+    version: result.version,
+    complete: result.complete ?? false,
+    blocked: result.blocked ?? false,
+    reason: result.reason ?? null,
+    scores: result.scores ?? null,
+    runDirectory: result.runDirectory,
+    llmCalls: result.llmCalls,
+    stages: Object.fromEntries(Object.entries(result.stages ?? {}).map(([name, stage]) => [name, stage.stage ?? name])),
+    limitations: [
+      'zero-slop speaks only to the stallion /batch-step endpoint; no MCP stdio involved.',
+      'Without an llm hook (plan.llm omitted) Stage 2 is skipped and the run blocks honestly rather than inventing a rig.'
+    ]
     };
   }
   const { config, configPath } = await loadConfig(flags['--config']);
