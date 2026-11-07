@@ -18,7 +18,10 @@ const repo = path.resolve(import.meta.dirname, '..', '..');
 // Quoted counts live in comments and prose, so the sentence may be split across lines.
 const QUOTED = /(\d+)\s+(?:tests?|assertions)\b/g;
 
-const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', '.test-work', 'jobs']);
+// The CI layout checks the sibling stack out INSIDE this workspace
+// (stallion/, cavalry-mcp/). Their READMEs quote their own repos' test
+// counts, which have nothing to do with this runner's total — skip them.
+const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', '.test-work', 'jobs', 'stallion', 'cavalry-mcp']);
 
 async function walk(directory) {
   const found = [];
