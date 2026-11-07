@@ -764,8 +764,11 @@ export function analyzeTrajectory({ elementId, property, points, attributePath, 
     }
   }
 
-  // Check for oscillating trajectory (spring candidate)
-  const springFit = fitDampedSpring(normalized, 1);
+  // Check for oscillating trajectory (spring candidate). The target is the
+  // trajectory's settle value (its normalized final sample), NOT 1.0: the
+  // min-max normalization maps the data maximum to 1.0, so a target of 1.0
+  // admits no overshoot at all and the spring path could never fire.
+  const springFit = fitDampedSpring(normalized, normalized[normalized.length - 1].v);
   if (springFit.success) {
     if (!pixelGateEnabled) {
       return {

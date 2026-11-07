@@ -8,6 +8,53 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Stage 4.5 — the zero-token local parameter refiner** (`src/solver/local_refiner.ts`,
+  wired into `src/pipeline/zero-slop-pipeline.mjs`). Between `_mg` compilation and
+  perceptual diffing, the refiner reads actual Cavalry bounding boxes through
+  stallion v0.11's `/batch_inspect` at the beat frames, computes the L2 kinematic
+  loss against the reference tracks and drives the rig's numeric parameters with
+  bounded coordinate descent plus a Nelder-Mead pass on stall, until every frame is
+  inside the spec gate (1.5 px position, 2% scale). Zero LLM tokens by construction.
+  Stage 5's structural escalation now fires only below a post-solver SSIM of 0.92
+  (`ESCALATION_SSIM_GATE`): a clone at 0.93 is a polish problem the solver owns; a
+  clone at 0.88 is a topology problem worth one LLM turn.
+- **The reference asset deconstructor** (`src/decomp/`, CLI `refclone decomp
+  <video_or_frames>`): design-token fingerprinting with role classification
+  (`token_fingerprinter.ts`), clean SVG + transparent-matte tracing with measured
+  foreground boxes and the ready Stallion import payload (`svg_tracer.ts`), and the
+  audio + optical-flow beat grid snapped to integer frames (`beat_grid.ts`).
+- **Turnkey live clone runner** (`npm run clone:live -- <input>`,
+  `scripts/clone-live.mjs`, defaults in `templates/live-pipeline-plan.json`): probes
+  `:8080` for a live v0.11+ bridge (heartbeat plus one `batch_inspect` capability
+  probe — the heartbeat slot carries the last payload, not a status), falls back to
+  the `MockStallionServer` fixture on `--mock-fallback` or headless CI, runs decomp
+  then the 5-stage pipeline, and prints one telemetry scorecard.
+- **`MockStallionServer`** (`tests/fixtures/MockStallionServer.ts`): a deterministic
+  headless bridge speaking the exact v0.11 wire — `_mg` manifest execution,
+  `/batch_inspect` with linear keyframe interpolation, checkpoint/rollback,
+  synthetic PNG renders, disk-only `render_frame_fast` parity mode, and a
+  `preloadMg` mode matching the live shared-context shape. The Windows/Ubuntu CI
+  matrix runs 100% of the synthetic pipeline on it.
+- **Live-parity pixel readback** (`decodeRenderFrameFast` in
+  `src/cavalry/stallion-batch.mjs`): a `/render_frame_fast` envelope that names an
+  on-disk `outPath` without an inline buffer — the only shape a live script host
+  can produce — resolves its bytes from disk, so Stage 5 verification is identical
+  against live Cavalry and the mock.
+- **Stage 3 semantic trajectory fitter** (`src/promotion/trajectory_fitter.ts`):
+  tracked trajectories become `LinearSpan` / `CubicBezierSpan` / `DampedSpringSpan`
+  / `StaggerGroup` primitives inside a token-counted `SemanticBeatDescriptor`
+  (<400 tokens, over-budget throws) — raw per-frame arrays can no longer reach any
+  LLM prompt.
+
+### Fixed
+
+- **Damped-spring promotion was dead code**: `analyzeTrajectory` fitted springs
+  against a min-max-normalized target of 1.0, and the normalization maps the data
+  maximum to exactly 1.0 — no trajectory could ever overshoot the target, so the
+  spring path never fired. The fit target is now the trajectory's settle value.
+  `stallion-batch.mjs` also regained its `renderOutputDir` pass-through, which an
+  escaping slip had replaced with a `ReferenceError`.
+
 - **Stage 3.5 — the `_mg` contract gate** (`src/cavalry/mg-contract.mjs`). The compiled
   script a promotion produced was only ever proved wrong at dispatch, and a macro
   that threw part-way left a half-built scene with no record of which macro did

@@ -456,7 +456,7 @@ configs, the generic modules, the skills, the README, or any report you would ha
 
 ```powershell
 npm run verify     # syntax check every module + config parity + skill mirrors + privacy scan
-npm test           # 551 tests, no Cavalry needed (the cross-repo mock-bridge tests skip when the sibling repos are not built)
+npm test           # 589 tests, no Cavalry needed (the cross-repo mock-bridge tests skip when the sibling repos are not built)
 npm run verify:docs  # re-runs the suite and checks that every test count quoted in these docs is current
 npm run test:integration   # LIVE: needs Cavalry 2.8 + Stallion; writes integration/evidence/ (gitignored)
 ```

@@ -14,12 +14,18 @@
  *       `cavalry-mcp/lib`'s `compileMgDsl` → stallion `/batch-step`.
  *   Stage 4 — Mathematical bbox & curve alignment (0 tokens)
  *       `bboxTrajectorySolver` + `bezierCurveFitter` patches → `/batch-step`.
+ *   Stage 4.5 — Deterministic local parameter refinement (0 tokens)
+ *       `local_refiner.ts` polls `/batch_inspect` at the beat frames, computes
+ *       the L2 bbox loss against the reference tracks and drives the numeric
+ *       rig parameters with coordinate descent + Nelder-Mead until every frame
+ *       is within 1.5 px position / 2% scale. Stage 5's SSIM only runs after.
  *   Stage 5 — Perceptual diffing & strict escalation gate (0 tokens on
  *       convergence)
  *       `coordinateDescentOptimizer` over the rig's tunables; COMPLETE when
- *       SSIM >= 0.96 AND bbox IoU >= 0.95. Below that after optimization, ONE
- *       escalation turn: residual crop + compactDomTsv → LLM structural patch
- *       → stages 3-5 once more. Never a second fallback.
+ *       SSIM >= 0.96 AND bbox IoU >= 0.95. ONE escalation turn is available
+ *       and justified ONLY when post-solver SSIM < 0.92 (structural/topology
+ *       mismatch): residual crop + compactDomTsv → LLM structural patch →
+ *       stages 3-5 once more. Never a second fallback.
  *
  * The LLM is injectable (`options.llm.complete(prompt) → manifest|patch`) so
  * the orchestrator is testable end-to-end without a model; with no `llm` and
@@ -40,6 +46,8 @@ import { bindAssets } from '../assets/stallionAssetBinder.ts';
 import { fitEasing } from '../solver/bezierCurveFitter.ts';
 import { solveBboxTrajectories, alignmentToMgOp, boxIoU } from '../solver/bboxTrajectorySolver.ts';
 import { optimizeCoordinateDescent, compositeLoss } from '../solver/coordinateDescentOptimizer.ts';
+import { refineLocally, LOCAL_REFINER_DEFAULTS } from '../solver/local_refiner.ts';
+import { fitSemanticBeat, beatsToPromptBlock } from '../promotion/trajectory_fitter.ts';
 import { loadCavalryLib } from '../cavalry/cavalry-lib.mjs';
 import { computeSSIM } from '../vision/perceptual.mjs';
 
@@ -51,7 +59,17 @@ export const ZERO_SLOP_DEFAULTS = Object.freeze({
   maxFallbackTurns: 1,
   optimizer: { threshold: 0.96, maxIterations: 12 },
   sampleStride: 6,
+  localRefiner: { ...LOCAL_REFINER_DEFAULTS },
 });
+
+/**
+ * The structural escalation gate: only a post-solver SSIM below 0.92 justifies
+ * spending an LLM turn, because it indicates a topology problem (missing mask,
+ * wrong shape primitive, missing deformer) that numeric refinement cannot fix.
+ * A clone between 0.92 and the acceptance gate is reported below-gate with no
+ * retry — the numbers say "polish", not "restructure".
+ */
+export const ESCALATION_SSIM_GATE = 0.92;
 
 const fail = (code, message, details = {}) => {
   const error = new Error(message);
@@ -153,11 +171,136 @@ export function buildRigPrompt({ assetManifest, styleSpecs, easingDescriptors, p
   for (const hit of presetHits ?? []) {
     lines.push(`- ${hit.elementId}: ${hit.presets.slice(0, 4).map((preset) => `${preset.id}(${preset.motionSignature})`).join(', ')}`);
   }
-  lines.push('Reference tracks (frame -> value/box):');
-  for (const track of tracks ?? []) {
-    lines.push(`- ${track.elementId}: ${track.summary ?? ''}`);
+  // Reference evidence enters the prompt ONLY as fitted semantic spans — the
+  // Stage 3 trajectory fitter's compact descriptors, never raw frame arrays.
+  const beatDescriptors = fitBeatDescriptorsFromTracks(tracks);
+  if (beatDescriptors.length) {
+    lines.push(beatsToPromptBlock(beatDescriptors));
+  } else {
+    for (const track of tracks ?? []) {
+      if (track.summary) lines.push(`- ${track.elementId}: ${track.summary}`);
+    }
   }
   return lines.join('\n');
+}
+
+/**
+ * Build Stage 3 semantic beat descriptors from the tracked evidence. The raw
+ * frames/values stay inside this function: only the fitter's token-counted
+ * `promptLine` ever leaves it.
+ */
+export function fitBeatDescriptorsFromTracks(tracks) {
+  const descriptors = [];
+  const byElement = new Map();
+  for (const track of tracks ?? []) {
+    const inputs = byElement.get(track.elementId) ?? [];
+    // Attribute tracks carry parallel frames/values arrays; box tracks become
+    // centroid series (position) plus size series (scale) — still per-frame
+    // measurements, consumed only by the fitter.
+    for (const attributeTrack of track.attributeTracks ?? []) {
+      if (!Array.isArray(attributeTrack.frames) || !Array.isArray(attributeTrack.values)) continue;
+      inputs.push({
+        elementId: track.elementId,
+        property: attributeTrack.attr ?? attributeTrack.property ?? 'value',
+        attributePath: attributeTrack.target ?? null,
+        points: attributeTrack.frames.map((frame, index) => ({ frame: Number(frame), value: Number(attributeTrack.values[index]) })),
+      });
+    }
+    const boxEntries = Object.entries(track.boxesByFrame ?? {});
+    if (boxEntries.length >= 2) {
+      inputs.push({ elementId: track.elementId, property: 'position.x', points: boxEntries.map(([frame, box]) => ({ frame: Number(frame), value: Number(box.x ?? box.cx ?? 0) + Number(box.width ?? box.w ?? 0) / 2 })) });
+      inputs.push({ elementId: track.elementId, property: 'position.y', points: boxEntries.map(([frame, box]) => ({ frame: Number(frame), value: Number(box.y ?? box.cy ?? 0) + Number(box.height ?? box.h ?? 0) / 2 })) });
+      inputs.push({ elementId: track.elementId, property: 'scale.width', points: boxEntries.map(([frame, box]) => ({ frame: Number(frame), value: Number(box.width ?? box.w ?? 0) })) });
+    }
+    if (inputs.length) byElement.set(track.elementId, inputs);
+  }
+  if (!byElement.size) return descriptors;
+  const flat = [...byElement.values()].flat();
+  const fps = Number(tracks?.find((track) => Number(track.fps) > 0)?.fps) || 30;
+  try {
+    descriptors.push(fitSemanticBeat({ beatId: tracks?.[0]?.beatId ?? 'beat_01', fps, tracks: flat }));
+  } catch {
+    // Over-budget descriptor: split per element so each stays bounded.
+    for (const [elementId, trackInputs] of byElement) {
+      try {
+        descriptors.push(fitSemanticBeat({ beatId: `beat_${elementId}`.slice(0, 48), fps, tracks: trackInputs }));
+      } catch {
+        // Even a single element over budget stays out of the prompt; the
+        // tracks' own `summary` (if any) is the honest fallback.
+      }
+    }
+  }
+  return descriptors;
+}
+
+/**
+ * Stage 4.5 — deterministic local parameter refinement between compilation
+ * and perceptual diffing (see solver/local_refiner.ts). Queries stallion's
+ * /batch_inspect at the beat frames, computes the L2 bbox loss against the
+ * reference tracks and drives the numeric rig parameters with coordinate
+ * descent + Nelder-Mead until every frame is within epsPos/epsScale. Zero
+ * LLM tokens by construction.
+ */
+export async function runStage45LocalRefinement({ stage3, tracks, tunables = [], client, options = {} }) {
+  const layerIds = [];
+  for (const track of tracks ?? []) {
+    if (track.layerId && !layerIds.includes(track.layerId)) layerIds.push(track.layerId);
+  }
+  if (!layerIds.length || !tracks?.length) {
+    return { stage: 'local-refinement', skipped: true, reason: 'no tracked layers to refine against', llmTokens: 0 };
+  }
+  if (!tunables.length) {
+    return { stage: 'local-refinement', skipped: true, reason: 'no numeric tunables exposed by the rig', llmTokens: 0 };
+  }
+  const referenceBoxes = {};
+  for (const track of tracks) {
+    const perFrame = {};
+    for (const [frame, box] of Object.entries(track.boxesByFrame ?? {})) {
+      perFrame[Math.round(Number(frame))] = {
+        x: Number(box.x ?? box.cx ?? 0),
+        y: Number(box.y ?? box.cy ?? 0),
+        width: Number(box.width ?? box.w ?? 0),
+        height: Number(box.height ?? box.h ?? 0),
+      };
+    }
+    if (Object.keys(perFrame).length) referenceBoxes[track.layerId] = perFrame;
+  }
+  // Beat frames: f_start, f_mid1, f_mid2, f_end across the sampled set.
+  const sampled = Object.keys(stage3.frames ?? {}).map(Number).sort((a, b) => a - b);
+  const beatFrames = sampled.length >= 4
+    ? [sampled[0], sampled[Math.floor((sampled.length - 1) / 3)], sampled[Math.floor((2 * (sampled.length - 1)) / 3)], sampled[sampled.length - 1]]
+    : sampled.slice();
+  if (beatFrames.length < 2) {
+    return { stage: 'local-refinement', skipped: true, reason: 'fewer than two sampled frames to measure', llmTokens: 0 };
+  }
+  const applyParams = async (params) => {
+    const ops = [];
+    for (const tunable of tunables) {
+      if (!(tunable.name in params)) continue;
+      ops.push({ op: 'set', target: tunable.target, attrs: { [tunable.attr]: params[tunable.name] } });
+    }
+    if (!ops.length) return true;
+    const response = await postBatchStep({ dslManifest: { ops }, sampleFrames: beatFrames, ...client });
+    return response.ok !== false;
+  };
+  const parameters = tunables.map((tunable) => ({
+    name: tunable.name,
+    value: Number(tunable.value ?? 0),
+    ...(tunable.step != null ? { step: Number(tunable.step) } : {}),
+    ...(tunable.min != null ? { min: Number(tunable.min) } : {}),
+    ...(tunable.max != null ? { max: Number(tunable.max) } : {}),
+  }));
+  const refinement = await refineLocally({
+    client: { batchInspect: async (request) => postBatchInspect({ ...request, ...client }) },
+    layerIds,
+    beatFrames,
+    referenceBoxes,
+    parameters,
+    applyParams,
+    options: options.refiner,
+    timeoutMs: options.timeoutMs ?? 120_000,
+  });
+  return { stage: 'local-refinement', skipped: false, beatFrames, refinement, llmTokens: 0 };
 }
 
 /** Parse the Stage 2 answer tolerantly: strip fences, find the outermost JSON object. */
@@ -198,19 +341,33 @@ export async function runStage3Compile({ manifest, presetScripts, sampleFrames, 
 
 /** Raw batch-step POST — the single wire the whole pipeline speaks. */
 export async function postBatchStep({ script, dslManifest, sampleFrames = [], queryLayers, renderFrames, renderOutputDir, baseUrl, token, fetchImpl, timeoutMs = 120_000 }) {
+  return postKind('batch-step', { script, dslManifest, sampleFrames, queryLayers, renderFrames, renderOutputDir }, { baseUrl, token, fetchImpl, timeoutMs });
+}
+
+/** Raw batch_inspect POST — geometry-only multi-frame readback (no pixels). */
+export async function postBatchInspect({ frames, layerIds, attributes, includeHidden, compId, baseUrl, token, fetchImpl, timeoutMs = 60_000 }) {
+  return postKind('batch_inspect', { frames, layerIds, attributes, includeHidden, compId }, { baseUrl, token, fetchImpl, timeoutMs });
+}
+
+/** One POST /post + GET /get round trip for any v0.11 introspection kind. */
+async function postKind(kind, fields, { baseUrl, token, fetchImpl, timeoutMs }) {
   const impl = fetchImpl ?? globalThis.fetch;
   const url = String(baseUrl ?? process.env.STALLION_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
   const headers = { 'content-type': 'application/json' };
   const bearer = token ?? process.env.STALLION_TOKEN ?? '';
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   const seq = `zs-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+  const body = { type: kind, seq };
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) body[key] = value;
+  }
   const response = await impl(`${url}/post`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ type: 'batch-step', seq, script, dslManifest, sampleFrames, queryLayers, renderFrames, renderOutputDir }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!response.ok) throw fail('STALLION_HTTP_ERROR', `batch-step POST failed with HTTP ${response.status}`);
+  if (!response.ok) throw fail('STALLION_HTTP_ERROR', `${kind} POST failed with HTTP ${response.status}`);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const poll = await impl(`${url}/get`, { headers, signal: AbortSignal.timeout(timeoutMs) });
@@ -218,14 +375,14 @@ export async function postBatchStep({ script, dslManifest, sampleFrames = [], qu
       const text = await poll.text();
       try {
         const parsed = JSON.parse(text);
-        if (parsed.kind === 'batch-step' && String(parsed.seq) === seq) return parsed;
+        if (parsed.kind === kind && String(parsed.seq) === seq) return parsed;
       } catch {
         // transient non-JSON payload; keep polling until the deadline
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  throw fail('STALLION_TIMEOUT', `no batch-step result for ${seq} within ${timeoutMs}ms`);
+  throw fail('STALLION_TIMEOUT', `no ${kind} result for ${seq} within ${timeoutMs}ms`);
 }
 
 /**
@@ -429,8 +586,18 @@ export async function runStage5Gate({
     complete,
     optimization,
     escalation: null,
+    // Structural escalation is justified ONLY below this gate: a clone at
+    // 0.93 SSIM is a polish problem (the local solver owns it), a clone at
+    // 0.88 is a topology problem (missing mask, wrong primitive, missing
+    // deformer) that no numeric refinement can repair.
+    escalationGate: ESCALATION_SSIM_GATE,
+    structuralRetryJustified: ssim < ESCALATION_SSIM_GATE,
   };
   if (complete) return result;
+  if (ssim >= ESCALATION_SSIM_GATE) {
+    result.escalation = { attempted: false, reason: `ssim ${round2(ssim)} is above the ${ESCALATION_SSIM_GATE} structural gate; below acceptance is reported, not retried` };
+    return result;
+  }
   if (!llm || typeof llm.complete !== 'function') {
     result.escalation = { attempted: false, reason: 'no LLM hook provided; the clone stays below the gate' };
     return result;
@@ -590,6 +757,17 @@ export async function runZeroSlopPipeline(options = {}) {
     tracks: options.tracks ?? [],
     sampleFrames,
     client,
+  });
+
+  // Stage 4.5 — deterministic numeric refinement against /batch_inspect.
+  // Zero LLM tokens; SSIM (Stage 5) is only worth paying for once this
+  // converges, so it runs strictly after.
+  stages.localRefinement = await runStage45LocalRefinement({
+    stage3: stages.compilation,
+    tracks: options.tracks ?? [],
+    tunables: options.tunables ?? [],
+    client,
+    options: { refiner: thresholds.localRefiner, timeoutMs: options.timeoutMs },
   });
 
   stages.gate = await runStage5Gate({

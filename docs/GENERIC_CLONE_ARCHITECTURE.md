@@ -2,7 +2,7 @@
 
 Status: implemented and shipped in this repository. The design was written before the
 generic code existed, so §12 records what was actually built and where it deviates from
-that plan. Test baseline: `npm test` runs 551 tests green; `test/run-tests.mjs` discovers
+that plan. Test baseline: `npm test` runs 589 tests green; `test/run-tests.mjs` discovers
 every `*.test.mjs` under the grouped `test/` tree, so that is the number the count gate
 compares against, and the two cross-repo mock-bridge files skip when the sibling repos are
 not built.

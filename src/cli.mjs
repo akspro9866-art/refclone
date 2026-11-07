@@ -15,6 +15,7 @@ import { runQa } from './pipeline/qa.mjs';
 import { exportFinal } from './pipeline/export.mjs';
 import { runPipeline } from './pipeline/run.mjs';
 import { runZeroSlopPipeline } from './pipeline/zero-slop-pipeline.mjs';
+import { deconstruct, parseCropSpec, loadAudioPcm } from './decomp/decomp.ts';
 import { readJson, WorkflowError } from './core.mjs';
 import {
   runProceduralPipeline, runClosedLoopProceduralPipeline,
@@ -39,6 +40,7 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs qa <scene-plan.json> --render <render-manifest.json> [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs export <scene-plan.json> --project <saved-scene> --render <render-manifest.json> --qa <qa-report.json> [--build <build-report.json>] [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs procedural <observations.json> --shot <shot-id> [--metadata <media-metadata.json>] [--config <json>] [--max-iterations <n>] [--report <path>]
+  node src/cli.mjs decomp <video_or_frames_dir> [--out <dir>] [--fps <n>] [--frames <start:end>] [--audio <file>] [--sample-rate <hz>] [--crop "x,y,w,h[:name];..."]
   node src/cli.mjs zero-slop --plan <pipeline-plan.json> [--job <directory>] [--base-url <url>]
   node src/cli.mjs --help
 
@@ -121,7 +123,7 @@ cavalry_run_script.
 export async function main(args) {
   if (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]))) return { help: HELP };
   const [command, reference, ...rest] = args;
-  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural', 'zero-slop'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
+  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural', 'zero-slop', 'decomp'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
     // zero-slop is plan-driven: the pipeline plan carries the reference evidence.
   if (command !== 'zero-slop' && (!reference || reference.startsWith('--'))) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
   const flags = {};
@@ -140,6 +142,7 @@ export async function main(args) {
     : command === 'export' ? ['--project', '--render', '--qa', '--build', '--reference', '--config', '--job']
     : command === 'procedural' ? ['--shot', '--metadata', '--config', '--max-iterations', '--report']
     : command === 'zero-slop' ? ['--plan', '--job', '--base-url']
+    : command === 'decomp' ? ['--out', '--fps', '--frames', '--audio', '--sample-rate', '--crop']
     : ['--manifest', '--job'];
   for (let i = 0; i < rest.length; i += 2) {
     const key = rest[i];
@@ -524,6 +527,49 @@ export async function main(args) {
         'procedural emits promotion and perceptual artifacts only; it never opens a Cavalry scene.',
         'The compiled _mg script must be executed through cavalry_run_script at a later build gate.',
         'Without rendered frame comparisons the perceptual gate is skipped and converged reports null.'
+      ]
+    };
+  }
+  if (command === 'decomp') {
+    const fps = flags['--fps'] !== undefined ? Number(flags['--fps']) : undefined;
+    if (fps !== undefined && (!Number.isFinite(fps) || fps <= 0)) throw new WorkflowError('CLI_USAGE', '--fps must be a positive number');
+    const frameRange = flags['--frames'] !== undefined ? (() => {
+      const match = /^(\d+):(\d+)$/.exec(String(flags['--frames']));
+      if (!match || Number(match[1]) >= Number(match[2])) throw new WorkflowError('CLI_USAGE', '--frames expects <start:end> with start < end');
+      return [Number(match[1]), Number(match[2])];
+    })() : undefined;
+    const audioPcm = flags['--audio'] ? await loadAudioPcm(path.resolve(flags['--audio']), flags['--sample-rate'] !== undefined ? Number(flags['--sample-rate']) : 8000) : null;
+    const result = await deconstruct(path.resolve(reference), {
+      outDir: flags['--out'] ? path.resolve(flags['--out']) : undefined,
+      fps,
+      frameRange,
+      audioPcm,
+      sampleRate: flags['--sample-rate'] !== undefined ? Number(flags['--sample-rate']) : undefined,
+      cropSpecs: flags['--crop'] !== undefined ? [flags['--crop']] : undefined,
+    });
+    return {
+      status: 'decomposed',
+      version: result.version,
+      source: result.source,
+      inputKind: result.inputKind,
+      fps: result.fps,
+      framesDecoded: result.framesDecoded,
+      restFrameIndex: result.restFrameIndex,
+      beatBoundaries: result.beatGrid.boundaries.map(boundary => boundary.frame),
+      beatCount: result.beatGrid.beats.length,
+      tokens: {
+        background: result.tokenFingerprints[0]?.background ?? null,
+        primarySurface: result.tokenFingerprints[0]?.primarySurface ?? null,
+      },
+      assets: result.assetManifest.assets.map(asset => ({ id: asset.assetId, file: asset.file, pathCount: asset.pathCount })),
+      assetFailures: result.assetManifest.failures,
+      stallionImportCount: result.stallionImport.count,
+      artifacts: result.artifacts,
+      warnings: result.warnings,
+      limitations: [
+        'decomp measures evidence only: it never opens a scene, runs a solver or approves a clone.',
+        'Feed beat-grid boundaries into plan/procedural as exact integer-frame beat timings.',
+        'The stallion-import payload animates the traced assets instead of approximating primitives.'
       ]
     };
   }

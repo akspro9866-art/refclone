@@ -28,7 +28,12 @@ export const STALLION_PAYLOAD_KINDS = Object.freeze([
   'layers',
   'snapshot',
   'snapshot-batch',
-  'render-frames'
+  'render-frames',
+  'batch-step',
+  'batch_inspect',
+  'checkpoint',
+  'rollback',
+  'render_frame_fast'
 ]);
 
 const fail = (code, message, details = {}) => {
@@ -277,6 +282,83 @@ export function createStallionClient(options = {}) {
     return ensureOk(envelope, 'snapshot-batch');
   }
 
+  /**
+   * One atomic batch-step round trip: execute + step + measure + render
+   * (see stallion's BatchStep.ts). This is how Stage 4/4.5 apply `_mg`
+   * patches and read back sampled geometry in the same call.
+   */
+  async function batchStep(step = {}) {
+    const envelope = await request({
+      type: 'batch-step',
+      ...(typeof step.script === 'string' ? { script: step.script } : {}),
+      ...(step.dslManifest && typeof step.dslManifest === 'object' ? { dslManifest: step.dslManifest } : {}),
+      ...(Array.isArray(step.sampleFrames) ? { sampleFrames: step.sampleFrames } : {}),
+      ...(Array.isArray(step.queryLayers) ? { queryLayers: step.queryLayers } : {}),
+      ...(step.renderFrames != null ? { renderFrames: step.renderFrames === true } : {}),
+      ...(step.renderOutputDir ? { renderOutputDir: String(step.renderOutputDir).replace(/\\/g, '/') } : {}),
+      ...(step.compId ? { compId: step.compId } : {}),
+      ...(step.scale != null ? { scale: step.scale } : {})
+    }, { kind: 'batch-step', timeoutMs: step.timeoutMs, seqPrefix: 'batch-step' });
+    return ensureOk(envelope, 'batch-step');
+  }
+
+  /**
+   * Geometry-only multi-frame readback matrix (see stallion's
+   * BatchInspect.ts): the Stage 4.5 loss is evaluated from this — no pixels.
+   */
+  async function batchInspect(inspection = {}) {
+    const frames = Array.isArray(inspection.frames) ? inspection.frames.map(frame => Math.round(Number(frame))).filter(frame => Number.isFinite(frame)) : [];
+    if (frames.length === 0) fail('STALLION_CLIENT_INVALID', 'batchInspect requires at least one frame.');
+    if (frames.length > 64) fail('STALLION_CLIENT_INVALID', 'batchInspect accepts at most 64 frames.');
+    const envelope = await request({
+      type: 'batch_inspect',
+      frames,
+      ...(Array.isArray(inspection.layerIds) ? { layerIds: inspection.layerIds.slice(0, 200) } : {}),
+      ...(Array.isArray(inspection.attributes) ? { attributes: inspection.attributes.slice(0, 16) } : {}),
+      ...(inspection.includeHidden === true ? { includeHidden: true } : {}),
+      ...(inspection.compId ? { compId: inspection.compId } : {})
+    }, { kind: 'batch_inspect', timeoutMs: inspection.timeoutMs, seqPrefix: 'batch-inspect' });
+    return ensureOk(envelope, 'batch_inspect');
+  }
+
+  /** Serialize scene state under a snapshotId (bridge memory + fast temp copy). */
+  async function checkpoint(checkpointOptions = {}) {
+    const envelope = await request({
+      type: 'checkpoint',
+      snapshotId: String(checkpointOptions.snapshotId ?? `refclone-${nextSeq('cp')}`).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80),
+      ...(Array.isArray(checkpointOptions.layerIds) ? { layerIds: checkpointOptions.layerIds.slice(0, 200) } : {}),
+      ...(checkpointOptions.compId ? { compId: checkpointOptions.compId } : {})
+    }, { kind: 'checkpoint', timeoutMs: checkpointOptions.timeoutMs, seqPrefix: 'checkpoint' });
+    return ensureOk(envelope, 'checkpoint');
+  }
+
+  /** Restore a checkpoint by snapshotId or inline state document. */
+  async function rollback(rollbackOptions = {}) {
+    const envelope = await request({
+      type: 'rollback',
+      ...(rollbackOptions.snapshotId ? { snapshotId: String(rollbackOptions.snapshotId) } : {}),
+      ...(rollbackOptions.state && typeof rollbackOptions.state === 'object' ? { state: rollbackOptions.state } : {}),
+      ...(rollbackOptions.compId ? { compId: rollbackOptions.compId } : {})
+    }, { kind: 'rollback', timeoutMs: rollbackOptions.timeoutMs, seqPrefix: 'rollback' });
+    return ensureOk(envelope, 'rollback');
+  }
+
+  /** One downscaled temp-dir render for the verify loop. */
+  async function renderFrameFast(renderOptions = {}) {
+    const frame = Math.round(Number(renderOptions.frame));
+    if (!Number.isFinite(frame)) fail('STALLION_CLIENT_INVALID', 'renderFrameFast requires a numeric frame.');
+    const envelope = await request({
+      type: 'render_frame_fast',
+      frame,
+      ...(renderOptions.scaleFactor != null ? { scaleFactor: renderOptions.scaleFactor } : {}),
+      ...(renderOptions.inline != null ? { inline: renderOptions.inline === true } : {}),
+      ...(renderOptions.outDir ? { outDir: String(renderOptions.outDir).replace(/\\/g, '/') } : {}),
+      ...(renderOptions.fileName ? { fileName: renderOptions.fileName } : {}),
+      ...(renderOptions.compId ? { compId: renderOptions.compId } : {})
+    }, { kind: 'render_frame_fast', timeoutMs: renderOptions.timeoutMs, seqPrefix: 'render-fast' });
+    return ensureOk(envelope, 'render_frame_fast');
+  }
+
   return {
     version: STALLION_BATCH_VERSION,
     baseUrl,
@@ -285,8 +367,54 @@ export function createStallionClient(options = {}) {
     request,
     readLayers,
     readState,
-    snapshotBatch
+    snapshotBatch,
+    batchStep,
+    batchInspect,
+    checkpoint,
+    rollback,
+    renderFrameFast
   };
+}
+
+/**
+ * Resolve a `/render_frame_fast` envelope to actual PNG bytes, live and mock
+ * alike.
+ *
+ * The mock synthesizes the buffer in memory (`pngBase64`, aka `inlineBase64`
+ * in some clients); a live Cavalry script host has no binary read and no
+ * Node builtins, so it can only write the PNG to disk and name it — `outPath`
+ * (newer) or `file` (v0.11 field). This decoder accepts every spelling, and
+ * falls back to a local filesystem read so Stage 5 verification sees
+ * identical pixels against both surfaces. Returns
+ * `{ bytes, source, width, height, image }` or null when no source is
+ * readable.
+ */
+export function decodeRenderFrameFast(envelope, readFile = fs.readFileSync) {
+  if (!envelope || typeof envelope !== 'object') return null;
+  const inline = typeof envelope.pngBase64 === 'string' && envelope.pngBase64.length > 0
+    ? envelope.pngBase64
+    : (typeof envelope.inlineBase64 === 'string' && envelope.inlineBase64.length > 0 ? envelope.inlineBase64 : null);
+  if (inline) {
+    try {
+      const bytes = Buffer.from(inline, 'base64');
+      const image = PNG.sync.read(bytes);
+      return { bytes, source: 'inline', width: image.width, height: image.height, image };
+    } catch {
+      // A corrupt inline buffer falls through to the disk copy when one exists.
+    }
+  }
+  const outPath = typeof envelope.outPath === 'string' && envelope.outPath
+    ? envelope.outPath
+    : (typeof envelope.file === 'string' && envelope.file ? envelope.file : null);
+  if (!outPath) return null;
+  try {
+    const bytes = readFile(outPath);
+    if (!bytes || bytes.length === 0) return null;
+    const image = PNG.sync.read(bytes);
+    return { bytes, source: 'disk', width: image.width, height: image.height, image, outPath };
+  } catch {
+    return null;
+  }
 }
 
 /**

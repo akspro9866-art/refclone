@@ -23,9 +23,6 @@
   "engines": {
     "node": ">=24"
   },
-  "os": [
-    "win32"
-  ],
   "bin": {
     "refclone": "src/cli.mjs"
   },
@@ -35,7 +32,9 @@
     "verify:docs": "node .github/scripts/test-count.mjs",
     "test:integration": "node integration/cavalry.integration.mjs",
     "prepublishOnly": "npm run verify && npm test",
-    "test:zero-slop": "node --test test/pipeline/zero-slop-pipeline.test.ts"
+    "test:zero-slop": "node --test test/pipeline/zero-slop-pipeline.test.ts",
+    "e2e:zero-slop": "node scripts/e2e-zero-slop.mjs",
+    "clone:live": "node scripts/clone-live.mjs"
   },
   "files": [
     "src",

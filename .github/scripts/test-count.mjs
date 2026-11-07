@@ -8,6 +8,7 @@
 // the honest number is the runner's total as-is.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { discoverTests } from '../../test/discover.mjs';
@@ -34,7 +35,12 @@ async function walk(directory) {
 function runSuite() {
   return new Promise((resolve, reject) => {
     // Explicit files keep the invocation independent of shell glob semantics.
-    const testFiles = discoverTests(path.join(repo, 'test'));
+    // The grouped `test/` tree and the spec-shaped `tests/` tree both count —
+    // the same set `npm test` runs through test/run-tests.mjs.
+    const testsTree = path.join(repo, 'tests');
+    const testFiles = discoverTests(path.join(repo, 'test')).concat(
+      existsSync(testsTree) ? discoverTests(testsTree) : [],
+    );
     const child = spawn(process.execPath, ['--test', '--test-reporter=tap', ...testFiles], { cwd: repo, env: { ...process.env } });
     let stdout = '';
     let stderr = '';

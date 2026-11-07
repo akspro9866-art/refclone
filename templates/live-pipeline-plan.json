@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "template": "live-pipeline-plan",
+  "description": "Sensible defaults for a live Cavalry 2.8.0 reference clone: 1920x1080 at 30 or 60 fps, _mg preset-library rigs, Stage 3 settle-normalized trajectory fitting, Stage 4.5 local bbox solver (maxPosError <= 1.5px, maxScaleError <= 2%, llmTokens: 0) and Stage 5 SSIM verification (>= 0.92). Every value can be overridden per run; the clone:live runner merges this template under its CLI flags.",
+  "comp": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "endFrame": 180,
+    "bg": "#101418"
+  },
+  "decomp": {
+    "cropSpecs": [],
+    "audio": null,
+    "sampleRate": 8000,
+    "maxFrames": 600,
+    "frameRange": null
+  },
+  "solver": {
+    "epsPos": 1.5,
+    "epsScale": 0.02,
+    "lambda": 1,
+    "maxSweeps": 24,
+    "maxSimplexIterations": 120,
+    "timeoutMs": 120000
+  },
+  "gate": {
+    "ssimThreshold": 0.92,
+    "iouThreshold": 0.9,
+    "escalationSsimGate": 0.92,
+    "optimizer": { "threshold": 0.92, "maxIterations": 12 }
+  },
+  "presets": {
+    "entrance": "none",
+    "queryHints": ["stagger", "spring", "pop"],
+    "category": null,
+    "maxInvocations": 4
+  },
+  "bridge": {
+    "baseUrl": "http://127.0.0.1:8080",
+    "mockFallback": true,
+    "minVersion": "0.11.0",
+    "requiredCapabilities": ["batch-step", "batch_inspect", "checkpoint", "rollback", "render_frame_fast"],
+    "timeoutMs": 120000
+  },
+  "notes": [
+    "comp.width/height/fps are defaults: the runner overrides them with the measured frame dimensions and --fps.",
+    "decomp.cropSpecs use the x,y,w,h[:name];... syntax. Empty means: tokens + beat grid only, no vector asset tracing.",
+    "gate.ssimThreshold is the Stage 5 acceptance gate; escalationSsimGate is the structural-retry threshold (an LLM turn is justified only below it).",
+    "presets.entrance 'auto' resolves one entrance preset from the 120-preset library — preset rigs ship demo content parameters, so the deterministic lane defaults to 'none' and the zero-slop pipeline reports below-gate honestly instead of animating invented copy. Set 'auto' (or author params in --plan) only when placeholder content is acceptable.",
+    "Per-element motion cloning of arbitrary footage needs tracks: pass --plan with tracks/manifest from a procedural/autoanalyze run."
+  ]
+}
