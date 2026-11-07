@@ -413,7 +413,7 @@ test('the pipeline blocks honestly when there is no manifest and no LLM hook', a
   assert.match(String(result.reason), /no manifest and no LLM hook/);
 });
 
-test('runStage5Gate escalates at most once and reports honest scores', async () => {
+test('runStage5Gate stays local-only: a failing gate never calls the LLM hook', async () => {
   await withMockBridge(async (_port, baseUrl) => {
     const stage3 = await postBatchStep({
       baseUrl,
@@ -422,8 +422,9 @@ test('runStage5Gate escalates at most once and reports honest scores', async () 
       },
       sampleFrames: [0],
     });
-    // A track that can never be satisfied: the gate must fail closed, try the
-    // escalation exactly once, and record the LLM's involvement.
+    // A track that can never be satisfied: the gate must fail closed and stay
+    // below acceptance. Even with an LLM hook present, escalation was removed,
+    // so the hook must never be called and the failure is reported honestly.
     let calls = 0;
     const gate = await import('../../src/pipeline/zero-slop-pipeline.mjs').then((m) =>
       m.runStage5Gate({
@@ -436,15 +437,16 @@ test('runStage5Gate escalates at most once and reports honest scores', async () 
         llm: {
           complete: async () => {
             calls += 1;
-            return 'not-json-at-all';
+            return '{"ops":[]}';
           },
         },
       }),
     );
     assert.equal(gate.complete, false);
-    assert.equal(gate.escalation?.attempted, true, 'escalation was attempted');
-    assert.equal(calls, 1, 'exactly one escalation turn');
-    assert.equal(gate.escalation?.applied, false, 'unparsable patch is recorded, never applied');
+    assert.equal(calls, 0, 'the LLM hook is never invoked on a failing gate');
+    assert.equal(gate.escalation?.attempted, false, 'no escalation is attempted');
+    assert.match(String(gate.escalation?.reason), /local-only/, 'escalation records the local-only reason');
+    assert.equal(gate.escalation?.applied, undefined, 'no patch is ever applied');
   });
 });
 

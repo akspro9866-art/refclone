@@ -1,7 +1,7 @@
 /**
  * Zero-slop cloning pipeline: the 5-stage orchestration where everything that
  * CAN be deterministic IS deterministic, and the LLM is a single-shot rigger
- * plus at most one escalation turn.
+ * only. There is no LLM escalation/refinement loop.
  *
  *   Stage 1 — Deconstruction & assets (0 tokens)
  *       SVG extraction (`svgExtractor`), style specs (`styleSpecExtractor`),
@@ -19,18 +19,15 @@
  *       the L2 bbox loss against the reference tracks and drives the numeric
  *       rig parameters with coordinate descent + Nelder-Mead until every frame
  *       is within 1.5 px position / 2% scale. Stage 5's SSIM only runs after.
- *   Stage 5 — Perceptual diffing & strict escalation gate (0 tokens on
- *       convergence)
+ *   Stage 5 — Perceptual diffing & strict gate (0 tokens)
  *       `coordinateDescentOptimizer` over the rig's tunables; COMPLETE when
- *       SSIM >= 0.96 AND bbox IoU >= 0.95. ONE escalation turn is available
- *       and justified ONLY when post-solver SSIM < 0.92 (structural/topology
- *       mismatch): residual crop + compactDomTsv → LLM structural patch →
- *       stages 3-5 once more. Never a second fallback.
+ *       SSIM >= 0.96 AND bbox IoU >= 0.95. A below-gate result is reported
+ *       honestly and never retried through an LLM (local-only pipeline).
  *
- * The LLM is injectable (`options.llm.complete(prompt) → manifest|patch`) so
- * the orchestrator is testable end-to-end without a model; with no `llm` and
+ * The LLM is injectable (`options.llm.complete(prompt) → manifest`) so the
+ * orchestrator is testable end-to-end without a model; with no `llm` and
  * no pre-supplied `manifest`, Stage 2 records `blocked` — an honest outcome,
- * never a fabricated rig.
+ * never a fabricated rig. Stage 5 never calls the LLM.
  *
  * Bridge contract: every scene touch is a stallion `/batch-step` round trip
  * (`type: "batch-step"` on POST /post; the mock bridge also serves the literal
@@ -56,18 +53,15 @@ export const ZERO_SLOP_PIPELINE_VERSION = '1.0.0';
 export const ZERO_SLOP_DEFAULTS = Object.freeze({
   ssimThreshold: 0.96,
   iouThreshold: 0.95,
-  maxFallbackTurns: 1,
   optimizer: { threshold: 0.96, maxIterations: 12 },
   sampleStride: 6,
   localRefiner: { ...LOCAL_REFINER_DEFAULTS },
 });
 
 /**
- * The structural escalation gate: only a post-solver SSIM below 0.92 justifies
- * spending an LLM turn, because it indicates a topology problem (missing mask,
- * wrong shape primitive, missing deformer) that numeric refinement cannot fix.
- * A clone between 0.92 and the acceptance gate is reported below-gate with no
- * retry — the numbers say "polish", not "restructure".
+ * Structural quality reference threshold (0.92). Retained as a measurement
+ * landmark for parity tests; it no longer triggers any LLM escalation, which
+ * was removed from this local-only pipeline.
  */
 export const ESCALATION_SSIM_GATE = 0.92;
 
@@ -536,7 +530,9 @@ function decodeRgbaSidecar(buffer, width, height) {
 /**
  * Stage 5 — optimization + gate. Runs bounded coordinate descent over the
  * rig's tunables (each candidate is a real batch-step evaluation), then the
- * strict gate. On failure, ONE escalation turn is available.
+ * strict gate. Local-only: a below-gate result is reported honestly and never
+ * retried through an LLM. The `llm` parameter is accepted for backwards
+ * signature compatibility and is deliberately ignored.
  */
 export async function runStage5Gate({
   stage3,
@@ -547,7 +543,7 @@ export async function runStage5Gate({
   runDirectory,
   thresholds = ZERO_SLOP_DEFAULTS,
   optimizerOptions = ZERO_SLOP_DEFAULTS.optimizer,
-  llm = null,
+  llm = null, // ignored: no LLM escalation remains in this pipeline
 }) {
   const sampleFrames = Object.keys(stage3.frames ?? {}).map(Number).sort((a, b) => a - b);
   const applyParams = async (params) => {
@@ -585,95 +581,12 @@ export async function runStage5Gate({
     ssim: round2(ssim),
     complete,
     optimization,
-    escalation: null,
-    // Structural escalation is justified ONLY below this gate: a clone at
-    // 0.93 SSIM is a polish problem (the local solver owns it), a clone at
-    // 0.88 is a topology problem (missing mask, wrong primitive, missing
-    // deformer) that no numeric refinement can repair.
+    // Local-only pipeline: LLM escalation was removed. A failing gate is
+    // reported, never patched by a model turn, regardless of any llm hook.
+    escalation: { attempted: false, reason: 'local-only pipeline: LLM escalation removed; below-gate fidelity is reported honestly, never retried' },
     escalationGate: ESCALATION_SSIM_GATE,
-    structuralRetryJustified: ssim < ESCALATION_SSIM_GATE,
   };
-  if (complete) return result;
-  if (ssim >= ESCALATION_SSIM_GATE) {
-    result.escalation = { attempted: false, reason: `ssim ${round2(ssim)} is above the ${ESCALATION_SSIM_GATE} structural gate; below acceptance is reported, not retried` };
-    return result;
-  }
-  if (!llm || typeof llm.complete !== 'function') {
-    result.escalation = { attempted: false, reason: 'no LLM hook provided; the clone stays below the gate' };
-    return result;
-  }
-  // ONE escalation turn: residual evidence + compact DOM → structural patch.
-  const residualBox = worstResidualBox(bestStage, tracks);
-  const prompt = [
-    'The clone is below the acceptance gate. Reply with ONLY a JSON patch manifest:',
-    '{"ops":[{"op":"set|keyframe|easing|expression|fit","target":"$id",...}]}',
-    `Measured scores: bboxIoU=${round2(iou)} ssim=${round2(ssim)} (need >= ${thresholds.iouThreshold} / ${thresholds.ssimThreshold}).`,
-    `Worst-residual region: ${JSON.stringify(residualBox)}.`,
-    'Current compact DOM (id\\ttype\\tparent\\tname\\tx,y,w,h\\tanimAttrs\\tconnections):',
-    bestStage.compactDomTsv ?? '',
-  ].join('\n');
-  let answer;
-  try {
-    answer = await llm.complete(prompt);
-  } catch (error) {
-    result.escalation = { attempted: true, applied: false, error: String(error.message ?? error) };
-    return result;
-  }
-  let patch;
-  try {
-    patch = parseManifestAnswer(answer);
-  } catch (error) {
-    result.escalation = { attempted: true, applied: false, error: String(error.message ?? error) };
-    return result;
-  }
-  const patchedStage = await postBatchStep({
-    dslManifest: patch,
-    sampleFrames,
-    renderFrames: true,
-    renderOutputDir: runDirectory ? path.join(runDirectory, 'escalation') : undefined,
-    ...client,
-  });
-  const patchedIou = meanGeometryIoU(patchedStage, tracks);
-  const patchedSsim = await meanRenderedSsim(patchedStage, framePngPaths ?? {});
-  result.escalation = {
-    attempted: true,
-    applied: true,
-    iou: round2(patchedIou),
-    ssim: round2(patchedSsim),
-    complete: patchedSsim >= thresholds.ssimThreshold && patchedIou >= thresholds.iouThreshold,
-  };
-  if (result.escalation.complete) {
-    result.iou = round2(patchedIou);
-    result.ssim = round2(patchedSsim);
-    result.complete = true;
-    bestStage = patchedStage;
-  }
   return result;
-}
-
-function worstResidualBox(stage, tracks) {
-  let worst = null;
-  let worstIou = 1;
-  const geometryByLayer = new Map();
-  for (const [frameKey, entry] of Object.entries(stage.frames ?? {})) {
-    for (const geometry of entry.geometries ?? []) {
-      const list = geometryByLayer.get(geometry.layerId) ?? [];
-      list.push({ frame: Number(frameKey), box: geometry.bbox, name: geometry.name });
-      geometryByLayer.set(geometry.layerId, list);
-    }
-  }
-  for (const track of tracks ?? []) {
-    for (const point of resolveGeometryLists(geometryByLayer, track)) {
-      const referenceBox = track.boxesByFrame?.[point.frame];
-      if (!referenceBox) continue;
-      const iou = boxIoU(referenceBox, point.box);
-      if (iou < worstIou) {
-        worstIou = iou;
-        worst = { layerId: track.layerId, frame: point.frame, iou: round2(iou), reference: referenceBox, measured: point.box };
-      }
-    }
-  }
-  return worst;
 }
 
 /**
@@ -781,9 +694,6 @@ export async function runZeroSlopPipeline(options = {}) {
     optimizerOptions: thresholds.optimizer,
     llm: options.llm ?? null,
   });
-  if (stages.gate.escalation?.applied && stages.gate.complete) {
-    llmCalls.push({ turn: 'escalation', applied: true });
-  }
 
   return {
     version: ZERO_SLOP_PIPELINE_VERSION,

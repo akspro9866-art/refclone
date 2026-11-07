@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// CI: `node --check` every distributable module, so a syntax error never reaches
-// a user as a runtime failure inside a five-minute stage.
+// CI/build: `node --check` every distributable module, so a syntax error never
+// reaches a user as a runtime failure inside a five-minute stage. `.ts` files
+// are parsed through Node 24's native type stripping (erasable syntax only);
+// this is an honest parse gate, not a full TypeScript typecheck.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -18,7 +20,7 @@ async function walk(root) {
   for (const entry of entries) {
     const full = path.join(root, entry.name);
     if (entry.isDirectory()) await walk(full);
-    else if (entry.isFile() && entry.name.endsWith('.mjs')) files.push(full);
+    else if (entry.isFile() && (entry.name.endsWith('.mjs') || entry.name.endsWith('.ts'))) files.push(full);
   }
 }
 

@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.mjs",
     "./cli": "./src/cli.mjs",
+    "./strict": "./src/strict/index.mjs",
     "./package.json": "./package.json"
   },
   "license": "MIT",
@@ -27,7 +28,10 @@
     "refclone": "src/cli.mjs"
   },
   "scripts": {
+    "build": "node .github/scripts/syntax-check.mjs",
     "test": "node test/run-tests.mjs",
+    "test:ci": "node test/run-tests.mjs",
+    "test:live": "node integration/cavalry.integration.mjs",
     "verify": "node .github/scripts/syntax-check.mjs && node .github/scripts/config-parity.mjs && node .github/scripts/skill-parity.mjs && node .github/scripts/privacy-scan.mjs",
     "verify:docs": "node .github/scripts/test-count.mjs",
     "test:integration": "node integration/cavalry.integration.mjs",
@@ -69,6 +73,7 @@
     "visual-qa"
   ],
   "dependencies": {
+    "@akspro/cavalry-mcp": "file:../cavalry-mcp",
     "@modelcontextprotocol/sdk": "1.32.2",
     "ajv": "8.20.0",
     "cavalry-mcp": "file:../cavalry-mcp",

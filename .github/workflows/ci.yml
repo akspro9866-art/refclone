@@ -22,12 +22,19 @@ jobs:
     name: Unit and synthetic-pipeline tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    defaults:
+      run:
+        # The repo is checked out into refclone/ (not the workspace root) so
+        # that file:../cavalry-mcp resolves exactly like a local checkout.
+        working-directory: refclone
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: refclone
 
       - name: Install FFmpeg (windows)
         if: runner.os == 'Windows'
@@ -55,10 +62,11 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: refclone/package-lock.json
 
       # The package manifest depends on cavalry-mcp via file:../cavalry-mcp, so
-      # the sibling stack is checked out at the workspace root — the same layout
-      # a local developer has — before npm ci runs.
+      # the sibling stack is checked out next to refclone/ at the workspace
+      # root — the same layout a local developer has — before npm ci runs.
       - name: Check out the sibling stallion bridge
         uses: actions/checkout@v4
         with:
@@ -75,7 +83,7 @@ jobs:
         run: npm ci
 
       - name: Build stallion
-        working-directory: stallion
+        working-directory: ${{ github.workspace }}/stallion
         shell: bash
         run: |
           # NODE_ENV=production is set only for the build: npm ci would omit
@@ -85,14 +93,14 @@ jobs:
           NODE_ENV=production npm run build
 
       - name: Build cavalry-mcp
-        working-directory: cavalry-mcp
+        working-directory: ${{ github.workspace }}/cavalry-mcp
         shell: bash
         run: |
           npm ci
           npm run build
 
-      - name: Syntax check every module
-        run: node .github/scripts/syntax-check.mjs
+      - name: Build (honest syntax gate, Node 24 native TS strip)
+        run: npm run build
 
       - name: Shipped configs stay in sync
         run: node .github/scripts/config-parity.mjs
@@ -103,8 +111,8 @@ jobs:
       - name: No personal paths or private reference material
         run: node .github/scripts/privacy-scan.mjs
 
-      - name: npm test
-        run: npm test
+      - name: Full test suite (strict + legacy)
+        run: npm run test:ci
         env:
           # With the sibling stack built, test/e2e/mock-bridge.e2e.test.mjs runs as
           # a hard gate; without it the e2e skips deterministically.
@@ -120,9 +128,9 @@ jobs:
         with:
           name: test-logs-${{ matrix.os }}
           path: |
-            *.log
-            test-output/
-            jobs/
+            refclone/*.log
+            refclone/test-output/
+            refclone/jobs/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -138,19 +146,35 @@ jobs:
     runs-on: self-hosted
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[live-cavalry]'))
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: refclone
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: refclone
+      - name: Check out the sibling cavalry-mcp
+        uses: actions/checkout@v4
+        with:
+          repository: akspro9866-art/cavalry-mcp
+          path: cavalry-mcp
       - name: npm ci
         run: npm ci
+      - name: Build cavalry-mcp
+        working-directory: ${{ github.workspace }}/cavalry-mcp
+        shell: bash
+        run: |
+          npm ci
+          npm run build
       - name: Integration run (requires Cavalry with Scripts > Stallion enabled)
-        run: npm run test:integration
+        run: npm run test:live
       - name: Upload integration artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: integration-logs
           path: |
-            *.log
-            integration-output/
+            refclone/*.log
+            refclone/integration-output/
           retention-days: 30
           if-no-files-found: ignore

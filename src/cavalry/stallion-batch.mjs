@@ -18,6 +18,10 @@ import { WorkflowError, hashObject } from '../core.mjs';
 
 export const STALLION_BATCH_VERSION = '1.0.0';
 
+// Serialize operations sharing an endpoint, including separate client instances.
+const endpointQueues = new Map();
+const uncertainEndpoints = new Set();
+
 export const DEFAULT_STALLION_URL = 'http://127.0.0.1:8080';
 
 /** Envelope kinds this client understands when polling `/get`. */
@@ -33,7 +37,8 @@ export const STALLION_PAYLOAD_KINDS = Object.freeze([
   'batch_inspect',
   'checkpoint',
   'rollback',
-  'render_frame_fast'
+  'render_frame_fast',
+  'batchEvalAndCapture'
 ]);
 
 const fail = (code, message, details = {}) => {
@@ -156,7 +161,25 @@ export function createStallionClient(options = {}) {
    * @param {string} [requestOptions.seqPrefix] - Debug-friendly seq prefix.
    * @returns {Promise<Object>} The matching envelope
    */
-  async function request(payload, requestOptions = {}) {
+  function request(payload, requestOptions = {}) {
+    const previous = endpointQueues.get(baseUrl) ?? Promise.resolve();
+    const operation = previous.catch(() => {}).then(async () => {
+      if (payload?.type === 'batchEvalAndCapture' && uncertainEndpoints.has(baseUrl)) {
+        fail('STALLION_STATE_UNKNOWN', 'A prior strict mutation timed out; reconcile externally, never retry.');
+      }
+      try { return await executeRequest(payload, requestOptions); }
+      catch (error) {
+        if (payload?.type === 'batchEvalAndCapture' && ['STALLION_TIMEOUT', 'STALLION_UNREACHABLE', 'STALLION_INVALID_RESPONSE'].includes(error.code)) uncertainEndpoints.add(baseUrl);
+        throw error;
+      }
+    });
+    const settled = operation.catch(() => {});
+    endpointQueues.set(baseUrl, settled);
+    void settled.then(() => { if (endpointQueues.get(baseUrl) === settled) endpointQueues.delete(baseUrl); });
+    return operation;
+  }
+
+  async function executeRequest(payload, requestOptions = {}) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       fail('STALLION_CLIENT_INVALID', 'A payload object is required.');
     }
@@ -174,7 +197,10 @@ export function createStallionClient(options = {}) {
     // Some deployments (and the mock's direct path routes) answer the envelope
     // straight from the POST; accept it when it already carries our seq.
     const matches = envelope => envelope && typeof envelope === 'object' && envelope.seq === seq;
-    if (matches(ack)) return ack;
+    if (matches(ack)) {
+      if (requestOptions.kind && ack.kind !== requestOptions.kind) fail('STALLION_INVALID_RESPONSE', `Expected kind '${requestOptions.kind}', received '${String(ack.kind)}'.`);
+      return ack;
+    }
 
     let delay = pollMs;
     let lastPayload = null;
@@ -359,8 +385,46 @@ export function createStallionClient(options = {}) {
     return ensureOk(envelope, 'render_frame_fast');
   }
 
+  /** Strict request: one mutation, one correlated capture; never retried. */
+  async function batchEvalAndCapture(batch) {
+    const invalid = message => fail('STALLION_CLIENT_INVALID', message);
+    if (!batch || typeof batch.code !== 'string' || !batch.code.trim() || typeof batch.transactionId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(batch.transactionId) || typeof batch.undoGroupName !== 'string' || !batch.undoGroupName) invalid('Strict code, transactionId and undoGroupName required.');
+    const frames = batch.sampleFrames, ids = batch.inspectLayerIds, render = batch.renderConfig;
+    if (!Array.isArray(frames) || !frames.length || frames.length > 64 || frames.some(f => !Number.isInteger(f) || f < 0) || new Set(frames).size !== frames.length) invalid('Strict sampleFrames must be 1..64 unique nonnegative integers.');
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200 || ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length) invalid('Strict inspectLayerIds must be 1..200 unique IDs.');
+    if (!render || render.enabled !== true || typeof render.outputDir !== 'string' || !render.outputDir || render.scaleFactor !== 1 || batch.rollbackOnError !== true) invalid('Strict capture requires unity-scale rendering (scaleFactor 1, the host render multiplier) and rollbackOnError.');
+    // Explicit rollback contract: no silent fallback between undo and checkpoint.
+    const strategy = batch.rollbackStrategy ?? 'undo';
+    if (strategy !== 'undo' && strategy !== 'checkpoint') invalid('rollbackStrategy must be "undo" or "checkpoint".');
+    let checkpointPath;
+    if (strategy === 'checkpoint') {
+      if (typeof batch.checkpointPath !== 'string' || !batch.checkpointPath.trim() || !batch.checkpointPath.toLowerCase().endsWith('.cv')) invalid('Checkpoint strategy requires a .cv checkpointPath.');
+      checkpointPath = batch.checkpointPath.replace(/\\/g, '/');
+    } else if (batch.checkpointPath != null) invalid('checkpointPath is only valid with rollbackStrategy "checkpoint".');
+    const envelope = await request({ type: 'batchEvalAndCapture', transactionId: batch.transactionId, undoGroupName: batch.undoGroupName, code: batch.code, sampleFrames: frames, inspectLayerIds: ids, renderConfig: render, rollbackOnError: true, ...(strategy === 'checkpoint' ? { rollbackStrategy: 'checkpoint', checkpointPath } : {}) }, { kind: 'batchEvalAndCapture', seqPrefix: 'strict' });
+    ensureOk(envelope, 'batchEvalAndCapture');
+    if (envelope.ok !== true || envelope.transactionId !== batch.transactionId || !Number.isFinite(envelope.executionTimeMs) || envelope.executionTimeMs < 0) fail('STALLION_INVALID_RESPONSE', 'Strict transaction evidence missing or mismatched.');
+    if (strategy === 'checkpoint') {
+      if (envelope.rollbackStrategy !== 'checkpoint' || envelope.checkpoint?.saved !== true || envelope.checkpoint?.path !== checkpointPath) fail('STALLION_INVALID_RESPONSE', 'Checkpoint save evidence missing or mismatched.');
+    }
+    const comp = envelope.compInfo;
+    if (!comp || !['width', 'height', 'fps', 'startFrame', 'endFrame'].every(k => Number.isFinite(comp[k])) || comp.width <= 0 || comp.height <= 0 || comp.fps <= 0) fail('STALLION_INVALID_RESPONSE', 'Strict composition evidence missing.');
+    for (const frame of frames) {
+      const entry = envelope.frames?.[frame];
+      if (!entry || typeof entry.renderedPngPath !== 'string') fail('STALLION_INVALID_RESPONSE', `Missing strict pixels for frame ${frame}.`);
+      // Host capture contract names every fresh render frame_<n>.png.
+      if (entry.renderedPngPath.split(/[\\/]/).pop() !== `frame_${frame}.png`) fail('STALLION_INVALID_RESPONSE', `Strict pixels for frame ${frame} violate the frame_<n>.png host contract.`);
+      for (const id of ids) {
+        const m = entry.layerMetrics?.[id];
+        if (!m || !['x','y','width','height','centreX','centreY'].every(k => Number.isFinite(m.bbox?.[k])) || m.bbox.width <= 0 || m.bbox.height <= 0 || !['posX','posY','scaleX','scaleY','rotation','opacity'].every(k => Number.isFinite(m.worldTransform?.[k]))) fail('STALLION_INVALID_RESPONSE', `Missing strict metrics for ${id} at ${frame}.`);
+      }
+    }
+    return envelope;
+  }
+
   return {
     version: STALLION_BATCH_VERSION,
+    batchEvalAndCapture,
     baseUrl,
     status,
     getPayload,

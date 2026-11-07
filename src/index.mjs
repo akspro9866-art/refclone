@@ -169,5 +169,9 @@ export {
 // cavalry-mcp direct library loader (no MCP stdio anywhere)
 export { loadCavalryLib, cavalryLibAvailable } from './cavalry/cavalry-lib.mjs';
 
+// Strict, fail-closed solid-rectangle route (Stage0 candidate inspection,
+// static-gated convergence, zero-HTTP Stage 3.5 validation). No LLM refinement.
+export { inspectReference, compileAndConverge, validateStage35 } from './strict/index.mjs';
+
 // CLI dispatcher (programmatic invocation)
 export { main as cliMain } from './cli.mjs';

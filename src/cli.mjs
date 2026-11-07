@@ -15,6 +15,7 @@ import { runQa } from './pipeline/qa.mjs';
 import { exportFinal } from './pipeline/export.mjs';
 import { runPipeline } from './pipeline/run.mjs';
 import { runZeroSlopPipeline } from './pipeline/zero-slop-pipeline.mjs';
+import { inspectReference, compileAndConverge, validateStage35 } from './strict/index.mjs';
 import { deconstruct, parseCropSpec, loadAudioPcm } from './decomp/decomp.ts';
 import { readJson, WorkflowError } from './core.mjs';
 import {
@@ -42,6 +43,9 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs procedural <observations.json> --shot <shot-id> [--metadata <media-metadata.json>] [--config <json>] [--max-iterations <n>] [--report <path>]
   node src/cli.mjs decomp <video_or_frames_dir> [--out <dir>] [--fps <n>] [--frames <start:end>] [--audio <file>] [--sample-rate <hz>] [--crop "x,y,w,h[:name];..."]
   node src/cli.mjs zero-slop --plan <pipeline-plan.json> [--job <directory>] [--base-url <url>]
+  node src/cli.mjs inspect <reference-video> [--start <sec>] [--end <sec>] [--fps <n>] [--out <dir>]
+  node src/cli.mjs converge <beat-spec.json> [--out <dir>] [--max-iterations <n>]
+  node src/cli.mjs validate <beat-spec-or-hook.json>
   node src/cli.mjs --help
 
 Run is the one-command, resume-first pipeline. It reuses a complete verified
@@ -118,12 +122,20 @@ to n rounds until the perceptual gate passes. --report <path> writes the markdow
 summary to that file. This command never opens a Cavalry scene; the compiled _mg
 script is returned for a later build/render gate to execute through
 cavalry_run_script.
+Inspect/converge/validate are the strict, fail-closed solid-rectangle route.
+Inspect measures only the Stage0 candidate hero (local synthetic geometry); it
+reports stage1Ran=false and pending beats/trajectories until the compile-time
+static batch gate passes. Converge applies the measured rig through a qualified
+transport only: an unqualified live host blocks before any POST (exit nonzero).
+Validate checks a BeatSpec or a refclone_/cavalry_ compile hook payload locally
+with zero HTTP. A blocked strict result exits nonzero; legacy commands are
+unchanged.
 `;
 
 export async function main(args) {
   if (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]))) return { help: HELP };
   const [command, reference, ...rest] = args;
-  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural', 'zero-slop', 'decomp'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
+  if (!['run', 'ingest', 'analyze', 'autoanalyze', 'assets', 'resolve', 'design', 'plan', 'design-generic', 'plan-generic', 'build', 'render', 'qa', 'export', 'procedural', 'zero-slop', 'decomp', 'inspect', 'converge', 'validate'].includes(command)) throw new WorkflowError('COMMAND_UNAVAILABLE', `Command is not implemented: ${command}`);
     // zero-slop is plan-driven: the pipeline plan carries the reference evidence.
   if (command !== 'zero-slop' && (!reference || reference.startsWith('--'))) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
   const flags = {};
@@ -143,6 +155,9 @@ export async function main(args) {
     : command === 'procedural' ? ['--shot', '--metadata', '--config', '--max-iterations', '--report']
     : command === 'zero-slop' ? ['--plan', '--job', '--base-url']
     : command === 'decomp' ? ['--out', '--fps', '--frames', '--audio', '--sample-rate', '--crop']
+    : command === 'inspect' ? ['--start', '--end', '--fps', '--out']
+    : command === 'converge' ? ['--out', '--max-iterations']
+    : command === 'validate' ? []
     : ['--manifest', '--job'];
   for (let i = 0; i < rest.length; i += 2) {
     const key = rest[i];
@@ -573,6 +588,34 @@ export async function main(args) {
       ]
     };
   }
+  if (command === 'inspect') {
+    const numeric = flag => {
+      if (flags[flag] === undefined) return undefined;
+      const value = Number(flags[flag]);
+      if (!Number.isFinite(value)) throw new WorkflowError('CLI_USAGE', `${flag} must be a finite number`);
+      return value;
+    };
+    const input = { videoPath: path.resolve(reference) };
+    const startSec = numeric('--start'), endSec = numeric('--end'), fps = numeric('--fps');
+    if (startSec !== undefined) input.startSec = startSec;
+    if (endSec !== undefined) input.endSec = endSec;
+    if (fps !== undefined) input.fps = fps;
+    if (flags['--out']) input.outputDir = path.resolve(flags['--out']);
+    return { ...(await inspectReference(input)), strict: true };
+  }
+  if (command === 'converge') {
+    const input = { beatSpec: await readJson(path.resolve(reference)) };
+    if (flags['--out']) input.outputDir = path.resolve(flags['--out']);
+    if (flags['--max-iterations'] !== undefined) {
+      const value = Number(flags['--max-iterations']);
+      if (!Number.isInteger(value)) throw new WorkflowError('CLI_USAGE', '--max-iterations must be an integer');
+      input.maxIterations = value;
+    }
+    return { ...(await compileAndConverge(input)), strict: true };
+  }
+  if (command === 'validate') {
+    return { ...(await validateStage35(await readJson(path.resolve(reference)))), strict: true };
+  }
   if (command === 'zero-slop') {
     if (!flags['--plan']) throw new WorkflowError('CLI_USAGE', 'zero-slop requires --plan <pipeline-plan.json>');
     const plan = await readJson(path.resolve(flags['--plan']));
@@ -620,6 +663,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const result = await main(process.argv.slice(2));
     process.stdout.write(result.help ?? `${JSON.stringify(result, null, 2)}\n`);
+    // Strict commands fail closed: a blocked result is a nonzero exit. Legacy
+    // commands keep their existing exit behaviour.
+    if (result.strict === true && result.ok === false) process.exitCode = 1;
   } catch (error) {
     process.stderr.write(`${JSON.stringify({ status: 'failed', error: typeof error.toJSON === 'function' ? error.toJSON() : { code: 'UNEXPECTED', message: error.message } }, null, 2)}\n`);
     process.exitCode = 1;

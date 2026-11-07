@@ -18,7 +18,7 @@ const specTree = path.join(path.dirname(here), 'tests')
 const files = discoverTests(here).concat(fs.existsSync(specTree) ? discoverTests(specTree) : [])
 
 if (files.length === 0) {
-  console.error('no *.test.mjs files found')
+  console.error('no *.test.mjs or *.test.ts files found')
   process.exit(1)
 }
 
