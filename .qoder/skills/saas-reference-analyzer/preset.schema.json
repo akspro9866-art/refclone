@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SaaS Style Preset Library",
+  "type": "object",
+  "required": [
+    "style_name",
+    "version",
+    "type",
+    "resolution",
+    "fps",
+    "project_dna",
+    "layout_rules",
+    "pacing_rules",
+    "presets",
+    "asset_specs",
+    "font_template_prompt",
+    "fallback_font",
+    "icon_template_prompt",
+    "sfx_template_prompts",
+    "music_template_prompt",
+    "saas_rules"
+  ],
+  "properties": {
+    "style_name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "version": { "type": "string", "const": "v1" },
+    "type": { "type": "string", "const": "SAAS_ONLY" },
+    "resolution": { "type": "string" },
+    "fps": { "type": "number" },
+    "project_dna": {
+      "type": "object",
+      "required": ["aspect_ratio", "style_descriptor", "color_tokens", "safe_margins"],
+      "properties": {
+        "aspect_ratio": { "type": "string" },
+        "style_descriptor": { "type": "string" },
+        "color_tokens": {
+          "type": "object",
+          "required": ["primary", "background", "text", "accent"],
+          "properties": {
+            "primary": { "type": "string" },
+            "background": { "type": "string" },
+            "text": { "type": "string" },
+            "accent": { "type": "string" }
+          }
+        },
+        "safe_margins": { "type": "string" }
+      }
+    },
+    "layout_rules": {
+      "type": "object",
+      "required": ["text_to_ui_ratio", "grid_padding", "watermark_position"],
+      "properties": {
+        "text_to_ui_ratio": { "type": "string" },
+        "grid_padding": { "type": "string" },
+        "watermark_position": { "type": "string" }
+      }
+    },
+    "pacing_rules": {
+      "type": "object",
+      "required": ["avg_shot_frames", "ui_hold_frames", "cuts_per_10s", "cut_trigger", "modulation_rule"],
+      "properties": {
+        "avg_shot_frames": { "type": "number" },
+        "ui_hold_frames": { "type": "number" },
+        "cuts_per_10s": { "type": "number" },
+        "cut_trigger": { "type": "string" },
+        "modulation_rule": { "type": "string" }
+      }
+    },
+    "presets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "preset_id",
+          "category",
+          "tier",
+          "occurrences",
+          "use_for",
+          "default_params",
+          "what_to_modify",
+          "what_to_keep_fixed",
+          "example_timestamp"
+        ],
+        "properties": {
+          "preset_id": { "type": "string" },
+          "category": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "tier": { "type": "string", "enum": ["CORE", "OPTIONAL"] },
+          "occurrences": { "type": "string" },
+          "use_for": { "type": "string" },
+          "default_params": { "type": "object" },
+          "what_to_modify": { "type": "array", "items": { "type": "string" } },
+          "what_to_keep_fixed": { "type": "array", "items": { "type": "string" } },
+          "example_timestamp": { "type": "string" }
+        }
+      }
+    },
+    "asset_specs": {
+      "type": "object",
+      "required": ["font", "icons", "sfx", "music"]
+    },
+    "font_template_prompt": { "type": "string" },
+    "fallback_font": { "type": "string" },
+    "icon_template_prompt": { "type": "string" },
+    "sfx_template_prompts": { "type": "array", "items": { "type": "string" } },
+    "music_template_prompt": { "type": "string" },
+    "saas_rules": {
+      "type": "object",
+      "required": ["allowed_categories", "on_non_saas_input"],
+      "properties": {
+        "allowed_categories": { "type": "array", "items": { "type": "string" } },
+        "on_non_saas_input": {
+          "type": "string",
+          "const": "This library is SaaS-only. Remove non-SaaS video and retry."
+        }
+      }
+    }
+  }
+}

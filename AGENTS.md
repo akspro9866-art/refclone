@@ -17,6 +17,10 @@ PowerShell 5.1 cannot parse it), and `Invoke-Item` rather than `open`. Paths in
 JSON and TOML use forward slashes (`C:/Users/<you>/...`) because a backslash is
 an escape character there; paths you hand to a Windows shell use backslashes.
 
+## SaaS reference video intake
+
+[`.qoder/rules/saas-video-intake.md`](.qoder/rules/saas-video-intake.md) is always on. When a chat supplies 5–10 video paths without asking to build from an existing style, load [`.qoder/skills/saas-reference-analyzer/SKILL.md`](.qoder/skills/saas-reference-analyzer/SKILL.md) and run the analysis-only pipeline: `ingest`, `decomp`, `inspect`, `autoanalyze`, `analyze`, `validate`, plus the local `validate_output.py`. Do not invoke `run`, `build`, `render`, `qa`, `export`, `procedural`, `converge`, `zero-slop`, or any `stallion` command. If any input is not SaaS UI content, abort the batch and print only: "This library is SaaS-only. Remove non-SaaS video and retry."
+
 ## Non-negotiables
 
 - Preserve exact visible copy. Never invent, paraphrase or "tidy" text, glyphs,

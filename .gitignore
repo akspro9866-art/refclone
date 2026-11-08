@@ -28,3 +28,7 @@ config.local.json
 
 # Generated smoke-run evidence: records this machine, never shipped.
 scripts/output/
+
+# Python bytecode from local validation runs.
+__pycache__/
+*.pyc
