@@ -25,3 +25,6 @@ integration/evidence/
 .env.*
 config.local.json
 *.tmp
+
+# Generated smoke-run evidence: records this machine, never shipped.
+scripts/output/
