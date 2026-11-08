@@ -47,6 +47,7 @@ import { refineLocally, LOCAL_REFINER_DEFAULTS } from '../solver/local_refiner.t
 import { fitSemanticBeat, beatsToPromptBlock } from '../promotion/trajectory_fitter.ts';
 import { loadCavalryLib } from '../cavalry/cavalry-lib.mjs';
 import { computeSSIM } from '../vision/perceptual.mjs';
+import { extractStylePreset, styleGatePass } from '../stages/stage6_extract_style.ts';
 
 export const ZERO_SLOP_PIPELINE_VERSION = '1.0.0';
 
@@ -694,6 +695,51 @@ export async function runZeroSlopPipeline(options = {}) {
     optimizerOptions: thresholds.optimizer,
     llm: options.llm ?? null,
   });
+
+  // Stage 6 — style extraction. Runs automatically after Stage 5 once a style
+  // id is requested, and only on a verified gate unless --force-style is set.
+  // Extraction failures are recorded next to the gate result, never hidden and
+  // never allowed to rewrite the measured scores.
+  if (options.extractStyleId) {
+    const gatePass = styleGatePass(stages.gate, { ssim: thresholds.ssimThreshold, iou: thresholds.iouThreshold });
+    if (!gatePass && options.forceStyle !== true) {
+      stages.styleExtraction = {
+        stage: 'style-extraction',
+        status: 'skipped',
+        reason: 'Stage 5 gate did not pass; pass --force-style to export the style anyway',
+      };
+    } else {
+      try {
+        const extraction = await extractStylePreset({
+          stage3Graph: stages.compilation,
+          stage4DslAst: { manifest },
+          stage5Report: stages.gate,
+          options: {
+            styleId: options.extractStyleId,
+            description: options.styleDescription,
+            force: options.forceStyle === true,
+            clonedDir: options.clonedDir,
+            skillDir: options.skillDir,
+            compWidth: options.comp?.width,
+            compHeight: options.comp?.height,
+            fps: options.comp?.fps,
+            totalFrames: options.totalFrames,
+            durationSec: options.durationSec,
+            thresholds: { ssim: thresholds.ssimThreshold, iou: thresholds.iouThreshold },
+          },
+        });
+        stages.styleExtraction = { stage: 'style-extraction', ...extraction };
+      } catch (error) {
+        stages.styleExtraction = {
+          stage: 'style-extraction',
+          status: 'failed',
+          code: error?.code ?? 'STYLE_EXTRACTION_FAILED',
+          message: String(error?.message ?? error),
+          details: error?.details ?? null,
+        };
+      }
+    }
+  }
 
   return {
     version: ZERO_SLOP_PIPELINE_VERSION,

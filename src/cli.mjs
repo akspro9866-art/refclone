@@ -42,7 +42,7 @@ const HELP = `refclone - reference-faithful video cloning (qualified commands on
   node src/cli.mjs export <scene-plan.json> --project <saved-scene> --render <render-manifest.json> --qa <qa-report.json> [--build <build-report.json>] [--reference <video>] [--config <json>] [--job <directory>]
   node src/cli.mjs procedural <observations.json> --shot <shot-id> [--metadata <media-metadata.json>] [--config <json>] [--max-iterations <n>] [--report <path>]
   node src/cli.mjs decomp <video_or_frames_dir> [--out <dir>] [--fps <n>] [--frames <start:end>] [--audio <file>] [--sample-rate <hz>] [--crop "x,y,w,h[:name];..."]
-  node src/cli.mjs zero-slop --plan <pipeline-plan.json> [--job <directory>] [--base-url <url>]
+  node src/cli.mjs zero-slop --plan <pipeline-plan.json> [--job <directory>] [--base-url <url>] [--extract-style <style_id> [--auto-skill] [--cloned-dir <dir>] [--skill-dir <dir>] [--force-style]]
   node src/cli.mjs inspect <reference-video> [--start <sec>] [--end <sec>] [--fps <n>] [--out <dir>]
   node src/cli.mjs converge <beat-spec.json> [--out <dir>] [--max-iterations <n>]
   node src/cli.mjs validate <beat-spec-or-hook.json>
@@ -153,16 +153,24 @@ export async function main(args) {
     : command === 'qa' ? ['--render', '--reference', '--config', '--job']
     : command === 'export' ? ['--project', '--render', '--qa', '--build', '--reference', '--config', '--job']
     : command === 'procedural' ? ['--shot', '--metadata', '--config', '--max-iterations', '--report']
-    : command === 'zero-slop' ? ['--plan', '--job', '--base-url']
+    : command === 'zero-slop' ? ['--plan', '--job', '--base-url', '--extract-style', '--auto-skill', '--cloned-dir', '--skill-dir', '--force-style']
     : command === 'decomp' ? ['--out', '--fps', '--frames', '--audio', '--sample-rate', '--crop']
     : command === 'inspect' ? ['--start', '--end', '--fps', '--out']
     : command === 'converge' ? ['--out', '--max-iterations']
     : command === 'validate' ? []
     : ['--manifest', '--job'];
-  for (let i = 0; i < rest.length; i += 2) {
+  // Boolean flags take no value; every other option is a strict flag/value pair.
+  const booleanFlags = new Set(['--auto-skill', '--force-style']);
+  for (let i = 0; i < rest.length; i += 1) {
     const key = rest[i];
-    if (!allowed.includes(key) || !rest[i + 1] || rest[i + 1].startsWith('--') || key in flags) throw new WorkflowError('CLI_USAGE', `Invalid, repeated or incomplete option: ${key}`);
+    if (!allowed.includes(key) || key in flags) throw new WorkflowError('CLI_USAGE', `Invalid or repeated option: ${key}`);
+    if (booleanFlags.has(key)) {
+      flags[key] = true;
+      continue;
+    }
+    if (!rest[i + 1] || rest[i + 1].startsWith('--')) throw new WorkflowError('CLI_USAGE', `Incomplete option: ${key}`);
     flags[key] = rest[i + 1];
+    i += 1;
   }
   const loadConfig = async requested => {
     const configPath = path.resolve(requested ?? fileURLToPath(new URL('../config.json', import.meta.url)));
@@ -623,7 +631,13 @@ export async function main(args) {
     ...plan,
     runDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined,
     baseUrl: flags['--base-url'] ?? plan.baseUrl,
+    extractStyleId: flags['--extract-style'] ?? plan.extractStyleId,
+    autoSkill: flags['--auto-skill'] === true || plan.autoSkill === true,
+    forceStyle: flags['--force-style'] === true || plan.forceStyle === true,
+    clonedDir: flags['--cloned-dir'] ? path.resolve(flags['--cloned-dir']) : plan.clonedDir,
+    skillDir: flags['--skill-dir'] ? path.resolve(flags['--skill-dir']) : plan.skillDir,
     });
+    const styleExtraction = result.stages?.styleExtraction ?? null;
     return {
     status: result.blocked ? 'blocked' : (result.complete ? 'complete' : 'below-gate'),
     version: result.version,
@@ -634,9 +648,22 @@ export async function main(args) {
     runDirectory: result.runDirectory,
     llmCalls: result.llmCalls,
     stages: Object.fromEntries(Object.entries(result.stages ?? {}).map(([name, stage]) => [name, stage.stage ?? name])),
+    style: styleExtraction ? {
+      status: styleExtraction.status ?? 'unknown',
+      styleId: styleExtraction.style_id ?? null,
+      gate: styleExtraction.gate ?? null,
+      presetPath: styleExtraction.preset_path ?? null,
+      skillPath: styleExtraction.skill_path ?? null,
+      autoSkill: flags['--auto-skill'] === true || plan.autoSkill === true,
+      slots: styleExtraction.slots ?? null,
+      defaults: styleExtraction.defaults ?? null,
+      error: styleExtraction.status === 'failed' ? { code: styleExtraction.code, message: styleExtraction.message } : null,
+      reason: styleExtraction.reason ?? null
+    } : null,
     limitations: [
       'zero-slop speaks only to the stallion /batch-step endpoint; no MCP stdio involved.',
-      'Without an llm hook (plan.llm omitted) Stage 2 is skipped and the run blocks honestly rather than inventing a rig.'
+      'Without an llm hook (plan.llm omitted) Stage 2 is skipped and the run blocks honestly rather than inventing a rig.',
+      'Stage 6 exports a style preset and skill only from the verified manifest; it never copies reference pixels.'
     ]
     };
   }
