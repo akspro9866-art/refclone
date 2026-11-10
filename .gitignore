@@ -1,6 +1,10 @@
 node_modules/
 npm-debug.log*
 
+# CI-only sibling checkout of the stallion bridge for the e2e mock-bridge gate
+# (see .github/workflows/ci.yml). Never part of a developer checkout or a release.
+.ci-siblings/
+
 # Local job evidence: measured frames, plans, renders, QA reports.
 # These are large, derived from your own reference video and can contain
 # copyrighted material, so they are never committed.

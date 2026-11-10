@@ -7,6 +7,12 @@ name: CI
 # the sibling stallion --mock bridge, so 100% of the suite runs without
 # skipping on both operating systems. Live-Cavalry evidence remains the
 # separate self-hosted job below.
+#
+# cavalry-mcp arrives as a pinned git dependency through npm ci — no sibling
+# checkout is needed for it. The stallion sibling is still checked out and
+# built so test/e2e/mock-bridge.e2e.test.mjs stays a hard gate; it lives in
+# .ci-siblings/ (gitignored and skipped by privacy-scan) so refclone itself
+# keeps a normal root checkout.
 
 on:
   push:
@@ -22,19 +28,12 @@ jobs:
     name: Unit and synthetic-pipeline tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    defaults:
-      run:
-        # The repo is checked out into refclone/ (not the workspace root) so
-        # that file:../cavalry-mcp resolves exactly like a local checkout.
-        working-directory: refclone
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: refclone
 
       - name: Install FFmpeg (windows)
         if: runner.os == 'Windows'
@@ -62,28 +61,21 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: refclone/package-lock.json
-
-      # The package manifest depends on cavalry-mcp via file:../cavalry-mcp, so
-      # the sibling stack is checked out next to refclone/ at the workspace
-      # root — the same layout a local developer has — before npm ci runs.
-      - name: Check out the sibling stallion bridge
-        uses: actions/checkout@v4
-        with:
-          repository: akspro9866-art/stallion
-          path: stallion
-
-      - name: Check out the sibling cavalry-mcp
-        uses: actions/checkout@v4
-        with:
-          repository: akspro9866-art/cavalry-mcp
-          path: cavalry-mcp
 
       - name: npm ci
         run: npm ci
 
+      # The e2e mock-bridge gate needs a built stallion mock. It is checked out
+      # into .ci-siblings/ (gitignored, skipped by privacy-scan) so the repo
+      # root stays a plain refclone checkout.
+      - name: Check out the stallion bridge (e2e gate)
+        uses: actions/checkout@v4
+        with:
+          repository: akspro9866-art/stallion
+          path: .ci-siblings/stallion
+
       - name: Build stallion
-        working-directory: ${{ github.workspace }}/stallion
+        working-directory: .ci-siblings/stallion
         shell: bash
         run: |
           # NODE_ENV=production is set only for the build: npm ci would omit
@@ -91,13 +83,6 @@ jobs:
           # what turns the esbuild watch mode into a one-shot build.
           npm ci
           NODE_ENV=production npm run build
-
-      - name: Build cavalry-mcp
-        working-directory: ${{ github.workspace }}/cavalry-mcp
-        shell: bash
-        run: |
-          npm ci
-          npm run build
 
       - name: Build (honest syntax gate, Node 24 native TS strip)
         run: npm run build
@@ -114,10 +99,11 @@ jobs:
       - name: Full test suite (strict + legacy)
         run: npm run test:ci
         env:
-          # With the sibling stack built, test/e2e/mock-bridge.e2e.test.mjs runs as
-          # a hard gate; without it the e2e skips deterministically.
-          STALLION_PATH: ${{ github.workspace }}/stallion
-          CAVALRY_MCP_PATH: ${{ github.workspace }}/cavalry-mcp
+          # With the stallion mock built, test/e2e/mock-bridge.e2e.test.mjs runs
+          # as a hard gate; without it the e2e skips deterministically.
+          # cavalry-mcp resolves to the pinned git dependency in node_modules.
+          STALLION_PATH: ${{ github.workspace }}/.ci-siblings/stallion
+          CAVALRY_MCP_PATH: ${{ github.workspace }}/node_modules/cavalry-mcp
 
       - name: Every test count in the docs is current
         run: node .github/scripts/test-count.mjs
@@ -128,9 +114,9 @@ jobs:
         with:
           name: test-logs-${{ matrix.os }}
           path: |
-            refclone/*.log
-            refclone/test-output/
-            refclone/jobs/
+            *.log
+            test-output/
+            jobs/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -146,26 +132,10 @@ jobs:
     runs-on: self-hosted
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[live-cavalry]'))
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: refclone
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: refclone
-      - name: Check out the sibling cavalry-mcp
-        uses: actions/checkout@v4
-        with:
-          repository: akspro9866-art/cavalry-mcp
-          path: cavalry-mcp
       - name: npm ci
         run: npm ci
-      - name: Build cavalry-mcp
-        working-directory: ${{ github.workspace }}/cavalry-mcp
-        shell: bash
-        run: |
-          npm ci
-          npm run build
       - name: Integration run (requires Cavalry with Scripts > Stallion enabled)
         run: npm run test:live
       - name: Upload integration artifacts
@@ -174,7 +144,7 @@ jobs:
         with:
           name: integration-logs
           path: |
-            refclone/*.log
-            refclone/integration-output/
+            *.log
+            integration-output/
           retention-days: 30
           if-no-files-found: ignore

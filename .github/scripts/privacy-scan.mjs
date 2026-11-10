@@ -36,7 +36,9 @@ const GENERIC_SURFACE = [
   '.qoder/skills/generic-clone/SKILL.md', 'docs/WORKFLOW.md', 'docs/IDE_SETUP.md',
   'docs/TROUBLESHOOTING.md', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md'
 ];
-const SKIP_DIRECTORIES = new Set(['.git', 'node_modules', 'jobs', '.test-work', 'assets']);
+// .ci-siblings is CI-only: a checkout of the stallion repo for the e2e gate
+// (gitignored, never shipped). It is another project's tree, not refclone content.
+const SKIP_DIRECTORIES = new Set(['.git', 'node_modules', 'jobs', '.test-work', 'assets', '.ci-siblings']);
 // Machine-local output of the live integration run. The directory is gitignored,
 // and its whole point is to record this machine's absolute paths, so scanning it
 // can only fail on the contributor's own evidence trail.
