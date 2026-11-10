@@ -1,9 +1,12 @@
 /**
  * Resolver for cavalry-mcp's direct-import library (`cavalry-mcp/lib`).
  *
- * refclone depends on the sibling checkout through the `file:../cavalry-mcp`
- * dependency, so `import('cavalry-mcp/lib')` normally resolves through
- * node_modules. The resolver keeps working in three other layouts:
+ * refclone depends on cavalry-mcp through a pinned git dependency
+ * (`git+https://github.com/akspro9866-art/cavalry-mcp.git#<commit>`), so
+ * `import('cavalry-mcp/lib')` normally resolves through node_modules. For
+ * local co-development `npm link ../cavalry-mcp` (or `npm install
+ * ../cavalry-mcp`) replaces that copy with the sibling checkout. The resolver
+ * also keeps working in three other layouts:
  *
  *   1. the package link is missing (a plain refclone clone without install) —
  *      the sibling checkout's built `dist/lib/index.js` is loaded directly;

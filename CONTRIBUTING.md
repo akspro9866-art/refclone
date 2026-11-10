@@ -39,7 +39,7 @@ video becomes a clone) and [docs/PIPELINE_ARCHITECTURE.md](docs/PIPELINE_ARCHITE
 ```powershell
 git clone https://github.com/<you>/refclone.git refclone
 cd refclone
-npm ci                       # three runtime dependencies
+npm ci                       # four runtime dependencies
 node src/cli.mjs --help      # the qualified command surface
 npm run verify               # module parse, config parity, skill mirrors, privacy scan
 npm test                     # the whole suite, no Cavalry required
@@ -49,6 +49,17 @@ npm run verify:docs          # the test counts quoted in the docs still match th
 `npm test` uses `node test/run-tests.mjs`, which recursively collects every `*.test.mjs`
 under the grouped `test/` tree. Shared helpers such as `test/helpers/fixtures.mjs` are
 imported by suites, not executed as their own entries.
+
+### Working on cavalry-mcp at the same time
+
+`cavalry-mcp` is installed from a pinned git commit, not from a sibling folder, so a
+fresh clone needs no second checkout. When you are changing both repositories together,
+replace the installed copy with your working tree — either `npm link ../cavalry-mcp`
+after `npm run build` there, or `npm install ../cavalry-mcp` for a one-off — and restore
+the pin with `npm ci` before committing. Do not commit a `file:` specifier: the lockfile
+must resolve the pinned git commit. The library loader in
+`src/cavalry/cavalry-lib.mjs` also falls back to a built sibling checkout (or
+`CAVALRY_MCP_DIR`) when the package is not installed at all.
 
 Tests build synthetic videos with FFmpeg instead of shipping footage, so they
 need `ffmpeg` and `ffprobe` on `PATH` — `choco install ffmpeg -y`, the same route

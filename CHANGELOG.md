@@ -46,6 +46,27 @@ All notable changes to this project are documented here. The format follows
   (<400 tokens, over-budget throws) — raw per-frame arrays can no longer reach any
   LLM prompt.
 
+### Changed
+
+- **`cavalry-mcp` is a pinned git dependency.** Both `file:../cavalry-mcp`
+  specifiers are gone: `cavalry-mcp` now resolves to
+  `git+https://github.com/akspro9866-art/cavalry-mcp.git#e411d779abff3728b4108da670f54394ff2c95d7`,
+  the duplicate `@akspro/cavalry-mcp` entry is removed, and the strict core import is
+  `cavalry-mcp/core`. The lockfile is regenerated from scratch and contains no `file:`
+  references, so a standalone clone installs without a sibling checkout. Local
+  co-development can still link the sibling (documented in CONTRIBUTING).
+
+### Known issue (parked for the maintainer)
+
+- **The pinned commit ships no built `dist/`.** cavalry-mcp's `package.json` has no
+  `prepare` script and tracks nothing under `dist/`, so `npm ci` installs the package
+  without `dist/core-exports.js`; every strict-lane check then fails with
+  `CORE_UNAVAILABLE: cavalry-mcp/core (ERR_MODULE_NOT_FOUND)` and the suite is red on a
+  fresh install. The required fix belongs in cavalry-mcp: build on install (a `prepare`
+  script), then tag `v3.4.0` from a commit that includes it. After that, change this pin
+  to `git+https://github.com/akspro9866-art/cavalry-mcp.git#v3.4.0` and re-run the suite.
+  Until then this branch stays local rather than opening a PR that cannot be green.
+
 ### Fixed
 
 - **Damped-spring promotion was dead code**: `analyzeTrajectory` fitted springs

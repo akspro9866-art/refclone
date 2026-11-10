@@ -10,7 +10,7 @@ export function exactKeys(value, allowed, label) {
 }
 export async function loadCore() {
   let core;
-  try{core=await import('@akspro/cavalry-mcp/core');}catch(e){fail(`CORE_UNAVAILABLE: @akspro/cavalry-mcp/core (${e.code??e.message})`);}
+  try{core=await import('cavalry-mcp/core');}catch(e){fail(`CORE_UNAVAILABLE: cavalry-mcp/core (${e.code??e.message})`);}
   for(const k of ['compileMgDsl','MG_HELPERS_SOURCE','MG_MANIFEST_RUNTIME','PRESET_PACKS'])if(core[k]==null)fail(`CORE_CONTRACT_MISSING: ${k}`);
   return core;
 }

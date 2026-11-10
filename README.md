@@ -154,9 +154,9 @@ flipping the declaration to `"darwin"` and watching `npm ci` reject it on this W
 | **Windows 10 or 11** | the supported and CI-verified platform; `npm` enforces it | CI on `windows-latest`; elsewhere `npm ci` stops with `EBADPLATFORM` |
 | Node.js **24+** | ESM `.mjs`, `node --test` runner, native TypeScript type stripping for the `.ts` suites | `node --version` |
 | `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version`; install routes in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
-| The three npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`) | schema validation, PNG decode, MCP client | `npm ci` (installs 96 packages, no global installs) |
+| The four npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`, and the pinned `cavalry-mcp`) | schema validation, PNG decode, MCP client, and the `_mg` compiler core | `npm ci` (installs 97 packages, no global installs) |
 | **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for `build`, `render`, `export`, and the live integration run | live MCP round-trips, see [`docs/MCP_CAPABILITIES.md`](docs/MCP_CAPABILITIES.md) |
-| A **`cavalry-mcp` 3.x** checkout, built | the MCP server this project talks to; the adapter audits its tool schemas at connect time | `node C:\path\to\cavalry-mcp\dist\index.js` |
+| The **`cavalry-mcp`** pinned git dependency | the MCP server this project talks to; the adapter audits its tool schemas at connect time | `npm ci` installs the pin; the strict lane also needs its built `dist/` (see `CHANGELOG.md`, Unreleased) |
 | The [Stallion fork](https://github.com/akspro9866-art/stallion) bridge | the readback/snapshot message types Stage 5 uses come from the fork, not upstream v0.8 | `docs/CREDITS.md`, `src/cavalry/stallion-batch.mjs` |
 
 The repository carries **17 JSON schemas** under `schemas/`, and every artifact a stage emits is

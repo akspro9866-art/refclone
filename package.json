@@ -73,10 +73,9 @@
     "visual-qa"
   ],
   "dependencies": {
-    "@akspro/cavalry-mcp": "file:../cavalry-mcp",
     "@modelcontextprotocol/sdk": "1.32.2",
     "ajv": "8.20.0",
-    "cavalry-mcp": "file:../cavalry-mcp",
+    "cavalry-mcp": "git+https://github.com/akspro9866-art/cavalry-mcp.git#e411d779abff3728b4108da670f54394ff2c95d7",
     "pngjs": "7.0.0"
   }
 }
