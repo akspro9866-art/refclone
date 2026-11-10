@@ -1,0 +1,83 @@
+name: Release
+
+# Preparation only: pushing a v* tag runs the supported-platform checks and
+# creates a GitHub Release whose notes are the matching CHANGELOG section.
+# Tagging is a manual maintainer step, and no tag has been pushed by this
+# repository's automation. The package version (0.1.0) and the CHANGELOG's
+# 0.1.0 section agree today; retitle the Unreleased section to the version and
+# date being released before tagging the next one, or the notes lookup will
+# fall back to an older section.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # The suite generates its own clips, so FFmpeg is required even though
+    # Cavalry never runs here. Windows is the supported platform; the version
+    # tag is the one case where the release evidence is not matrixed.
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        shell: pwsh
+        run: |
+          choco install ffmpeg --no-progress -y
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\ProgramData\chocolatey\bin'
+          (Get-Command ffmpeg, ffprobe).Source
+          ffmpeg -version | Select-Object -First 1
+          ffprobe -version | Select-Object -First 1
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # Same e2e hard gate as CI: the sibling stallion mock is built so
+      # test/e2e/mock-bridge.e2e.test.mjs does not degrade into a skip.
+      - name: Check out the stallion bridge (e2e gate)
+        uses: actions/checkout@v4
+        with:
+          repository: akspro9866-art/stallion
+          path: .ci-siblings/stallion
+
+      - name: Build stallion
+        working-directory: .ci-siblings/stallion
+        shell: bash
+        run: |
+          npm ci
+          NODE_ENV=production npm run build
+
+      - run: npm run verify
+      - run: npm run verify:docs
+
+      - name: Full test suite
+        run: npm test
+        env:
+          STALLION_PATH: ${{ github.workspace }}/.ci-siblings/stallion
+          CAVALRY_MCP_PATH: ${{ github.workspace }}/node_modules/cavalry-mcp
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Extract matching CHANGELOG section
+        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
