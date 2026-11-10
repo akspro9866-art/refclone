@@ -99,7 +99,13 @@ or network folder, where rename-over-open-file semantics are not dependable.
 - If you changed a stage's output, say which artifact fields move.
 - Update the matching doc in `docs/` and the skill text in
   `.qoder/skills/generic-clone/SKILL.md`; `.agents/skills/` mirrors that file and
-  CI checks the two are byte-identical.
+  CI checks the two are byte-identical. Shared stack skills have one canonical
+  home, `cavalry-mcp/.qoder/skills/`: the copies here stay in the repo for local
+  agents, and when a cavalry-mcp checkout is available (a sibling
+  `../cavalry-mcp`, or `CAVALRY_MCP_PATH` / `CAVALRY_MCP_DIR`) `npm run verify`
+  also compares every shared skill directory byte-for-byte against canonical.
+  Local-only skills are reported, not failed; without the checkout the sibling
+  comparison is skipped rather than guessed.
 - Add a line to `CHANGELOG.md` under *Unreleased* — and if you changed how many
   tests there are, `npm run verify:docs` will tell you which pages quote the old
   number.
