@@ -36,8 +36,53 @@ recovering; it never opens a Cavalry scene and never bypasses a review gate.
 
 ---
 
+## What it does in 20 seconds
+
+Point it at a reference `.mp4`; it decodes the footage, finds the shot cuts, measures backgrounds,
+regions and motion, and writes a draft shot-spec. You (or your agent) transcribe the real copy,
+resolve fonts and approve the assets — the pipeline never does that for you. It then compiles a
+deterministic plan and drives Cavalry through the MCP to build, render and compare every critical
+frame against the reference before QA and export. A missing font stays `null`, an unreadable word
+stays untranscribed, and a render is never called a match without the numbers behind it.
+
+## Quickstart (5 minutes)
+
+Windows 10 or 11, Node.js 24+, and `ffmpeg`/`ffprobe` on `PATH` are the prerequisites for every
+stage; `build`, `render` and `export` additionally need Cavalry 2.8 with the Stallion bridge
+enabled. Install FFmpeg through your package manager or the routes in
+[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md), reopen the shell, and prove both answer:
+
+```powershell
+ffmpeg -version
+ffprobe -version
+```
+
+Then clone, install and run the suite (it generates its own clips and never opens Cavalry):
+
+```powershell
+git clone https://github.com/akspro9866-art/refclone.git
+cd refclone
+npm ci
+npm test
+```
+
+`npm ci` also installs the pinned `cavalry-mcp` dependency described in [Requirements](#requirements);
+no sibling checkout is required for this step. The two review payloads under `examples/reviews/`
+are templates, not runnable fixtures — read one before your first gated run:
+
+```powershell
+Get-Content examples\reviews\boundary-review.example.json
+```
+
+Continue with [First clone, in five commands](#first-clone-in-five-commands). **The human gates
+stay closed**: the first run stops at the cut review, a later run stops at the shot-spec review,
+and no command — `npm test` included — marks a gate confirmed for you. You read the evidence, fill
+the review, and rerun.
+
 ## Contents
 
+- [What it does in 20 seconds](#what-it-does-in-20-seconds)
+- [Quickstart (5 minutes)](#quickstart-5-minutes)
 - [What this is, and what it is not](#what-this-is-and-what-it-is-not)
 - [Requirements](#requirements)
 - [Download and install](#download-and-install)
