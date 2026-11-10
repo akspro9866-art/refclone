@@ -120,7 +120,7 @@ validated against the matching schema before a later stage is allowed to read it
 > **Why Node 24.** The test runner executes `*.test.ts` suites directly with `node --test`, and
 > the syntax gate (`npm run build`) parses every `.ts` module with `node --check`. Both rely on
 > Node's **native TypeScript type stripping** — there is no tsx/ts-node in the dependency tree.
-> A local audit measured it: Node v20.20.2 fails 15 tests (no stripping at all), Node v22.23.4
+> A local audit measured it: Node v20.20.2 fails (15 failures, no stripping at all), Node v22.23.4
 > passes the full 647-test suite (stripping is on by default since 22.18), and Node 24 is the
 > supported, CI-verified line — so `engines` stays `>=24` rather than widening to a floor the
 > evidence does not support.
