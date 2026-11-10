@@ -4,11 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   WorkflowError, absolutePath, hashFile, hashObject, readJson,
-  withJobLock, writeJsonState
+  validateArtifact, withJobLock, writeJsonState
 } from '../core.mjs';
 import { deriveJobDirectory } from '../design/assets.mjs';
 import { validateScenePlan } from '../design/planner.mjs';
-import { ADAPTER_VERSION, CavalryAdapter, SceneLedger } from '../cavalry/cavalry.mjs';
+import { ADAPTER_VERSION, CavalryAdapter, SceneLedger, compileMotionTransferScene } from '../cavalry/cavalry.mjs';
 
 export const BUILD_VERSION = '1.1.0';
 
@@ -308,8 +308,11 @@ function buildMarkdown(state, plan) {
  * and nothing overwrites an earlier scene file.
  */
 export async function buildScene(planPath, options = {}) {
-  const resolvedPlanPath = absolutePath(planPath);
-  const plan = await readJson(resolvedPlanPath);
+  const resolvedPlanPath = typeof planPath === 'string' ? absolutePath(planPath) : null;
+  const plan = typeof planPath === 'object' && planPath !== null ? planPath : await readJson(resolvedPlanPath);
+  if (options.mode === 'motion-transfer' || plan?.mode === 'motion-transfer') {
+    return buildMotionTransferScene(plan, { ...options, specPath: resolvedPlanPath });
+  }
   const freshValidation = await validateScenePlan(plan);
   if (!freshValidation.valid || !plan.validation.valid) {
     throw new WorkflowError('BUILD_PLAN_NOT_VALID', 'Scene plan failed re-validation; build refused.', {
@@ -446,3 +449,67 @@ export async function buildScene(planPath, options = {}) {
     }
   });
 }
+
+/**
+ * Compile and optionally persist a `--mode motion-transfer` procedural SaaS scene
+ * from a validated `motion-transfer-spec` artifact.
+ */
+export async function buildMotionTransferScene(specOrPath, options = {}) {
+  const specPath = typeof specOrPath === 'string' ? absolutePath(specOrPath) : (options.specPath ? absolutePath(options.specPath) : null);
+  const spec = typeof specOrPath === 'object' && specOrPath !== null ? specOrPath : await readJson(specPath);
+  await validateArtifact('motion-transfer-spec', spec);
+  if (spec.creativeDistance?.passed !== true) {
+    throw new WorkflowError('MOTION_TRANSFER_DISTANCE_GATE', 'Creative distance gate (< 0.35) failed; refusing to compile 1:1 clone in motion-transfer mode.', {
+      score: spec.creativeDistance?.score ?? 0
+    });
+  }
+  if (spec.directorGates?.passed !== true) {
+    throw new WorkflowError('MOTION_TRANSFER_DIRECTOR_GATE', 'Studio Director Quality Gates failed; refusing to compile scene.', {
+      directorGates: spec.directorGates
+    });
+  }
+  const compilation = compileMotionTransferScene(spec, options);
+  let scriptPath = null;
+  let reportPath = null;
+  if (options.outputDirectory || options.jobDirectory) {
+    const outDir = absolutePath(options.outputDirectory ?? path.join(options.jobDirectory, 'build-motion-transfer', compilation.scriptHash.slice(0, 16)));
+    await fs.mkdir(outDir, { recursive: true });
+    scriptPath = path.join(outDir, 'motion-transfer-scene.js');
+    reportPath = path.join(outDir, 'motion-transfer-build.json');
+    await fs.writeFile(scriptPath, compilation.script, 'utf8');
+    await writeJsonState(reportPath, {
+      schemaVersion: 1,
+      mode: 'motion-transfer',
+      buildVersion: BUILD_VERSION,
+      sourceHash: spec.sourceHash,
+      scriptHash: compilation.scriptHash,
+      scriptPath,
+      purity: compilation.purity,
+      rigBuildersUsed: compilation.rigBuildersUsed,
+      cat15PresetsUsed: compilation.cat15PresetsUsed,
+      gradientCallsUsed: compilation.gradientCallsUsed,
+      alphaPlatesAttached: compilation.alphaPlatesAttached,
+      ready: compilation.ready
+    });
+  }
+  return {
+    status: compilation.ready ? 'built' : 'failed',
+    mode: 'motion-transfer',
+    buildVersion: BUILD_VERSION,
+    sourceHash: spec.sourceHash,
+    specPath,
+    script: compilation.script,
+    scriptHash: compilation.scriptHash,
+    scriptPath,
+    reportPath,
+    purity: compilation.purity,
+    rigBuildersUsed: compilation.rigBuildersUsed,
+    cat15PresetsUsed: compilation.cat15PresetsUsed,
+    gradientCallsUsed: compilation.gradientCallsUsed,
+    alphaPlatesAttached: compilation.alphaPlatesAttached,
+    compilation,
+    ready: compilation.ready,
+    failures: compilation.ready ? [] : [{ code: 'MG_PURITY_BELOW_GRADE_A', purity: compilation.purity }]
+  };
+}
+

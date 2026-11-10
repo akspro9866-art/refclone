@@ -1678,3 +1678,11 @@ __result = { layerId: __id, attribute: ${jsString(attr)}, frames: ${jsJson(atFra
     return this._run(async () => this._unsupported('rollback'));
   }
 }
+
+export {
+  MOTION_TRANSFER_RIG_BUILDERS,
+  CAT15_PROCEDURAL_SAAS_PRESETS,
+  compileMotionTransferScene,
+  compileMgScene
+} from './mg-compiler.mjs';
+

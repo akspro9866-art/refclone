@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import Ajv from 'ajv';
 
 const dir = new URL('../schemas/', import.meta.url);
-const names = ['media-metadata', 'shot-boundaries', 'keyframes', 'audio-analysis', 'shot-spec', 'asset-manifest', 'design-tokens', 'scene-plan', 'render-manifest', 'qa-report', 'job-state'];
+const names = ['media-metadata', 'shot-boundaries', 'keyframes', 'audio-analysis', 'shot-spec', 'asset-manifest', 'design-tokens', 'scene-plan', 'render-manifest', 'qa-report', 'job-state', 'motion-transfer-spec'];
 const ajv = new Ajv({ allErrors: true, strict: true });
 const schemas = new Map();
 for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.schema.json'))) {

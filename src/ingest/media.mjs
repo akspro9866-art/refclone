@@ -416,3 +416,13 @@ export async function ingest(reference, options = {}) {
     }
   });
 }
+
+export { captureLiveUrl, extractElementTrajectories } from './capture.ts';
+export { traceWebGlShaders } from './gl.ts';
+export { fitMotionCurve, fitCubicBezier, fitSpringParameters, computeVelocityCurve } from './easing.ts';
+export { renderProRes4444AlphaPlate, buildProRes4444FfmpegArgs, buildCavalryAlphaPlateDescriptor } from './alpha-plate.mjs';
+
+export function isLiveUrl(input) {
+  return typeof input === 'string' && /^https?:\/\//i.test(input.trim());
+}
+

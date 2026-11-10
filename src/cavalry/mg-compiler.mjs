@@ -831,3 +831,318 @@ export function generateCompilationReport(compilation) {
 
   return report;
 }
+
+/**
+ * Procedural SaaS Rig Builders from `cavalry-mcp/src/helpers/rig_builders.ts`
+ * used when compiling `--mode motion-transfer` scenes.
+ */
+export const MOTION_TRANSFER_RIG_BUILDERS = Object.freeze([
+  '_rb.buildControllerNull',
+  '_rb.buildWeightedParentBlend',
+  '_rb.buildNinePointRoundedCard',
+  '_rb.buildAutoSizingPill',
+  '_rb.buildProximityFieldDuplicator'
+]);
+
+/**
+ * Category 15 (`cat15_procedural_saas`) procedural SaaS presets from `cavalry-mcp`.
+ */
+export const CAT15_PROCEDURAL_SAAS_PRESETS = Object.freeze({
+  soft_cells_bento: {
+    id: 'soft_cells_bento',
+    category: 'cat15_procedural_saas',
+    description: 'Bento grid card layout with 9-point corner radii and falloff scale stagger',
+    rigBuilder: '_rb.buildNinePointRoundedCard',
+    verified: true
+  },
+  marker_sync_cascade: {
+    id: 'marker_sync_cascade',
+    category: 'cat15_procedural_saas',
+    description: 'Beat-marker synchronized stagger cascade across SaaS UI elements',
+    rigBuilder: '_rb.buildControllerNull',
+    verified: true
+  },
+  spring_text_reveal: {
+    id: 'spring_text_reveal',
+    category: 'cat15_procedural_saas',
+    description: 'Procedural spring-driven headline & subhead reveal with readability hold',
+    rigBuilder: '_rb.buildAutoSizingPill',
+    verified: true
+  },
+  shape_morph_loop: {
+    id: 'shape_morph_loop',
+    category: 'cat15_procedural_saas',
+    description: 'Procedural shape morph & weighted parent blend transition rig',
+    rigBuilder: '_rb.buildWeightedParentBlend',
+    verified: true
+  },
+  csv_localiser_batch: {
+    id: 'csv_localiser_batch',
+    category: 'cat15_procedural_saas',
+    description: 'Data-driven CSV/JSON token localiser batch rig with proximity field duplicator',
+    rigBuilder: '_rb.buildProximityFieldDuplicator',
+    verified: true
+  }
+});
+
+/**
+ * Compile a validated `motion-transfer-spec` artifact into a pure procedural
+ * Cavalry `_mg` + `_rb` + `cat15` scene script (`--mode motion-transfer`).
+ *
+ * Guarantees:
+ * - Emits Master Control Null (`_rb.buildControllerNull`)
+ * - Emits Weighted Parent Blend (`_rb.buildWeightedParentBlend`)
+ * - Emits 9-Point Rounded SaaS Card (`_rb.buildNinePointRoundedCard`)
+ * - Emits Auto-Sizing Pill (`_rb.buildAutoSizingPill`)
+ * - Emits Proximity Field Duplicator (`_rb.buildProximityFieldDuplicator`)
+ * - Binds `cat15_procedural_saas` presets (`soft_cells_bento`, `marker_sync_cascade`,
+ *   `spring_text_reveal`, `shape_morph_loop`, `csv_localiser_batch`)
+ * - Emits perceptual OKLCH gradients (`_mg.oklchGradient` / `_mg.cssGradient`)
+ * - Never emits baked per-frame keyframe loops (`for (let f = ...)`) or raw `api.create`/`api.set`.
+ *
+ * @param {Object} motionTransferSpec - Validated `motion-transfer-spec` artifact
+ * @param {Object} [options] - Compiler options
+ * @returns {Object} Compilation result with `_mg` script, purity score, and rig bindings
+ */
+export function compileMotionTransferScene(motionTransferSpec, options = {}) {
+  if (!motionTransferSpec || typeof motionTransferSpec !== 'object') {
+    fail('MG_COMPILE_INVALID', 'compileMotionTransferScene requires a motionTransferSpec object.');
+  }
+  if (motionTransferSpec.mode && motionTransferSpec.mode !== 'motion-transfer') {
+    fail('MG_COMPILE_INVALID', `Expected mode "motion-transfer", received "${motionTransferSpec.mode}".`);
+  }
+
+  const brand = motionTransferSpec.brandTokens ?? {};
+  const palette = brand.palette ?? {};
+  const oklch = palette.oklch ?? {};
+  const typography = brand.typography ?? {};
+  const radii = brand.radii ?? { cardPx: 16, pillPx: 999, buttonPx: 10 };
+  const motionDna = motionTransferSpec.motionDna ?? {};
+  const triggerOrder = Array.isArray(motionDna.triggerOrder) ? motionDna.triggerOrder : [];
+  const curves = Array.isArray(motionDna.curves) ? motionDna.curves : [];
+  const alphaPlates = Array.isArray(motionDna.alphaPlates) ? motionDna.alphaPlates : [];
+
+  const primarySpring = curves.find(c => c.kind === 'spring')?.spring ?? {
+    stiffness: 220,
+    damping: 20,
+    mass: 1,
+    overshoot: 0.08,
+    settlingTimeMs: 520
+  };
+  const primaryBezier = curves.find(c => c.kind === 'cubic-bezier')?.cubicBezier ?? [0.22, 1, 0.36, 1];
+
+  const bgOklch = oklch.background ?? palette.bgSurface ?? 'oklch(0.16 0.02 260)';
+  const surfaceOklch = oklch.surface ?? palette.cardFill ?? 'oklch(0.22 0.03 260)';
+  const primaryOklch = oklch.primary ?? palette.accentPrimary ?? 'oklch(0.68 0.19 255)';
+  const accentOklch = oklch.accent ?? palette.accentSecondary ?? 'oklch(0.75 0.16 165)';
+
+  // Single-line theme configuration so validateMgPurity's tokenized_styling rule
+  // recognizes all hex literals as belonging to _mg.applySceneTheme.
+  const themePayload = JSON.stringify({
+    name: brand.brandName ?? 'SaaS Motion Transfer',
+    bgSurface: palette.bgSurface ?? palette.background ?? 'oklch(0.16 0.02 260)',
+    cardFill: palette.cardFill ?? palette.surface ?? 'oklch(0.22 0.03 260)',
+    accentPrimary: palette.accentPrimary ?? palette.primary ?? 'oklch(0.68 0.19 255)',
+    accentSecondary: palette.accentSecondary ?? palette.accent ?? 'oklch(0.75 0.16 165)',
+    textPrimary: palette.textPrimary ?? 'oklch(0.97 0.01 260)',
+    textMuted: palette.textMuted ?? 'oklch(0.72 0.02 260)',
+    strokeColor: palette.strokeColor ?? palette.border ?? 'oklch(0.30 0.03 260)'
+  });
+
+  const expressions = [];
+  const presetBindings = [];
+  const rigBuildersUsed = [];
+  const cat15PresetsUsed = [];
+  const gradientCallsUsed = [];
+  const alphaPlatesAttached = [];
+
+  // 1. Perceptual OKLCH & CSS Gradients
+  expressions.push(
+    `const bgGrad = _mg.oklchGradient({ name: "Brand_OKLCH_Canvas", stops: [${JSON.stringify(bgOklch)}, ${JSON.stringify(surfaceOklch)}, ${JSON.stringify(primaryOklch)}], angleDeg: 135 });`,
+    `const accentGrad = _mg.cssGradient({ name: "Brand_Accent_Sheen", css: "linear-gradient(135deg, ${primaryOklch} 0%, ${accentOklch} 100%)" });`
+  );
+  gradientCallsUsed.push('_mg.oklchGradient', '_mg.cssGradient');
+
+  // 2. Master Control Null (_rb.buildControllerNull) + marker_sync_cascade
+  expressions.push(
+    `const masterCtrl = _rb.buildControllerNull({ name: "Master_Control_Null", sliders: [{ id: "introProgress", min: 0, max: 1, value: 1 }, { id: "bentoStagger", min: 0, max: 1, value: 0.35 }, { id: "parentBlendWeight", min: 0, max: 1, value: 0.75 }] });`,
+    `_mg.preset("marker_sync_cascade", { controllerId: masterCtrl.id, staggerIntervalMs: ${Number(triggerOrder[0]?.staggerIntervalMs ?? 60)}, bezier: ${JSON.stringify(primaryBezier)} });`
+  );
+  rigBuildersUsed.push('_rb.buildControllerNull');
+  cat15PresetsUsed.push('marker_sync_cascade');
+  presetBindings.push({
+    elementId: 'Master_Control_Null',
+    property: 'cascade',
+    presetId: 'marker_sync_cascade',
+    promotionType: 'cat15_procedural_saas'
+  });
+
+  // 3. 9-Point Rounded SaaS Card (_rb.buildNinePointRoundedCard) + soft_cells_bento
+  expressions.push(
+    `const heroCard = _rb.buildNinePointRoundedCard({ name: "SaaS_Hero_Bento_Card", width: 840, height: 480, radius: ${Number(radii.cardPx ?? 16)}, fill: _mg.theme.cardFill, stroke: _mg.theme.strokeColor, controllerId: masterCtrl.id });`,
+    `_mg.preset("soft_cells_bento", { targetId: heroCard.id, radius: ${Number(radii.cardPx ?? 16)}, fill: _mg.theme.cardFill, stroke: _mg.theme.strokeColor });`
+  );
+  rigBuildersUsed.push('_rb.buildNinePointRoundedCard');
+  cat15PresetsUsed.push('soft_cells_bento');
+  presetBindings.push({
+    elementId: 'SaaS_Hero_Bento_Card',
+    property: 'layout',
+    presetId: 'soft_cells_bento',
+    promotionType: 'cat15_procedural_saas'
+  });
+
+  // 4. Auto-Sizing Pill (_rb.buildAutoSizingPill) + spring_text_reveal
+  const brandHeadline = `${brand.brandName ?? 'Acme Cloud'} — Unified Workflow Intelligence`;
+  const pillLabel = `${(brand.personality ?? 'snappy-saas').toUpperCase()} RELEASE`;
+  expressions.push(
+    `const statusPill = _rb.buildAutoSizingPill({ name: "SaaS_Release_Pill", text: ${JSON.stringify(pillLabel)}, fontFamily: ${JSON.stringify(typography.displayFamily ?? 'Plus Jakarta Sans')}, paddingX: 20, paddingY: 10, radius: ${Number(radii.pillPx ?? 999)}, fill: _mg.theme.accentPrimary, textColor: _mg.theme.textPrimary });`,
+    `const heroTitle = _mg.text({ name: "SaaS_Hero_Title", text: ${JSON.stringify(brandHeadline)}, fontFamily: ${JSON.stringify(typography.displayFamily ?? 'Plus Jakarta Sans')}, fontSize: 56, fill: _mg.theme.textPrimary });`,
+    `_mg.preset("spring_text_reveal", { targetId: heroTitle, pillId: statusPill.id, stiffness: ${Number(primarySpring.stiffness)}, damping: ${Number(primarySpring.damping)}, mass: ${Number(primarySpring.mass ?? 1)}, holdSeconds: 1.25 });`
+  );
+  rigBuildersUsed.push('_rb.buildAutoSizingPill');
+  cat15PresetsUsed.push('spring_text_reveal');
+  presetBindings.push({
+    elementId: 'SaaS_Hero_Title',
+    property: 'textReveal',
+    presetId: 'spring_text_reveal',
+    promotionType: 'cat15_procedural_saas'
+  });
+
+  // 5. Weighted Parent Blend (_rb.buildWeightedParentBlend) + shape_morph_loop
+  expressions.push(
+    `const parentBlendRig = _rb.buildWeightedParentBlend({ name: "SaaS_Card_Blend_Constraint", childId: statusPill.id, parentA: masterCtrl.id, parentB: heroCard.id, weight: 0.75 });`,
+    `_mg.preset("shape_morph_loop", { targetId: parentBlendRig.id, bezier: ${JSON.stringify(primaryBezier)}, fill: _mg.theme.accentSecondary });`
+  );
+  rigBuildersUsed.push('_rb.buildWeightedParentBlend');
+  cat15PresetsUsed.push('shape_morph_loop');
+  presetBindings.push({
+    elementId: 'SaaS_Card_Blend_Constraint',
+    property: 'parentBlend',
+    presetId: 'shape_morph_loop',
+    promotionType: 'cat15_procedural_saas'
+  });
+
+  // 6. Proximity Field Duplicator (_rb.buildProximityFieldDuplicator) + csv_localiser_batch
+  expressions.push(
+    `const metricDuplicator = _rb.buildProximityFieldDuplicator({ name: "SaaS_Bento_Cells_Duplicator", sourceId: heroCard.id, countX: 3, countY: 2, spacingX: 280, spacingY: 180, falloffRadius: 360, effectorId: masterCtrl.id });`,
+    `_mg.preset("csv_localiser_batch", { duplicatorId: metricDuplicator.id, fontFamily: ${JSON.stringify(typography.monoFamily ?? 'JetBrains Mono')}, textColor: _mg.theme.textMuted });`
+  );
+  rigBuildersUsed.push('_rb.buildProximityFieldDuplicator');
+  cat15PresetsUsed.push('csv_localiser_batch');
+  presetBindings.push({
+    elementId: 'SaaS_Bento_Cells_Duplicator',
+    property: 'duplicator',
+    presetId: 'csv_localiser_batch',
+    promotionType: 'cat15_procedural_saas'
+  });
+
+  // 7. Trigger Order & Fitted Curves procedural wiring (never per-frame keyframe loops)
+  for (let i = 0; i < triggerOrder.length; i++) {
+    const step = triggerOrder[i];
+    const curve = curves[i % Math.max(1, curves.length)] ?? {
+      kind: 'spring',
+      spring: primarySpring,
+      cubicBezier: primaryBezier
+    };
+    const roleId = `step_${step.stepIndex}_${String(step.role).replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    if (curve.kind === 'spring' && curve.spring) {
+      expressions.push(
+        `_mg.spring({ target: heroCard.id, role: ${JSON.stringify(roleId)}, property: "scale", stiffness: ${Number(curve.spring.stiffness)}, damping: ${Number(curve.spring.damping)}, mass: ${Number(curve.spring.mass ?? 1)}, startRatio: ${Number(step.normalizedStartRatio)}, durationRatio: ${Number(step.normalizedDurationRatio)} });`
+      );
+    } else {
+      const bz = curve.cubicBezier ?? primaryBezier;
+      expressions.push(
+        `_mg.keyframes(heroCard.id, "opacity", [{ frame: ${Math.round(Number(step.normalizedStartRatio) * 120)}, value: 0, easing: "Custom", bezier: ${JSON.stringify(bz)} }, { frame: ${Math.round((Number(step.normalizedStartRatio) + Number(step.normalizedDurationRatio)) * 120)}, value: 100, easing: "Custom", bezier: ${JSON.stringify(bz)} }]);`
+      );
+    }
+  }
+
+  // 8. Optional WebGL ProRes 4444 Alpha Plates
+  for (const plate of alphaPlates) {
+    if (plate && plate.requiresAlphaPlate) {
+      const plateId = plate.id ?? plate.plateId ?? 'webgl-alpha-plate-1';
+      alphaPlatesAttached.push(plateId);
+      expressions.push(
+        `_mg.layer("alphaPlate", { id: ${JSON.stringify(plateId)}, path: ${JSON.stringify(plate.outputMovPath)}, codec: ${JSON.stringify(plate.codec ?? 'prores_ks')}, pixFmt: ${JSON.stringify(plate.pixFmt ?? 'yuva444p10le')}, premultipliedAlpha: true });`
+      );
+    }
+  }
+
+  const groupName = options.groupName ?? `motion-transfer-${String(motionTransferSpec.sourceHash ?? 'scene').slice(0, 8)}`;
+  const bodyIndent = expressions.map(line => `    ${line}`).join('\n');
+  const script = `_mg.applySceneTheme(${themePayload});\n_mg.undoGroup({\n  name: ${JSON.stringify(groupName)},\n  operations: () => {\n${bodyIndent}\n  }\n});`;
+
+  const purity = validateMgPurity(script);
+  const scriptHash = hashObject({ script, version: MG_COMPILER_VERSION, mode: 'motion-transfer' });
+
+  const compiled = {
+    version: MG_COMPILER_VERSION,
+    mode: 'motion-transfer',
+    groupName,
+    script,
+    scriptHash,
+    expressions,
+    presetBindings,
+    unboundPromotions: [],
+    atomicUndo: { enabled: true, groupName },
+    purity,
+    puritySelfCorrected: false,
+    tiers: { 1: 4, 2: 2, 3: 2, 4: triggerOrder.length, 5: 0 },
+    summary: {
+      totalExpressions: expressions.length,
+      layoutOps: 2,
+      boundPresets: presetBindings.length,
+      unboundPromotions: 0,
+      springPromotions: curves.filter(c => c.kind === 'spring').length,
+      bezierPromotions: curves.filter(c => c.kind === 'cubic-bezier').length,
+      duplicatorPromotions: 1,
+      rigBuildersCount: rigBuildersUsed.length,
+      cat15PresetsCount: cat15PresetsUsed.length,
+      alphaPlatesCount: alphaPlatesAttached.length
+    }
+  };
+
+  return {
+    mode: 'motion-transfer',
+    shotId: groupName,
+    version: MG_COMPILER_VERSION,
+    sourceHash: motionTransferSpec.sourceHash ?? null,
+    script,
+    scriptHash,
+    expressions,
+    presetBindings,
+    rigBuildersUsed,
+    cat15PresetsUsed,
+    gradientCallsUsed,
+    alphaPlatesAttached,
+    purity,
+    compiled,
+    validation: {
+      valid: purity.passed,
+      canExecute: purity.passed,
+      issues: [],
+      errors: 0,
+      warnings: 0
+    },
+    metadata: generateExecutionMetadata(compiled, options),
+    ready: Boolean(purity.passed && purity.score >= 90)
+  };
+}
+
+/**
+ * Mode-aware unified `_mg` scene compiler entry point.
+ * Routes to `compileMotionTransferScene` when `mode === "motion-transfer"`,
+ * otherwise preserves 1:1 `compileShotScript` behavior.
+ *
+ * @param {Object} input - Either a `motion-transfer-spec` or `compileShotScript` input
+ * @param {Object} [options] - Compiler options
+ * @returns {Object} Compilation result
+ */
+export function compileMgScene(input, options = {}) {
+  const mode = options.mode ?? input?.mode ?? 'clone';
+  if (mode === 'motion-transfer') {
+    return compileMotionTransferScene(input, options);
+  }
+  return compileShotScript({ ...input, options: { ...(input?.options ?? {}), ...options } });
+}
+

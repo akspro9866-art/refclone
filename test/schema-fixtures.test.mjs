@@ -343,6 +343,111 @@ const fixtures = {
     },
     scene: { projectPath: null, elements: {}, lastCheckpoint: null },
     corrections: [], updatedAt: '2026-10-27T23:00:00.000+05:30'
+  },
+  'motion-transfer-spec': {
+    ...envelope,
+    mode: 'motion-transfer',
+    references: [{
+      id: 'ref-1',
+      source: 'https://example.com/hero',
+      sourceKind: 'url',
+      fps: { num: 60, den: 1 },
+      durationSeconds: 2.0,
+      weight: 1,
+      strippedLiterals: { textRemoved: true, colorsRemoved: true, logosRemoved: true }
+    }],
+    motionDna: {
+      triggerOrder: [{
+        stepIndex: 0,
+        role: 'hero-container',
+        normalizedStartRatio: 0,
+        normalizedDurationRatio: 0.4,
+        staggerIntervalMs: 60,
+        referenceId: 'ref-1'
+      }],
+      curves: [{
+        id: 'curve-1',
+        role: 'hero-container',
+        property: 'scale',
+        kind: 'spring',
+        cubicBezier: [0.22, 1, 0.36, 1],
+        spring: { stiffness: 220, damping: 20, mass: 1, overshoot: 0.08, settlingTimeMs: 520 },
+        velocityCurve: [0, 0.5, 1, 0.3, 0],
+        rmse: 0.004
+      }],
+      stagger: {
+        defaultIntervalMs: 60,
+        pattern: 'domino',
+        maxGroupLagMs: 240
+      },
+      alphaPlates: [{
+        id: 'plate-1',
+        outputMovPath: fixturePath('alpha.mov'),
+        codec: 'prores_ks',
+        profile: '4444',
+        pixFmt: 'yuva444p10le',
+        requiresAlphaPlate: true,
+        bbox: { x: 0.08, y: 0.08, width: 0.84, height: 0.84 },
+        shaderSummary: 'WebGL fragment shader with custom uniforms'
+      }],
+      strippedLiterals: { textRemoved: true, colorsRemoved: true, logosRemoved: true }
+    },
+    brandTokens: {
+      brandName: 'Acme Cloud',
+      theme: 'neutral',
+      palette: {
+        colorSpace: 'oklch',
+        bgSurface: 'oklch(0.16 0.02 260)',
+        cardFill: 'oklch(0.22 0.03 260)',
+        textPrimary: 'oklch(0.97 0.01 260)',
+        textMuted: 'oklch(0.72 0.02 260)',
+        accentPrimary: 'oklch(0.68 0.19 255)',
+        accentSecondary: 'oklch(0.75 0.16 165)',
+        strokeColor: 'oklch(0.30 0.03 260)',
+        gradientCss: 'linear-gradient(135deg, oklch(0.16 0.02 260) 0%, oklch(0.22 0.03 260) 100%)'
+      },
+      typography: {
+        displayFamily: 'Plus Jakarta Sans',
+        bodyFamily: 'Inter',
+        monoFamily: 'JetBrains Mono',
+        scalePx: { hero: 64, h1: 48, h2: 34, body: 20, caption: 15 }
+      },
+      radii: { cardPx: 16, pillPx: 999, buttonPx: 10 },
+      motionPersonality: {
+        archetype: 'snappy-saas',
+        minReadabilityHoldSeconds: 0.85,
+        staggerIntervalMs: 80,
+        preferSpringPhysics: true
+      }
+    },
+    creativeDistance: {
+      overallScore: 0.82,
+      threshold: 0.35,
+      passed: true,
+      dimensions: {
+        layoutDivergence: 0.75,
+        paletteDivergence: 0.85,
+        copyReplacement: 1.0,
+        timingHybridity: 0.7
+      },
+      crossPollination: {
+        referenceCount: 1,
+        timingSourceId: 'ref-1',
+        choreographySourceId: 'ref-1',
+        spatialArchetype: 'procedural-saas-bento-stack'
+      }
+    },
+    directorGates: {
+      passed: true,
+      score: 100,
+      gates: {
+        focalHierarchy: { passed: true, score: 20, notes: 'Single primary focal point.' },
+        springAndEasingPhysics: { passed: true, score: 20, notes: 'Analytical spring physics verified.' },
+        typographyAndReadabilityHold: { passed: true, score: 20, notes: 'Hold >= 0.70s.' },
+        perceptualOklchAndSafeMargins: { passed: true, score: 20, notes: 'OKLCH & safe margins verified.' },
+        proceduralRigPurity: { passed: true, score: 20, notes: 'Zero baked keyframe loops.' }
+      }
+    }
   }
 };
 
@@ -545,6 +650,14 @@ const invalidCases = {
     [x => { x.scene.elements.panel = 42; }, 'type', '/scene/elements/panel'],
     [x => { x.corrections = ['repaired']; }, 'type', '/corrections/0'],
     [x => { x.updatedAt = '2026-10-27T23:00:00'; }, 'pattern', '/updatedAt']
+  ],
+  'motion-transfer-spec': [
+    [x => { x.mode = 'clone'; }, 'const', '/mode'],
+    [x => { x.references = []; }, 'minItems', '/references'],
+    [x => { x.references[0].strippedLiterals.textRemoved = false; }, 'const', '/references/0/strippedLiterals/textRemoved'],
+    [x => { x.motionDna.curves[0].cubicBezier = [0.2, 0.5]; }, 'minItems', '/motionDna/curves/0/cubicBezier'],
+    [x => { x.creativeDistance.overallScore = 1.5; }, 'maximum', '/creativeDistance/overallScore'],
+    [x => { x.directorGates.score = 120; }, 'maximum', '/directorGates/score']
   ]
 };
 

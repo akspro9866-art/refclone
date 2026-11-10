@@ -216,3 +216,28 @@ export async function analyzeReference(ingestIndexPath, options = {}) {
     return { ...result, cached: false, validation };
   });
 }
+
+/**
+ * Strip literal copy, colors, and logo assets from a reference shot-spec so
+ * `--mode motion-transfer` retains only normalized spatial/temporal DNA.
+ */
+export function stripSpecLiteralsForMotionTransfer(spec) {
+  const cloned = structuredClone(spec ?? {});
+  for (const shot of cloned.shots ?? []) {
+    for (const element of shot.elements ?? []) {
+      element.copy = null;
+      element.color = null;
+      element.assetId = null;
+    }
+    shot.requiredAssets = [];
+  }
+  return {
+    strippedSpec: cloned,
+    strippedLiterals: {
+      textRemoved: true,
+      colorsRemoved: true,
+      logosRemoved: true
+    }
+  };
+}
+

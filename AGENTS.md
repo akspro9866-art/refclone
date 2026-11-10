@@ -79,6 +79,17 @@ gate with copy-pasteable `nextActions`. The gates are:
 For the full per-gate runbook use the `generic-clone` skill
 (`.qoder/skills/generic-clone/SKILL.md`).
 
+## Stage-by-Stage Skill Loading Protocol (`.qoder/skills/` & `.agents/skills/`)
+
+When running in `--mode motion-transfer` (Creative SaaS Mode) or executing stage-gated motion compilation, load the canonical skills from `.qoder/skills/<skill>/SKILL.md` (mirrored byte-for-byte in `.agents/skills/<skill>/SKILL.md`):
+
+| Pipeline Stage | Required Skills to Load | Primary Responsibility & Output |
+| :--- | :--- | :--- |
+| **Stage 0 / 1: Brand & Ingest** | [`brand-intake`](.qoder/skills/brand-intake/SKILL.md), [`reanimate`](.qoder/skills/reanimate/SKILL.md) | Generate/load `brand.md` + `MOTION.md`; capture live SaaS URLs on a virtual clock (`scripts/capture.ts`, `scripts/gl.ts`) and fit `cubic-bezier` / `spring` curves (`scripts/easing.ts`). |
+| **Stage 2: Choreography & Mixing** | [`mix-and-match`](.qoder/skills/mix-and-match/SKILL.md), [`motion-design-skill`](.qoder/skills/motion-design-skill/SKILL.md), [`canonical-motion-moves`](.qoder/skills/canonical-motion-moves/SKILL.md), [`apple-launch-film`](.qoder/skills/apple-launch-film/SKILL.md), [`antigravity-design-expert`](.qoder/skills/antigravity-design-expert/SKILL.md), [`motion-design`](.qoder/skills/motion-design/SKILL.md) | Cross-pollinate 2–3 references into `motion-transfer-spec.json` (`schemas/motion-transfer-spec.schema.json`); route timing/easing through [`director/choreography.md`](.qoder/skills/motion-design-skill/director/choreography.md) and [`reference/timing-easing-tables.md`](.qoder/skills/motion-design-skill/reference/timing-easing-tables.md). |
+| **Stage 3 / 4: Procedural Compilation & Color** | [`color-motion`](.qoder/skills/color-motion/SKILL.md), [`kinetic-typography-skills`](.qoder/skills/kinetic-typography-skills/SKILL.md), [`data-animation-skills`](.qoder/skills/data-animation-skills/SKILL.md), [`motion-graphics`](.qoder/skills/motion-graphics/SKILL.md) | Compile `_mg` scenes using procedural `rig_builders.ts` (`buildControllerNull`, `buildAutoSizingPill`, `buildNinePointRoundedCard`, `buildProximityFieldDuplicator`), `cat15` soft-cell/marker-sync rigs, and `OKLCH` color interpolation. |
+| **Stage 5 / 6: QA, Critique & Audio** | [`review-loop`](.qoder/skills/review-loop/SKILL.md), [`director-gate-check`](.qoder/skills/director-gate-check/SKILL.md), [`motion-design-critique`](.qoder/skills/motion-design-critique/SKILL.md), [`shot-composition`](.qoder/skills/shot-composition/SKILL.md), [`sound-design`](.qoder/skills/sound-design/SKILL.md) | In `--mode motion-transfer`, evaluate beat-indexed contact sheets against `review-loop` and the 5 Studio Director Quality Gates (`>= 0.70s` readability holds, `5%`/`10%` safe margins, zero collisions), and master `-14 LUFS` audio cues. |
+
 ## Read, do not guess
 
 - `docs/GENERIC_CLONE_ARCHITECTURE.md` — how any video becomes a clone.

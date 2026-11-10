@@ -1,0 +1,618 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/motion-transfer-spec.schema.json",
+  "title": "Motion-transfer specification (Schema #18)",
+  "description": "Extracts normalized motion DNA (trigger order, duration ratios, fitted cubic-bezier/spring curves, stagger intervals, velocity curves, and optional WebGL alpha plates) from 1-3 references, strips reference literals, injects SaaS brand tokens, and verifies creative distance and the 5 Studio Director Quality Gates.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sourceHash",
+    "mode",
+    "references",
+    "motionDna",
+    "brandTokens",
+    "creativeDistance",
+    "directorGates"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "sourceHash": {
+      "$ref": "common.schema.json#/definitions/sourceHash"
+    },
+    "mode": {
+      "type": "string",
+      "const": "motion-transfer"
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/definitions/referenceSource"
+      }
+    },
+    "motionDna": {
+      "$ref": "#/definitions/motionDna"
+    },
+    "brandTokens": {
+      "$ref": "#/definitions/brandTokens"
+    },
+    "creativeDistance": {
+      "$ref": "#/definitions/creativeDistance"
+    },
+    "directorGates": {
+      "$ref": "#/definitions/directorGates"
+    }
+  },
+  "definitions": {
+    "strippedLiterals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["textRemoved", "colorsRemoved", "logosRemoved"],
+      "properties": {
+        "textRemoved": {
+          "type": "boolean",
+          "const": true
+        },
+        "colorsRemoved": {
+          "type": "boolean",
+          "const": true
+        },
+        "logosRemoved": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "referenceSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "sourceKind",
+        "fps",
+        "durationSeconds",
+        "strippedLiterals"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/identifier"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceKind": {
+          "type": "string",
+          "enum": ["url", "video", "trace"]
+        },
+        "fps": {
+          "$ref": "common.schema.json#/definitions/fps"
+        },
+        "durationSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "strippedLiterals": {
+          "$ref": "#/definitions/strippedLiterals"
+        }
+      }
+    },
+    "triggerStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stepIndex",
+        "role",
+        "normalizedStartRatio",
+        "normalizedDurationRatio",
+        "staggerIntervalMs"
+      ],
+      "properties": {
+        "stepIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "normalizedStartRatio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "normalizedDurationRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "staggerIntervalMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "referenceId": {
+          "$ref": "common.schema.json#/definitions/identifier"
+        }
+      }
+    },
+    "springParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stiffness",
+        "damping",
+        "mass",
+        "overshoot",
+        "settlingTimeMs"
+      ],
+      "properties": {
+        "stiffness": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "damping": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "mass": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "overshoot": {
+          "type": "number",
+          "minimum": 0
+        },
+        "settlingTimeMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "dampingRatio": {
+          "type": "number",
+          "minimum": 0
+        },
+        "naturalFrequency": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "fittedCurve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "property",
+        "kind",
+        "cubicBezier",
+        "spring",
+        "velocityCurve",
+        "rmse"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/identifier"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "property": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["cubic-bezier", "spring"]
+        },
+        "cubicBezier": {
+          "type": ["array", "null"],
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          }
+        },
+        "spring": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/springParams" }
+          ]
+        },
+        "velocityCurve": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "number"
+          }
+        },
+        "rmse": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "alphaPlateDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "outputMovPath",
+        "codec",
+        "profile",
+        "pixFmt",
+        "requiresAlphaPlate",
+        "bbox"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/definitions/identifier"
+        },
+        "outputMovPath": {
+          "$ref": "common.schema.json#/definitions/absolutePath"
+        },
+        "codec": {
+          "type": "string",
+          "const": "prores_ks"
+        },
+        "profile": {
+          "type": "string",
+          "const": "4444"
+        },
+        "pixFmt": {
+          "type": "string",
+          "const": "yuva444p10le"
+        },
+        "requiresAlphaPlate": {
+          "type": "boolean",
+          "const": true
+        },
+        "bbox": {
+          "$ref": "common.schema.json#/definitions/bbox"
+        },
+        "shaderSummary": {
+          "type": "string"
+        }
+      }
+    },
+    "motionDna": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "triggerOrder",
+        "curves",
+        "stagger",
+        "strippedLiterals"
+      ],
+      "properties": {
+        "triggerOrder": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/triggerStep"
+          }
+        },
+        "curves": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/fittedCurve"
+          }
+        },
+        "stagger": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["defaultIntervalMs", "pattern", "maxGroupLagMs"],
+          "properties": {
+            "defaultIntervalMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "pattern": {
+              "type": "string",
+              "enum": ["linear", "domino", "radial", "marker-sync", "proximity"]
+            },
+            "maxGroupLagMs": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "alphaPlates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/alphaPlateDescriptor"
+          }
+        },
+        "strippedLiterals": {
+          "$ref": "#/definitions/strippedLiterals"
+        }
+      }
+    },
+    "brandTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "brandName",
+        "palette",
+        "typography",
+        "radii",
+        "motionPersonality"
+      ],
+      "properties": {
+        "brandName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme": {
+          "type": "string",
+          "minLength": 1
+        },
+        "palette": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "colorSpace",
+            "bgSurface",
+            "cardFill",
+            "textPrimary",
+            "textMuted",
+            "accentPrimary",
+            "strokeColor"
+          ],
+          "properties": {
+            "colorSpace": {
+              "type": "string",
+              "enum": ["oklch", "srgb-hex"]
+            },
+            "bgSurface": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cardFill": {
+              "type": "string",
+              "minLength": 1
+            },
+            "textPrimary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "textMuted": {
+              "type": "string",
+              "minLength": 1
+            },
+            "accentPrimary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "accentSecondary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "strokeColor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "gradientCss": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "typography": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "displayFamily",
+            "bodyFamily",
+            "monoFamily",
+            "scalePx"
+          ],
+          "properties": {
+            "displayFamily": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bodyFamily": {
+              "type": "string",
+              "minLength": 1
+            },
+            "monoFamily": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scalePx": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["hero", "h1", "h2", "body", "caption"],
+              "properties": {
+                "hero": { "type": "number", "exclusiveMinimum": 0 },
+                "h1": { "type": "number", "exclusiveMinimum": 0 },
+                "h2": { "type": "number", "exclusiveMinimum": 0 },
+                "body": { "type": "number", "exclusiveMinimum": 0 },
+                "caption": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          }
+        },
+        "radii": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cardPx", "pillPx", "buttonPx"],
+          "properties": {
+            "cardPx": { "type": "number", "minimum": 0 },
+            "pillPx": { "type": "number", "minimum": 0 },
+            "buttonPx": { "type": "number", "minimum": 0 }
+          }
+        },
+        "motionPersonality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "archetype",
+            "minReadabilityHoldSeconds",
+            "staggerIntervalMs",
+            "preferSpringPhysics"
+          ],
+          "properties": {
+            "archetype": {
+              "type": "string",
+              "enum": [
+                "snappy-saas",
+                "apple-cinematic",
+                "tactile-bento",
+                "kinetic-editorial"
+              ]
+            },
+            "minReadabilityHoldSeconds": {
+              "type": "number",
+              "minimum": 0.7
+            },
+            "staggerIntervalMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "preferSpringPhysics": {
+              "type": "boolean"
+            }
+          }
+        },
+        "copySlots": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "creativeDistance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overallScore",
+        "threshold",
+        "passed",
+        "dimensions",
+        "crossPollination"
+      ],
+      "properties": {
+        "overallScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0.35,
+          "maximum": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "dimensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "layoutDivergence",
+            "paletteDivergence",
+            "copyReplacement",
+            "timingHybridity"
+          ],
+          "properties": {
+            "layoutDivergence": { "type": "number", "minimum": 0, "maximum": 1 },
+            "paletteDivergence": { "type": "number", "minimum": 0, "maximum": 1 },
+            "copyReplacement": { "type": "number", "minimum": 0, "maximum": 1 },
+            "timingHybridity": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "crossPollination": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "referenceCount",
+            "timingSourceId",
+            "choreographySourceId",
+            "spatialArchetype"
+          ],
+          "properties": {
+            "referenceCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "timingSourceId": {
+              "$ref": "common.schema.json#/definitions/identifier"
+            },
+            "choreographySourceId": {
+              "$ref": "common.schema.json#/definitions/identifier"
+            },
+            "spatialArchetype": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "gateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "score", "notes"],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "directorGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "score", "gates"],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "focalHierarchy",
+            "springAndEasingPhysics",
+            "typographyAndReadabilityHold",
+            "perceptualOklchAndSafeMargins",
+            "proceduralRigPurity"
+          ],
+          "properties": {
+            "focalHierarchy": { "$ref": "#/definitions/gateResult" },
+            "springAndEasingPhysics": { "$ref": "#/definitions/gateResult" },
+            "typographyAndReadabilityHold": { "$ref": "#/definitions/gateResult" },
+            "perceptualOklchAndSafeMargins": { "$ref": "#/definitions/gateResult" },
+            "proceduralRigPurity": { "$ref": "#/definitions/gateResult" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -8,6 +8,19 @@ import {
   validateArtifact, verifyFiles, withJobLock, writeJsonState
 } from '../core.mjs';
 import { deriveJobDirectory } from '../design/assets.mjs';
+import {
+  FILMSTRIP_QA_VERSION,
+  buildBeatFilmstrip,
+  evaluateReviewLoopChecks,
+  runMotionTransferFilmstripQa
+} from '../vision/filmstrip-qa.mjs';
+
+export {
+  FILMSTRIP_QA_VERSION,
+  buildBeatFilmstrip,
+  evaluateReviewLoopChecks,
+  runMotionTransferFilmstripQa
+};
 
 export const QA_VERSION = '1.0.0';
 
@@ -419,8 +432,16 @@ function reportLimitations(plan, config, referenceProbe) {
  * report. It never edits the scene, the plan or the render.
  */
 export async function runQa(planPath, options = {}) {
+  if (typeof planPath === 'object' && planPath !== null) {
+    if (options.mode === 'motion-transfer' || planPath.mode === 'motion-transfer') {
+      return runMotionTransferFilmstripQa(planPath, options);
+    }
+  }
   const resolvedPlanPath = absolutePath(planPath);
   const plan = await readJson(resolvedPlanPath);
+  if (options.mode === 'motion-transfer' || plan?.mode === 'motion-transfer') {
+    return runMotionTransferFilmstripQa(plan, options);
+  }
   await validateArtifact('scene-plan', plan);
   if (!options.renderManifestPath) throw new WorkflowError('QA_RENDER_REQUIRED', 'QA requires --render <render-manifest.json>.');
   const renderManifestPath = absolutePath(options.renderManifestPath);

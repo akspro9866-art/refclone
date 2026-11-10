@@ -37,7 +37,16 @@ export {
   detectCriticalFrames
 } from './vision/critical-frames.mjs';
 export { PROMOTION_VERSION, analyzeScenePromotion, analyzeElement, compilePromotionToScript } from './cavalry/promotion.mjs';
-export { MG_COMPILER_VERSION, VERIFIED_PRESETS, compileShotScript, compileLayoutToMgDSL } from './cavalry/mg-compiler.mjs';
+export {
+  MG_COMPILER_VERSION,
+  VERIFIED_PRESETS,
+  MOTION_TRANSFER_RIG_BUILDERS,
+  CAT15_PROCEDURAL_SAAS_PRESETS,
+  compileShotScript,
+  compileLayoutToMgDSL,
+  compileMotionTransferScene,
+  compileMgScene
+} from './cavalry/mg-compiler.mjs';
 export { PERCEPTUAL_VERSION, analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport } from './vision/perceptual.mjs';
 
 // Stage 3.5: the _mg contract gate, run between compile and dispatch
@@ -175,3 +184,66 @@ export { inspectReference, compileAndConverge, validateStage35 } from './strict/
 
 // CLI dispatcher (programmatic invocation)
 export { main as cliMain } from './cli.mjs';
+
+// Phase 4: Creative SaaS `--mode motion-transfer` (Ingest, Design, Rig Compilation, Filmstrip QA)
+export {
+  CAPTURE_VERSION,
+  buildVirtualClockInitScript,
+  captureLiveUrl,
+  extractElementTrajectories
+} from './ingest/capture.ts';
+export {
+  GL_TRACE_VERSION,
+  buildWebGlSpyInitScript,
+  scoreFragmentComplexity,
+  traceWebGlShaders
+} from './ingest/gl.ts';
+export {
+  EASING_FITTER_VERSION,
+  computeVelocityCurve,
+  fitCubicBezier,
+  fitSpringParameters,
+  fitMotionCurve,
+  mapBezierToCavalryMagicEasing
+} from './ingest/easing.ts';
+export {
+  ALPHA_PLATE_VERSION,
+  buildProRes4444FfmpegArgs,
+  buildCavalryAlphaPlateDescriptor,
+  renderProRes4444AlphaPlate
+} from './ingest/alpha-plate.mjs';
+export {
+  BRAND_INTAKE_VERSION,
+  DEFAULT_BRAND_TOKENS,
+  hexToOklchString,
+  parseBrandMarkdown,
+  loadBrandTokens,
+  generateBrandMarkdownTemplate,
+  generateMotionMarkdownTemplate
+} from './design/brand-intake.mjs';
+export {
+  MIX_AND_MATCH_VERSION,
+  CREATIVE_DISTANCE_THRESHOLD,
+  stripReferenceLiterals,
+  computeCreativeDistance,
+  mixAndMatchReferences
+} from './design/mix-and-match.mjs';
+export {
+  DIRECTOR_GATE_VERSION,
+  STUDIO_DIRECTOR_GATES,
+  runDirectorGateChecks
+} from './design/director-gate-check.mjs';
+export {
+  MOTION_TRANSFER_VERSION,
+  buildMotionTransferSpec
+} from './design/motion-transfer.mjs';
+export {
+  FILMSTRIP_QA_VERSION,
+  buildBeatFilmstrip,
+  evaluateReviewLoopChecks,
+  runMotionTransferFilmstripQa
+} from './vision/filmstrip-qa.mjs';
+export {
+  runMotionTransferPipeline
+} from './pipeline/run.mjs';
+

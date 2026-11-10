@@ -942,3 +942,31 @@ export async function registerDesign(shotSpecPath, options = {}) {
     return { ...result, cached: false, validation };
   });
 }
+
+// Additive Phase 4 Motion-Transfer exports (Creative SaaS Mode).
+export {
+  BRAND_INTAKE_VERSION,
+  DEFAULT_BRAND_TOKENS,
+  hexToOklchString,
+  parseBrandMarkdown,
+  loadBrandTokens,
+  generateBrandMarkdownTemplate,
+  generateMotionMarkdownTemplate
+} from './brand-intake.mjs';
+export {
+  MIX_AND_MATCH_VERSION,
+  CREATIVE_DISTANCE_THRESHOLD,
+  stripReferenceLiterals,
+  computeCreativeDistance,
+  mixAndMatchReferences
+} from './mix-and-match.mjs';
+export {
+  DIRECTOR_GATE_VERSION,
+  STUDIO_DIRECTOR_GATES,
+  runDirectorGateChecks
+} from './director-gate-check.mjs';
+export {
+  MOTION_TRANSFER_VERSION,
+  buildMotionTransferSpec
+} from './motion-transfer.mjs';
+

@@ -805,3 +805,62 @@ export async function autoAnalyze(ingestIndexPath, options = {}) {
     return { ...result, cached: false, validation, spec };
   });
 }
+
+/**
+ * Extract normalized motion DNA (trigger order, duration ratios, stagger
+ * intervals, and fitted curves) from either an `autoAnalyze` result or a
+ * `captureLiveUrl` result for `--mode motion-transfer`.
+ */
+export async function extractMotionDnaFromCaptureOrAnalysis(sourceInput, options = {}) {
+  const { fitMotionCurve } = await import('./easing.ts');
+  const fps = Number(options.fps ?? sourceInput?.fps?.num ?? 60);
+  const totalFrames = Math.max(4, Number(sourceInput?.totalFrames ?? sourceInput?.frames?.length ?? 60));
+  const trajectories = Array.isArray(sourceInput?.trajectories) ? sourceInput.trajectories : [];
+  const referenceId = options.referenceId ?? 'ref-1';
+
+  const triggerOrder = trajectories.map((traj, idx) => {
+    const startRatio = round(Math.max(0, Math.min(1, traj.startFrame / Math.max(1, totalFrames - 1))), 4);
+    const durationFrames = Math.max(1, traj.endFrame - traj.startFrame);
+    const durationRatio = round(Math.max(0.05, Math.min(1, durationFrames / Math.max(1, totalFrames))), 4);
+    const prevStart = idx > 0 ? trajectories[idx - 1].startFrame : traj.startFrame;
+    const staggerIntervalMs = round(Math.max(0, ((traj.startFrame - prevStart) * 1000) / fps), 2);
+    return {
+      stepIndex: idx,
+      role: traj.role ?? `element-${idx + 1}`,
+      normalizedStartRatio: startRatio,
+      normalizedDurationRatio: durationRatio,
+      staggerIntervalMs,
+      referenceId
+    };
+  });
+
+  const curves = trajectories.map((traj, idx) => {
+    const samples = traj.tracks?.y?.length ? traj.tracks.y : [{ t: 0, y: 0 }, { t: 10, y: 50 }, { t: 20, y: 90 }, { t: 30, y: 100 }];
+    const fitted = fitMotionCurve(samples, fps, {
+      id: `${referenceId}-${traj.id}-y`,
+      role: traj.role ?? `element-${idx + 1}`,
+      property: 'position.y'
+    });
+    return {
+      id: fitted.id,
+      role: fitted.role ?? traj.role ?? `element-${idx + 1}`,
+      property: fitted.property,
+      kind: fitted.kind,
+      cubicBezier: fitted.cubicBezier,
+      spring: fitted.spring,
+      velocityCurve: fitted.velocityCurve,
+      rmse: fitted.rmse
+    };
+  });
+
+  return {
+    triggerOrder,
+    curves,
+    strippedLiterals: {
+      textRemoved: true,
+      colorsRemoved: true,
+      logosRemoved: true
+    }
+  };
+}
+

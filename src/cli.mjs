@@ -139,18 +139,18 @@ export async function main(args) {
     // zero-slop is plan-driven: the pipeline plan carries the reference evidence.
   if (command !== 'zero-slop' && (!reference || reference.startsWith('--'))) throw new WorkflowError('CLI_USAGE', `${command} requires an input path`);
   const flags = {};
-  const allowed = command === 'run' ? ['--config', '--jobs', '--job', '--profile', '--boundary-review', '--analysis-review']
-    : command === 'ingest' ? ['--config', '--jobs', '--review']
+  const allowed = command === 'run' ? ['--config', '--jobs', '--job', '--profile', '--boundary-review', '--analysis-review', '--mode']
+    : command === 'ingest' ? ['--config', '--jobs', '--review', '--mode']
     : command === 'analyze' ? ['--review']
     : command === 'autoanalyze' ? ['--config', '--max-track-frames', '--max-report-frames', '--report-width']
     : command === 'assets' ? ['--config', '--job', '--assets']
     : command === 'resolve' ? ['--manifest', '--tracks', '--wall-shift', '--logo', '--job']
-    : command === 'plan' ? ['--manifest', '--tokens', '--capabilities', '--fps', '--job']
+    : command === 'plan' ? ['--manifest', '--tokens', '--capabilities', '--fps', '--job', '--mode']
     : command === 'design-generic' ? ['--config', '--manifest', '--catalog', '--capabilities', '--job']
     : command === 'plan-generic' ? ['--config', '--manifest', '--tokens', '--catalog', '--capabilities', '--fps', '--job']
-    : command === 'build' ? ['--shot', '--phase', '--project', '--job']
+    : command === 'build' ? ['--shot', '--phase', '--project', '--job', '--mode']
     : command === 'render' ? ['--project', '--shot', '--job']
-    : command === 'qa' ? ['--render', '--reference', '--config', '--job']
+    : command === 'qa' ? ['--render', '--reference', '--config', '--job', '--mode']
     : command === 'export' ? ['--project', '--render', '--qa', '--build', '--reference', '--config', '--job']
     : command === 'procedural' ? ['--shot', '--metadata', '--config', '--max-iterations', '--report']
     : command === 'zero-slop' ? ['--plan', '--job', '--base-url', '--extract-style', '--auto-skill', '--cloned-dir', '--skill-dir', '--force-style']
@@ -158,7 +158,7 @@ export async function main(args) {
     : command === 'inspect' ? ['--start', '--end', '--fps', '--out']
     : command === 'converge' ? ['--out', '--max-iterations']
     : command === 'validate' ? []
-    : ['--manifest', '--job'];
+    : ['--manifest', '--job', '--mode'];
   // Boolean flags take no value; every other option is a strict flag/value pair.
   const booleanFlags = new Set(['--auto-skill', '--force-style']);
   for (let i = 0; i < rest.length; i += 1) {
@@ -189,8 +189,21 @@ export async function main(args) {
     }
     return undefined;
   };
+  if (flags['--mode'] !== undefined && !['clone', 'motion-transfer'].includes(flags['--mode'])) {
+    throw new WorkflowError('CLI_USAGE', `Invalid --mode "${flags['--mode']}": expected clone or motion-transfer`);
+  }
+  const mode = flags['--mode'] ?? 'clone';
   if (command === 'run') {
+    if (mode === 'motion-transfer') {
+      return await runPipeline(reference, {
+        mode: 'motion-transfer',
+        configPath: flags['--config'] ? path.resolve(flags['--config']) : undefined,
+        jobsDirectory: flags['--jobs'] ? path.resolve(flags['--jobs']) : undefined,
+        jobDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined
+      });
+    }
     const result = await runPipeline(path.resolve(reference), {
+      mode: 'clone',
       profile: flags['--profile'],
       configPath: flags['--config'] ? path.resolve(flags['--config']) : undefined,
       jobsDirectory: flags['--jobs'] ? path.resolve(flags['--jobs']) : undefined,
@@ -405,7 +418,14 @@ export async function main(args) {
     };
   }
   if (command === 'build') {
+    if (mode === 'motion-transfer') {
+      return await buildScene(path.resolve(reference), {
+        mode: 'motion-transfer',
+        jobDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined
+      });
+    }
     const result = await buildScene(path.resolve(reference), {
+      mode: 'clone',
       shot: flags['--shot'], phase: flags['--phase'],
       projectPath: flags['--project'] ? path.resolve(flags['--project']) : undefined,
       jobDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined
@@ -447,8 +467,16 @@ export async function main(args) {
     };
   }
   if (command === 'qa') {
+    if (mode === 'motion-transfer') {
+      return await runQa(path.resolve(reference), {
+        mode: 'motion-transfer',
+        configPath: flags['--config'] ? path.resolve(flags['--config']) : undefined,
+        jobDirectory: flags['--job'] ? path.resolve(flags['--job']) : undefined
+      });
+    }
     if (!flags['--render']) throw new WorkflowError('CLI_USAGE', 'qa requires --render <render-manifest.json>');
     const result = await runQa(path.resolve(reference), {
+      mode: 'clone',
       renderManifestPath: path.resolve(flags['--render']),
       referencePath: await requireReference(),
       configPath: flags['--config'] ? path.resolve(flags['--config']) : undefined,

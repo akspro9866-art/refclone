@@ -6,17 +6,18 @@ import {
   WorkflowError, absolutePath, hashFile, hashObject, readJson, validateArtifact, verifyFiles,
   writeJsonNew, writeJsonState
 } from '../core.mjs';
-import { ingest } from '../ingest/media.mjs';
+import { ingest, isLiveUrl, captureLiveUrl, traceWebGlShaders, renderProRes4444AlphaPlate } from '../ingest/media.mjs';
 import { analyzeReference } from '../ingest/analysis.mjs';
 import { registerAssets } from '../design/assets.mjs';
 import { registerResolvedInputs } from './resolve.mjs';
 import { registerDesign } from '../design/design.mjs';
 import { registerScenePlan } from '../design/planner.mjs';
+import { buildMotionTransferSpec } from '../design/motion-transfer.mjs';
 import { autoAnalyze } from '../ingest/autoanalyze.mjs';
 import { registerGenericDesign, registerGenericScenePlan } from '../design/generic-planner.mjs';
-import { buildScene, BUILD_VERSION } from './build.mjs';
+import { buildScene, buildMotionTransferScene, BUILD_VERSION } from './build.mjs';
 import { renderVideo, RENDER_VERSION } from './render.mjs';
-import { runQa } from './qa.mjs';
+import { runQa, runMotionTransferFilmstripQa } from './qa.mjs';
 import { exportFinal } from './export.mjs';
 import { ADAPTER_VERSION } from '../cavalry/cavalry.mjs';
 
@@ -473,6 +474,13 @@ function finalFromExport(manifest, exportManifestPath) {
  * run; human review gates block with a concrete next action instead of guessing.
  */
 export async function runPipeline(reference, options = {}) {
+  const mode = options.mode ?? 'clone';
+  if (!['clone', 'motion-transfer'].includes(mode)) {
+    throw new WorkflowError('RUN_MODE_INVALID', `Unsupported pipeline mode "${mode}". Expected "clone" or "motion-transfer".`, { mode });
+  }
+  if (mode === 'motion-transfer') {
+    return runMotionTransferPipeline(reference, options);
+  }
   const referencePath = absolutePath(reference);
   const configPath = absolutePath(options.configPath ?? fileURLToPath(new URL('../../config.json', import.meta.url)));
   const config = await readJson(configPath);
@@ -1026,3 +1034,73 @@ async function runIngest(referencePath, config, jobsDirectory, boundaryReview) {
     boundaryReview
   });
 }
+
+/**
+ * Creative SaaS `--mode motion-transfer` pipeline:
+ * 1. Ingests live URL (virtual-clock capture + WebGL shader trace + ProRes 4444 alpha plate) or video reference(s)
+ * 2. Strips literal text/colors/logos and extracts normalized motion DNA (`buildMotionTransferSpec`)
+ * 3. Cross-pollinates with `brand.md` / `MOTION.md` and enforces `creativeDistance >= 0.35` + 5 Studio Director Quality Gates
+ * 4. Compiles procedural Cavalry `_mg` + `_rb` + `cat15` scene (`buildMotionTransferScene`)
+ * 5. Runs the Creative Director Filmstrip QA Loop (`runMotionTransferFilmstripQa`) instead of 1:1 pixel-diff
+ */
+export async function runMotionTransferPipeline(reference, options = {}) {
+  const referencesInput = Array.isArray(reference) ? reference : [reference];
+  const spec = await buildMotionTransferSpec({
+    references: referencesInput,
+    brandMd: options.brandMd,
+    motionMd: options.motionMd,
+    brandDir: options.brandDir,
+    brandTokens: options.brandTokens,
+    alphaPlateOutputDir: options.alphaPlateOutputDir,
+    options
+  });
+
+  const buildResult = await buildMotionTransferScene(spec, {
+    outputDirectory: options.outputDirectory,
+    jobDirectory: options.jobDirectory
+  });
+
+  const qaReport = runMotionTransferFilmstripQa(spec, {
+    ...options,
+    compiledScript: buildResult.script
+  });
+
+  const complete = Boolean(buildResult.ready && qaReport.passed);
+  return {
+    schemaVersion: 1,
+    runVersion: RUN_VERSION,
+    mode: 'motion-transfer',
+    status: complete ? 'verified' : 'failed',
+    complete,
+    reviewRequired: false,
+    sourceHash: spec.sourceHash,
+    spec,
+    build: buildResult,
+    qa: qaReport,
+    stages: {
+      ingest: {
+        status: 'executed',
+        referenceCount: spec.references.length,
+        alphaPlates: spec.motionDna.alphaPlates?.length ?? 0
+      },
+      design: {
+        status: 'executed',
+        creativeDistance: spec.creativeDistance.overallScore
+      },
+      build: {
+        status: buildResult.status,
+        scriptHash: buildResult.scriptHash,
+        purityScore: buildResult.purity.score
+      },
+      qa: {
+        status: qaReport.status,
+        pixelDiffBypassed: true,
+        reviewLoopPassed: qaReport.reviewLoop.passed
+      }
+    },
+    nextActions: complete
+      ? ['No action required; motion-transfer procedural scene and Filmstrip QA passed all gates.']
+      : ['Inspect Filmstrip QA and Studio Director Gate diagnostics.']
+  };
+}
+

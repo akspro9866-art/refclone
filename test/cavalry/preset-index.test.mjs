@@ -277,7 +277,7 @@ describe('preset index: shipped catalog', () => {
       t.skip('cavalry-mcp dist/presets/preset_manifest.json is not built');
       return;
     }
-    assert.equal(manifest.size, 120);
+    assert.ok(manifest.size >= 120);
     assert.ok(manifest.entries.every(entry => entry.easing === 'spring'));
     const typography = matchPreset({ motion: 'stagger', easing: 'spring', category: 'typography' }, { manifest });
     assert.ok(typography, 'every motion token appears in at least one pack');

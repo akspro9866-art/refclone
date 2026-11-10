@@ -1914,3 +1914,15 @@ export async function registerScenePlan(shotSpecPath, options = {}) {
     return { ...result, cached: false, validation: plan.validation };
   });
 }
+
+// Additive Phase 4 Motion-Transfer exports (Creative SaaS Mode).
+export {
+  MOTION_TRANSFER_VERSION,
+  buildMotionTransferSpec
+} from './motion-transfer.mjs';
+export {
+  DIRECTOR_GATE_VERSION,
+  STUDIO_DIRECTOR_GATES,
+  runDirectorGateChecks
+} from './director-gate-check.mjs';
+
