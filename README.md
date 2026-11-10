@@ -166,7 +166,7 @@ validated against the matching schema before a later stage is allowed to read it
 > the syntax gate (`npm run build`) parses every `.ts` module with `node --check`. Both rely on
 > Node's **native TypeScript type stripping** — there is no tsx/ts-node in the dependency tree.
 > A local audit measured it: Node v20.20.2 fails (15 failures, no stripping at all), Node v22.23.4
-> passes the full 647-test suite (stripping is on by default since 22.18), and Node 24 is the
+> passes the full 649-test suite (stripping is on by default since 22.18), and Node 24 is the
 > supported, CI-verified line — so `engines` stays `>=24` rather than widening to a floor the
 > evidence does not support.
 
@@ -509,7 +509,7 @@ configs, the generic modules, the skills, the README, or any report you would ha
 
 ```powershell
 npm run verify     # syntax check every module + config parity + skill mirrors + privacy scan
-npm test           # 647 tests, no Cavalry needed (the cross-repo mock-bridge tests skip when the sibling repos are not built)
+npm test           # 649 tests, no Cavalry needed (the cross-repo mock-bridge tests skip when the sibling repos are not built)
 npm run verify:docs  # re-runs the suite and checks that every test count quoted in these docs is current
 npm run test:integration   # LIVE: needs Cavalry 2.8 + Stallion; writes integration/evidence/ (gitignored)
 ```

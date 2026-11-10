@@ -46,6 +46,7 @@ import { optimizeCoordinateDescent, compositeLoss } from '../solver/coordinateDe
 import { refineLocally, LOCAL_REFINER_DEFAULTS } from '../solver/local_refiner.ts';
 import { fitSemanticBeat, beatsToPromptBlock } from '../promotion/trajectory_fitter.ts';
 import { loadCavalryLib } from '../cavalry/cavalry-lib.mjs';
+import { enforceStage3PurityGate } from '../cavalry/mg-compiler.mjs';
 import { computeSSIM } from '../vision/perceptual.mjs';
 import { extractStylePreset, styleGatePass } from '../stages/stage6_extract_style.ts';
 
@@ -320,18 +321,26 @@ export function parseManifestAnswer(text) {
  * Stage 3 — compile the manifest through the direct library and execute it in
  * ONE batch-step round trip together with the preset scripts.
  */
-export async function runStage3Compile({ manifest, presetScripts, sampleFrames, renderFrames, renderOutputDir, client }) {
+export async function runStage3Compile({ manifest, presetScripts, sampleFrames, renderFrames, renderOutputDir, client, rawScript, theme = 'neutral', selfCorrect }) {
   const lib = await loadCavalryLib();
   if (!lib) throw fail('CAVALRY_LIB_UNAVAILABLE', 'cavalry-mcp/lib is not built; run npm install + npm run build in the sibling checkout');
   const compiled = lib.compileMgDsl(manifest);
-  const script = presetScripts.length ? `${presetScripts.join('\n')}\n${compiled}` : compiled;
-  return postBatchStep({
+  let script = presetScripts?.length ? `${presetScripts.join('\n')}\n${compiled}` : compiled;
+  let purityGate = null;
+  if (typeof rawScript === 'string' && rawScript.trim().length > 0) {
+    purityGate = enforceStage3PurityGate(rawScript, { theme, useMgUndoGroup: false, selfCorrect });
+    script = `${purityGate.script}\n${script}`;
+  }
+  const response = await postBatchStep({
     script,
     sampleFrames,
     renderFrames,
     renderOutputDir,
     ...client,
   });
+  return purityGate
+    ? { ...response, purity: purityGate.purity, puritySelfCorrected: purityGate.selfCorrected }
+    : response;
 }
 
 /** Raw batch-step POST — the single wire the whole pipeline speaks. */

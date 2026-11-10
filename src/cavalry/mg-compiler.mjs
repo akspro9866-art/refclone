@@ -17,6 +17,12 @@ import {
   wrapAtomicUndo,
   PROMOTION_VERSION
 } from './promotion.mjs';
+import {
+  validateMgPurity,
+  selfCorrectMgPurity
+} from '../validation/validate-mg-purity.mjs';
+
+export { validateMgPurity, selfCorrectMgPurity };
 
 export const MG_COMPILER_VERSION = '1.0.0';
 
@@ -340,8 +346,60 @@ function catalogDuplicatorMatch(presetMatches, baseElementId) {
  * @returns {Object} Compiled script with metadata, including per-operation tiers
  *     (`expressions[].tier`) and the `tiers` count summary
  */
+/**
+ * Enforce the 100-Point `_mg` Purity Gate at the end of Stage 3 (`mg-compiler`).
+ * If `passed === false`, automatically runs a single self-correction pass
+ * appending `autoFixPrompt` so Stage 4 only receives Grade A/B procedural `_mg` code.
+ *
+ * @param {string} generatedDsl
+ * @param {{ theme?: string, useMgUndoGroup?: boolean, selfCorrect?: (dsl: string, autoFixPrompt: string, purity: Object) => string }} [options]
+ */
+export function enforceStage3PurityGate(generatedDsl, options = {}) {
+  const initialPurity = validateMgPurity(generatedDsl);
+  if (initialPurity.passed) {
+    return {
+      script: generatedDsl,
+      purity: initialPurity,
+      initialPurity,
+      selfCorrected: false,
+      autoFixPrompt: initialPurity.autoFixPrompt
+    };
+  }
+
+  let candidate = generatedDsl;
+  if (typeof options.selfCorrect === 'function') {
+    const hooked = options.selfCorrect(
+      `${generatedDsl}\n// [autoFixPrompt] ${initialPurity.autoFixPrompt}`,
+      initialPurity.autoFixPrompt,
+      initialPurity
+    );
+    if (typeof hooked === 'string' && hooked.trim().length > 0) {
+      candidate = hooked;
+    }
+  }
+
+  let recheck = validateMgPurity(candidate);
+  if (!recheck.passed) {
+    const corrected = selfCorrectMgPurity(candidate, {
+      theme: options.theme ?? 'neutral',
+      useMgUndoGroup: options.useMgUndoGroup ?? true,
+      appendAutoFixComment: true
+    });
+    candidate = corrected.correctedScript;
+    recheck = corrected.finalValidation;
+  }
+
+  return {
+    script: candidate,
+    purity: recheck,
+    initialPurity,
+    selfCorrected: true,
+    autoFixPrompt: initialPurity.autoFixPrompt
+  };
+}
+
 export function compilePromotionScript({
-  analysis, groupName, capabilities, autoBindPresets = true, presetMatches = null
+  analysis, groupName, capabilities, autoBindPresets = true, presetMatches = null, rawDsl = null, theme = null, selfCorrect = null
 }) {
   if (!analysis || !analysis.elements) {
     fail('MG_COMPILE_INVALID', 'Valid promotion analysis is required.');
@@ -490,9 +548,44 @@ export function compilePromotionScript({
   }
 
   // Wrap in atomic undo group
-  const script = orderedExpressions.length > 0
+  let script = orderedExpressions.length > 0
     ? wrapAtomicUndo(orderedExpressions, groupName)
     : '// No procedural promotions to compile';
+
+  if (typeof rawDsl === 'string' && rawDsl.trim().length > 0) {
+    script = orderedExpressions.length > 0 ? `${script}\n${rawDsl}` : rawDsl;
+  }
+
+  // Run Stage 3 purity gate before Stage 4 execution
+  let purityGate;
+  if (orderedExpressions.length > 0 || (typeof rawDsl === 'string' && rawDsl.trim().length > 0)) {
+    purityGate = enforceStage3PurityGate(script, {
+      theme: theme ?? analysis?.theme ?? 'neutral',
+      useMgUndoGroup: true,
+      selfCorrect
+    });
+    script = purityGate.script;
+  } else {
+    purityGate = {
+      script,
+      purity: {
+        score: 100,
+        grade: 'A',
+        passed: true,
+        breakdown: {
+          atomicUndoSafety: 25,
+          mgPrimitivePurity: 30,
+          tokenizedStyling: 25,
+          proceduralMotionPurity: 20
+        },
+        violations: [],
+        autoFixPrompt: ''
+      },
+      initialPurity: null,
+      selfCorrected: false,
+      autoFixPrompt: ''
+    };
+  }
 
   // Generate script hash for caching
   const scriptHash = hashObject({
@@ -509,6 +602,8 @@ export function compilePromotionScript({
     groupName,
     script,
     scriptHash,
+    purity: purityGate.purity,
+    puritySelfCorrected: purityGate.selfCorrected,
     expressions: orderedExpressions.map((e, index) => ({
       undoGroup: e.undoGroup,
       presetBinding: e.presetBinding,
@@ -649,7 +744,10 @@ export function compileShotScript({ trackingAnalysis, promotionAnalysis, shotId,
     groupName,
     capabilities,
     autoBindPresets: options.autoBindPresets ?? true,
-    presetMatches: options.presetMatches ?? promotionAnalysis.presetMatches ?? null
+    presetMatches: options.presetMatches ?? promotionAnalysis.presetMatches ?? null,
+    rawDsl: options.rawDsl ?? null,
+    theme: options.theme ?? promotionAnalysis.theme ?? null,
+    selfCorrect: options.selfCorrect ?? null
   });
 
   const validation = validateCompiledScript(compiled, capabilities);
@@ -659,9 +757,11 @@ export function compileShotScript({ trackingAnalysis, promotionAnalysis, shotId,
     shotId,
     version: MG_COMPILER_VERSION,
     compiled,
+    purity: compiled.purity,
+    puritySelfCorrected: compiled.puritySelfCorrected,
     validation,
     metadata,
-    ready: validation.canExecute,
+    ready: validation.canExecute && Boolean(compiled.purity?.passed),
     trackingSummary: trackingAnalysis?.summary ?? null
   };
 }

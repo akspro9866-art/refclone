@@ -47,14 +47,14 @@ export const MG_CONTRACT_VERSION = '1.0.0';
 export const MG_PUBLISHED_HELPERS = Object.freeze([
   'comp', 'set', 'shape', 'layer', 'text', 'wire', 'deform', 'subMesh', 'subMeshLevel',
   'duplicator', 'stagger', 'kf', 'rig', 'ease', 'patch', 'patchSelected', 'patchKeyframeSafe',
-  'svg', 'theme', 'applyTheme', 'modulate', 'connectDynamic', 'semantic', 'semantics', 'find',
+  'svg', 'theme', 'applyTheme', 'applySceneTheme', 'modulate', 'connectDynamic', 'semantic', 'semantics', 'find',
   'presetRoots', 'syncToFrames', 'undoGroup', 'keyframe', 'keyframes', 'behavior',
   'trim', 'mask', 'blend', 'typography', 'filter', 'corner', 'selection', 'sel',
   'fromRaster', 'fitToBounds'
 ]);
 
 /** Read-only tables a script may legitimately read off `_mg`. */
-export const MG_PUBLISHED_TABLES = Object.freeze(['EASE_CURVES', 'EASE_ALIASES']);
+export const MG_PUBLISHED_TABLES = Object.freeze(['EASE_CURVES', 'EASE_ALIASES', 'ASTRYX_THEMES']);
 
 /** The macros refclone's Stage 4 compiler is allowed to emit. */
 export const MG_EMITTABLE_MACROS = Object.freeze([
