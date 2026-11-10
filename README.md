@@ -519,12 +519,14 @@ reference nobody transcribed stays blocked. It also covers tracking, motion clas
 grids, mask hints, preset matching, `_mg` compilation, the contract gate, critical-frame selection,
 perceptual scoring and atomic convergence against synthetic frames.
 
-CI runs the unit and synthetic pipeline on `windows-latest` with Node 24. It checks out and builds
-the sibling `stallion` and `cavalry-mcp` repositories first, so the cross-repo mock-bridge e2e is a
-hard gate rather than a skip. The live Cavalry job is manual only (`workflow_dispatch`, or a commit
-message containing `[live-cavalry]`) on a self-hosted Windows runner with Cavalry open; it is
-evidence, not a push gate. The integration script is synthetic by design (it never claims to clone
-your reference), and its output is not redistributed — reproduce it on your own machine.
+CI runs the unit and synthetic pipeline on `windows-latest` and `ubuntu-latest` with Node 24 (the
+engine itself is only supported on Windows; the Ubuntu leg keeps the media-free code honest). It
+checks out and builds the sibling `stallion` repository first, so the cross-repo mock-bridge e2e is
+a hard gate rather than a skip; `cavalry-mcp` comes from the pinned npm dependency. The live
+Cavalry job is manual only (`workflow_dispatch`, or a commit message containing `[live-cavalry]`)
+on a self-hosted Windows runner with Cavalry open; it is evidence, not a push gate. The integration
+script is synthetic by design (it never claims to clone your reference), and its output is not
+redistributed — reproduce it on your own machine.
 
 ## Limitations, stated plainly
 
