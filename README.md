@@ -107,7 +107,7 @@ flipping the declaration to `"darwin"` and watching `npm ci` reject it on this W
 | Requirement | Why | Verified with |
 |---|---|---|
 | **Windows 10 or 11** | the supported and CI-verified platform; `npm` enforces it | CI on `windows-latest`; elsewhere `npm ci` stops with `EBADPLATFORM` |
-| Node.js **24+** | ESM `.mjs`, `node --test` runner | `node --version` |
+| Node.js **24+** | ESM `.mjs`, `node --test` runner, native TypeScript type stripping for the `.ts` suites | `node --version` |
 | `ffmpeg` and `ffprobe` on `PATH` | decode, frame extraction, encoding, and the test suite itself | `ffmpeg -version`; install routes in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
 | The three npm deps (`ajv`, `pngjs`, `@modelcontextprotocol/sdk`) | schema validation, PNG decode, MCP client | `npm ci` (installs 96 packages, no global installs) |
 | **Cavalry 2.8.0** with the Stallion bridge enabled (Scripts → Stallion) | only needed for `build`, `render`, `export`, and the live integration run | live MCP round-trips, see [`docs/MCP_CAPABILITIES.md`](docs/MCP_CAPABILITIES.md) |
@@ -116,6 +116,14 @@ flipping the declaration to `"darwin"` and watching `npm ci` reject it on this W
 
 The repository carries **17 JSON schemas** under `schemas/`, and every artifact a stage emits is
 validated against the matching schema before a later stage is allowed to read it.
+
+> **Why Node 24.** The test runner executes `*.test.ts` suites directly with `node --test`, and
+> the syntax gate (`npm run build`) parses every `.ts` module with `node --check`. Both rely on
+> Node's **native TypeScript type stripping** — there is no tsx/ts-node in the dependency tree.
+> A local audit measured it: Node v20.20.2 fails 15 tests (no stripping at all), Node v22.23.4
+> passes the full 647-test suite (stripping is on by default since 22.18), and Node 24 is the
+> supported, CI-verified line — so `engines` stays `>=24` rather than widening to a floor the
+> evidence does not support.
 
 Cavalry is proprietary software and is **not** part of this repository. The MCP server and the
 Stallion bridge are third-party MIT projects described in [`docs/CREDITS.md`](docs/CREDITS.md);

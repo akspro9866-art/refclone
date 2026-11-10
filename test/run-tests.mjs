@@ -22,6 +22,10 @@ if (files.length === 0) {
   process.exit(1)
 }
 
+// First use of Node's native TypeScript type stripping: the *.test.ts files
+// below run directly under `node --test` with no tsx/ts-node loader. That is
+// why engines is >=24 — Node 20 cannot strip types at all (see README
+// "Why Node 24" for the measured 20/22/24 audit).
 const result = spawnSync(process.execPath, ['--test', ...process.argv.slice(2), ...files], {
   stdio: 'inherit',
 })
