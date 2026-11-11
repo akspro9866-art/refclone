@@ -9,7 +9,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
+import { SVGPathCommander } from 'svg-path-commander';
 import { WorkflowError, absolutePath, hashFile, hashObject, readJson, validateArtifact } from '../core.mjs';
+import { equalizePaths } from '../cavalry/equalizePaths.mjs';
+import { evaluateBezierEasing } from './morph-equalize.mjs';
+import { resolveAstryxTheme, ASTRYX_THEMES } from '../themes/astryx-themes.mjs';
+import { parseColor } from '../vision/lint.mjs';
 
 export const EDIT_LIST_VERSION = '1.0.0';
 const fail = (code, message, details = {}) => { throw new WorkflowError(code, message, details); };
@@ -382,4 +387,653 @@ export function editListKey(resolved) {
     version: EDIT_LIST_VERSION, edit: resolved.edit?.sha256 ?? null,
     fps: resolved.fps, size: resolved.size, frames: resolved.frames, runs: resolved.runs
   });
+}
+
+// --- OpenVideoHarness deterministic checklist evaluators ---------------------
+
+const clampNum = (value, min, max) => Math.max(min, Math.min(max, value));
+
+/** C1-continuous cubic Hermite spline (mirrors motion-craft `splineAt`). */
+export function splineAt(frame, keyframes) {
+  const n = keyframes?.length ?? 0;
+  if (n === 0) return [];
+  if (frame <= keyframes[0][0]) return keyframes[0].slice(1);
+  if (frame >= keyframes[n - 1][0]) return keyframes[n - 1].slice(1);
+  let i = 0;
+  for (let k = 0; k < n - 1; k += 1) {
+    if (frame >= keyframes[k][0] && frame <= keyframes[k + 1][0]) { i = k; break; }
+  }
+  const p0 = keyframes[Math.max(0, i - 1)];
+  const p1 = keyframes[i];
+  const p2 = keyframes[i + 1];
+  const p3 = keyframes[Math.min(n - 1, i + 2)];
+  const dt = p2[0] - p1[0];
+  if (dt <= 0) return p1.slice(1);
+  const u = clampNum((frame - p1[0]) / dt, 0, 1);
+  const u2 = u * u;
+  const u3 = u2 * u;
+  const dims = p1.length - 1;
+  const out = new Array(dims);
+  for (let d = 1; d <= dims; d += 1) {
+    const y0 = p0[d], y1 = p1[d], y2 = p2[d], y3 = p3[d];
+    const m1 = i === 0 ? 0
+      : Math.abs(y1 - y0) < 1e-4 || Math.abs(y2 - y1) < 1e-4 ? 0
+        : ((y2 - y0) / (p2[0] - p0[0])) * dt;
+    const m2 = i + 1 === n - 1 ? 0
+      : Math.abs(y3 - y2) < 1e-4 || Math.abs(y2 - y1) < 1e-4 ? 0
+        : ((y3 - y1) / (p3[0] - p1[0])) * dt;
+    out[d - 1] =
+      (2 * u3 - 3 * u2 + 1) * y1 +
+      (u3 - 2 * u2 + u) * m1 +
+      (-2 * u3 + 3 * u2) * y2 +
+      (u3 - u2) * m2;
+  }
+  return out;
+}
+
+/** Ease-out Fitts cursor trajectory lookup (mirrors motion-craft `fittsCursorAt`). */
+export function fittsCursorAt(frame, trajectory) {
+  if (!Array.isArray(trajectory) || trajectory.length === 0) return null;
+  const points = [...trajectory].sort((a, b) => a[0] - b[0]);
+  if (frame <= points[0][0]) return { x: points[0][1], y: points[0][2] };
+  const last = points[points.length - 1];
+  if (frame >= last[0]) return { x: last[1], y: last[2] };
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i], b = points[i + 1];
+    if (frame < a[0] || frame > b[0]) continue;
+    const span = b[0] - a[0];
+    if (span <= 0) return { x: b[1], y: b[2] };
+    const t = (frame - a[0]) / span;
+    const eased = 1 - ((1 - t) ** 3);
+    return { x: a[1] + (b[1] - a[1]) * eased, y: a[2] + (b[2] - a[2]) * eased };
+  }
+  return { x: last[1], y: last[2] };
+}
+
+const ENERGY_STAGE_DEFAULTS = Object.freeze({
+  hook: 0.78, 'cold-open': 0.78, valley: 0.35, contrast: 0.38,
+  setup: 0.50, build: 0.68, peak: 0.95, climax: 0.95, resolve: 0.45, outro: 0.40
+});
+
+const UNCALIBRATED_RAW_COLORS = new Set([
+  '#ff0000', '#00ff00', '#0000ff', '#ff00ff', '#00ffff', '#ffff00'
+]);
+
+const PLACEHOLDER_RE = /\b(lorem\s+ipsum|tbd|todo|placeholder|coming\s+soon)\b/i;
+const QUANT_CLAIM_RE = /\b\d+(?:\.\d+)?(?:\s*%|\s*(?:ms|x|kb|mb|gb|tb|presets?|tools?|modules?|skills?|req\/s|rps|users?|customers?)\b)/i;
+
+function mergeShotsForChecklist(edit, resolved, scenePlan) {
+  const fps = Number(edit?.fps ?? resolved?.fps ?? 30);
+  const pictureEntries = (resolved?.entries ?? []).filter(entry => entry.kind !== 'sound');
+  const rawEntries = new Map(((edit?.tracks?.[0]?.entries) ?? []).map(entry => [entry.id, entry]));
+  const videoShots = edit?.video?.shots ?? [];
+  const videoById = new Map(videoShots.filter(shot => shot?.id).map(shot => [shot.id, shot]));
+  const planById = new Map((scenePlan?.shots ?? []).filter(shot => shot?.id).map(shot => [shot.id, shot]));
+  return pictureEntries.map((entry, index) => {
+    const videoShot = videoById.get(entry.id) ?? videoShots[index] ?? {};
+    const trackEntry = rawEntries.get(entry.id) ?? {};
+    const planShot = planById.get(entry.id) ?? {};
+    const durationFrames = entry.frames[1] - entry.frames[0];
+    return {
+      id: entry.id,
+      index,
+      frames: [...entry.frames],
+      durationFrames,
+      durationSeconds: durationFrames / fps,
+      trackEntry,
+      videoShot,
+      planShot
+    };
+  });
+}
+
+function measureShot1Hook(shots, fps, scenePlan) {
+  const shot1 = shots[0];
+  if (!shot1) return { status: 'fail', message: 'edit has no picture shots for hook evaluation' };
+  const limit = Math.min(45, Math.round(1.5 * fps));
+  if (shot1.frames[0] !== 0) {
+    return { status: 'fail', message: `Shot 1 starts at frame ${shot1.frames[0]} instead of 0` };
+  }
+  const hook = shot1.videoShot.hook ?? null;
+  if (hook && typeof hook === 'object') {
+    if (hook.static === true || hook.hasMotion === false) {
+      return { status: 'fail', message: `Shot ${shot1.id} hook is static with no active entrance motion` };
+    }
+    const startFrame = Number(hook.startFrame ?? 0);
+    const peakFrame = Number(hook.peakFrame ?? hook.settleFrame ?? NaN);
+    if (!Number.isFinite(peakFrame)) {
+      return { status: 'fail', message: `Shot ${shot1.id} hook does not declare a finite peakFrame` };
+    }
+    if (startFrame > 5) {
+      return { status: 'fail', message: `Shot ${shot1.id} hook starts too late at frame ${startFrame}` };
+    }
+    if (peakFrame > limit) {
+      return { status: 'fail', message: `Shot ${shot1.id} hook peak at frame ${peakFrame} exceeds <= ${limit}f limit` };
+    }
+    return { status: 'pass', message: `Shot ${shot1.id} hook enters at ${startFrame}f and peaks at ${peakFrame}f (<= ${limit}f)` };
+  }
+  const shotEnd = shot1.frames[1];
+  const kfByTrack = new Map();
+  const shotOps = new Set(shot1.planShot.operationIds ?? []);
+  for (const kf of scenePlan?.keyframes ?? []) {
+    const belongs = kf.shotId === shot1.id || (shot1.planShot.keyframeIds ?? []).includes(kf.id) || (kf.targetFrame >= 0 && kf.targetFrame <= shotEnd);
+    if (!belongs || !Number.isFinite(kf.value)) continue;
+    const key = `${kf.elementId}|${kf.attributePath ?? kf.property ?? ''}`;
+    if (!kfByTrack.has(key)) kfByTrack.set(key, []);
+    kfByTrack.get(key).push(kf);
+  }
+  let earliestStart = Infinity;
+  let bestVel = 0;
+  let bestPeakFrame = Infinity;
+  for (const series of kfByTrack.values()) {
+    series.sort((a, b) => a.targetFrame - b.targetFrame);
+    for (let i = 0; i < series.length - 1; i += 1) {
+      const a = series[i], b = series[i + 1];
+      const dt = b.targetFrame - a.targetFrame;
+      if (dt <= 0 || Math.abs(b.value - a.value) < 1e-6) continue;
+      earliestStart = Math.min(earliestStart, a.targetFrame);
+      const vel = Math.abs(b.value - a.value) / dt;
+      const mid = Math.round((a.targetFrame + b.targetFrame) / 2);
+      if (vel > bestVel) { bestVel = vel; bestPeakFrame = mid; }
+    }
+  }
+  if (bestVel > 0) {
+    if (earliestStart > 5 || bestPeakFrame > limit) {
+      return { status: 'fail', message: `Shot ${shot1.id} keyframe velocity peaks at ${bestPeakFrame}f (limit <= ${limit}f)` };
+    }
+    return { status: 'pass', message: `Shot ${shot1.id} keyframe entrance velocity peaks at ${bestPeakFrame}f (<= ${limit}f)` };
+  }
+  const move = shot1.trackEntry.move;
+  if (move && Array.isArray(move.from) && Array.isArray(move.to) && JSON.stringify(move.from) !== JSON.stringify(move.to)) {
+    const peakFrame = Math.round(Math.min(limit, shot1.durationFrames / 2));
+    return { status: 'pass', message: `Shot ${shot1.id} camera move entrance active from 0f (peak ~${peakFrame}f)` };
+  }
+  if (shotOps.size > 0 && shot1.durationFrames <= limit) {
+    return { status: 'pass', message: `Shot ${shot1.id} active within ${shot1.durationFrames}f` };
+  }
+  return { status: 'fail', message: `Shot ${shot1.id} lacks active motion entrance or kinetic peak in first ${limit}f` };
+}
+
+function countWords(text) {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) return 0;
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 1 && /[\u4e00-\u9fff]{5,}/.test(words[0])) {
+    return words[0].length;
+  }
+  return words.length;
+}
+
+function checkPoint2WordCap(shots, scenePlan, fps) {
+  const beats = [];
+  for (const shot of shots) {
+    const explicitBeats = Array.isArray(shot.videoShot.beats) ? shot.videoShot.beats : [];
+    for (const beat of explicitBeats) beats.push({ shotId: shot.id, defaultDur: shot.durationSeconds, ...beat });
+    const inlineText = shot.videoShot.text ?? shot.trackEntry.caption ?? (typeof shot.trackEntry.reads === 'string' ? shot.trackEntry.reads : null);
+    if (inlineText !== undefined && inlineText !== null || Number.isFinite(shot.videoShot.words) || Number.isFinite(shot.videoShot.wordCount)) {
+      beats.push({
+        shotId: shot.id,
+        text: inlineText ?? '',
+        words: shot.videoShot.words ?? shot.videoShot.wordCount,
+        holdSeconds: shot.videoShot.holdSeconds ?? shot.durationSeconds,
+        allowLongRead: shot.videoShot.allowLongRead
+      });
+    }
+  }
+  for (const op of scenePlan?.operations ?? []) {
+    if (op?.action === 'createText' && typeof op?.params?.attributes?.text === 'string') {
+      const parentShot = shots.find(shot => shot.id === op.shotId);
+      const holdSeconds = Number(op.params.attributes.holdSeconds ?? parentShot?.durationSeconds ?? (scenePlan?.project?.totalFrames ?? fps) / fps);
+      beats.push({
+        shotId: op.shotId ?? op.elementId ?? 'plan',
+        text: op.params.attributes.text,
+        holdSeconds,
+        allowLongRead: op.params.attributes.allowLongRead
+      });
+    }
+  }
+  for (const beat of beats) {
+    const text = String(beat.text ?? '').trim();
+    const wordCount = Array.isArray(beat.words)
+      ? beat.words.length
+      : Number.isFinite(beat.words)
+        ? Number(beat.words)
+        : countWords(text);
+    const holdSeconds = Number(beat.holdSeconds ?? beat.durationSeconds ?? beat.defaultDur ?? 1);
+    const chars = text.replace(/\s+/g, '').length;
+    const cps = holdSeconds > 0 ? chars / holdSeconds : Infinity;
+    if ((text.length > 0 || wordCount > 0) && holdSeconds < 0.8) {
+      return { status: 'fail', message: `Beat in ${beat.shotId} holds ${holdSeconds.toFixed(2)}s (< 0.8s minimum readability hold)` };
+    }
+    if (cps > 15) {
+      return { status: 'fail', message: `Beat in ${beat.shotId} reading speed ${cps.toFixed(1)} CPS exceeds 15 CPS cap` };
+    }
+    if (wordCount > 4 && beat.allowLongRead !== true) {
+      return { status: 'fail', message: `Beat in ${beat.shotId} has ${wordCount} words (> 4 word kinetic cap)` };
+    }
+  }
+  return { status: 'pass', message: `${beats.length} text beat(s) pass <= 4 words and <= 15 CPS (>= 0.8s hold)` };
+}
+
+function checkPoint7AsymmetricPacing(shots) {
+  if (shots.length < 3) {
+    return { status: 'pass', message: `${shots.length} shot(s); fewer than 3 consecutive shots for slideshow check` };
+  }
+  for (let i = 0; i <= shots.length - 3; i += 1) {
+    const group = [shots[i], shots[i + 1], shots[i + 2]];
+    const durs = group.map(item => item.durationFrames);
+    if (Math.max(...durs) - Math.min(...durs) <= 2) {
+      return {
+        status: 'fail',
+        message: `3 consecutive shots (${group.map(g => g.id).join(', ')}) share nearly identical durations (${durs.join(', ')}f within +-2f)`
+      };
+    }
+  }
+  return { status: 'pass', message: `${shots.length} shots maintain asymmetric beat durations (> 2f delta per triple)` };
+}
+
+function checkPoint8EnergyArc(shots) {
+  const energies = [];
+  for (const shot of shots) {
+    const raw = shot.videoShot.energy;
+    const stage = typeof shot.videoShot.energyArc === 'string' ? shot.videoShot.energyArc.toLowerCase() : null;
+    const score = Number.isFinite(raw) ? Number(raw) : (stage && stage in ENERGY_STAGE_DEFAULTS ? ENERGY_STAGE_DEFAULTS[stage] : null);
+    if (score === null || score < 0 || score > 1) {
+      return { status: 'fail', message: `Shot ${shot.id} lacks valid 0.0-1.0 energy score (got ${raw ?? stage ?? 'none'})` };
+    }
+    energies.push({ id: shot.id, score, stage });
+  }
+  if (energies.length >= 2) {
+    const values = energies.map(e => e.score);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (max - min < 0.15) {
+      return { status: 'fail', message: `Flatline energy arc (${values.join(', ')}): spread ${(max - min).toFixed(2)} < 0.15` };
+    }
+    if (energies.length >= 3 && max < 0.65) {
+      return { status: 'fail', message: `Energy arc has no climax peak >= 0.65 (max ${max.toFixed(2)})` };
+    }
+  }
+  return { status: 'pass', message: `Energy arc spans [${energies.map(e => e.score.toFixed(2)).join(' -> ')}]` };
+}
+
+function checkPoint9ShotGrammarVariety(shots) {
+  const cards = shots.map(shot => ({
+    id: shot.id,
+    card: shot.videoShot.shotGrammarCard ?? shot.trackEntry.recipe ?? shot.videoShot.recipe ?? shot.trackEntry.camera?.card ?? null,
+    size: shot.trackEntry.camera?.size ?? shot.videoShot.camera?.size ?? null,
+    angle: shot.trackEntry.camera?.angle ?? shot.videoShot.camera?.angle ?? null
+  }));
+  if (shots.length >= 3 && cards.every(c => !c.card)) {
+    return { status: 'fail', message: 'Multi-shot edit declares no shotGrammarCard or recipe taxonomy on any shot' };
+  }
+  for (let i = 0; i <= cards.length - 3; i += 1) {
+    const a = cards[i], b = cards[i + 1], c = cards[i + 2];
+    if (a.card && a.card === b.card && b.card === c.card && a.size === b.size && b.size === c.size && a.angle === b.angle && b.angle === c.angle) {
+      return { status: 'fail', message: `3 consecutive shots (${a.id}, ${b.id}, ${c.id}) repeat shotGrammarCard "${a.card}" without scale/angle change` };
+    }
+  }
+  return { status: 'pass', message: `${cards.filter(c => c.card).length} shot(s) preserve shot-grammar variety` };
+}
+
+function checkPoint10CameraSplineC1(edit, shots) {
+  const splines = [
+    ...(Array.isArray(edit?.video?.cameraPaths) ? edit.video.cameraPaths : []),
+    ...(Array.isArray(edit?.video?.camera?.waypoints) ? [{ id: 'global', waypoints: edit.video.camera.waypoints }] : [])
+  ];
+  for (const shot of shots) {
+    const waypoints = shot.videoShot.camera?.waypoints ?? shot.videoShot.camera?.spline;
+    if (Array.isArray(waypoints)) splines.push({ id: shot.id, waypoints, seams: shot.videoShot.camera?.seams ?? [] });
+  }
+  for (const sp of splines) {
+    const pts = sp.waypoints;
+    if (!Array.isArray(pts) || pts.length < 2) continue;
+    for (let i = 1; i < pts.length; i += 1) {
+      if (!(pts[i][0] > pts[i - 1][0])) {
+        return { status: 'fail', message: `Camera spline ${sp.id} has non-monotonic waypoint frames (${pts[i - 1][0]} -> ${pts[i][0]})` };
+      }
+    }
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const f = pts[i][0];
+      const dt = 0.05;
+      const pL = splineAt(f - dt, pts);
+      const pM = splineAt(f, pts);
+      const pR = splineAt(f + dt, pts);
+      for (let d = 0; d < pM.length; d += 1) {
+        const vL = (pM[d] - pL[d]) / dt;
+        const vR = (pR[d] - pM[d]) / dt;
+        if (Math.abs(vR - vL) > Math.max(5, Math.abs(vL) * 0.25 + Math.abs(vR) * 0.25)) {
+          return { status: 'fail', message: `Camera spline ${sp.id} fails C1 velocity continuity at frame ${f} (vL=${vL.toFixed(2)}, vR=${vR.toFixed(2)})` };
+        }
+      }
+    }
+  }
+  for (let i = 0; i < shots.length - 1; i += 1) {
+    const curr = shots[i], next = shots[i + 1];
+    const continuous = next.trackEntry.seam === 'continuous' || next.videoShot.seam === 'continuous' || next.videoShot.camera?.continuous === true;
+    if (!continuous) continue;
+    if (next.videoShot.camera?.teleport === true) {
+      return { status: 'fail', message: `Camera teleports across continuous seam ${curr.id} -> ${next.id}` };
+    }
+    const toPos = curr.videoShot.camera?.endPosition ?? curr.trackEntry.move?.to;
+    const fromPos = next.videoShot.camera?.startPosition ?? next.trackEntry.move?.from;
+    if (Array.isArray(toPos) && Array.isArray(fromPos)) {
+      const dist = Math.hypot(...toPos.map((v, idx) => Number(v) - Number(fromPos[idx] ?? v)));
+      if (dist > 0.5) {
+        return { status: 'fail', message: `Camera position jump (${dist.toFixed(2)}) across continuous seam ${curr.id} -> ${next.id}` };
+      }
+    }
+    const vOut = curr.videoShot.camera?.endVelocity;
+    const vIn = next.videoShot.camera?.startVelocity;
+    if (Array.isArray(vOut) && Array.isArray(vIn)) {
+      const dv = Math.hypot(...vOut.map((v, idx) => Number(v) - Number(vIn[idx] ?? v)));
+      if (dv > 2.0) {
+        return { status: 'fail', message: `Camera first-derivative velocity jump (${dv.toFixed(2)}) at continuous seam ${curr.id} -> ${next.id}` };
+      }
+    }
+  }
+  return { status: 'pass', message: `${splines.length} camera spline(s) & continuous seams satisfy C1 continuity` };
+}
+
+function checkPoint11FittsCursor(edit, shots) {
+  const cursors = [
+    ...(Array.isArray(edit?.video?.cursors) ? edit.video.cursors : []),
+    ...shots.filter(s => s.videoShot.cursor).map(s => ({ shotId: s.id, ...s.videoShot.cursor }))
+  ];
+  if (!cursors.length) return { status: 'pass', message: 'no active Fitts cursor rig in scene' };
+  for (const rig of cursors) {
+    const label = rig.shotId ?? rig.id ?? 'cursor';
+    const compression = Number(rig.clickCompressionFrames ?? rig.anticipationFrames ?? (Number.isFinite(rig.stateChangeFrame) && Number.isFinite(rig.clickStartFrame) ? rig.stateChangeFrame - rig.clickStartFrame : NaN));
+    if (!Number.isFinite(compression) || compression < 3 || compression > 6) {
+      return { status: 'fail', message: `Cursor rig ${label} anticipation/click compression is ${compression}f (requires 3-6f before state change)` };
+    }
+    if (Array.isArray(rig.trajectory) && rig.trajectory.length >= 2) {
+      const sorted = [...rig.trajectory].sort((a, b) => a[0] - b[0]);
+      const t0 = sorted[0][0], t1 = sorted[sorted.length - 1][0];
+      const span = t1 - t0;
+      if (span >= 4) {
+        const pEarlyA = fittsCursorAt(t0 + span * 0.1, sorted);
+        const pEarlyB = fittsCursorAt(t0 + span * 0.25, sorted);
+        const pLateA = fittsCursorAt(t0 + span * 0.85, sorted);
+        const pLateB = fittsCursorAt(t1, sorted);
+        const speedEarly = Math.hypot(pEarlyB.x - pEarlyA.x, pEarlyB.y - pEarlyA.y) / (span * 0.15);
+        const speedLate = Math.hypot(pLateB.x - pLateA.x, pLateB.y - pLateA.y) / (span * 0.15);
+        if (speedLate >= speedEarly * 0.99 && speedEarly > 0) {
+          return { status: 'fail', message: `Cursor rig ${label} does not decelerate into hitbox (early=${speedEarly.toFixed(2)}, late=${speedLate.toFixed(2)})` };
+        }
+      }
+    }
+  }
+  return { status: 'pass', message: `${cursors.length} active Fitts cursor rig(s) decelerate with 3-6f anticipation/click` };
+}
+
+function checkPoint12SpringEasingPurity(edit, shots, scenePlan) {
+  const curves = [
+    ...(Array.isArray(edit?.video?.curves) ? edit.video.curves : []),
+    ...shots.flatMap(s => {
+      const list = [];
+      if (Array.isArray(s.videoShot.curves)) list.push(...s.videoShot.curves.map(c => ({ shotId: s.id, ...c })));
+      if (s.videoShot.easing) list.push({ shotId: s.id, kind: Array.isArray(s.videoShot.easing) ? 'cubic-bezier' : 'spring', value: s.videoShot.easing });
+      if (s.trackEntry.move?.ease === 'linear') list.push({ shotId: s.id, kind: 'cubic-bezier', cubicBezier: [0, 0, 1, 1] });
+      return list;
+    })
+  ];
+  for (const kf of scenePlan?.keyframes ?? []) {
+    if (kf.interpolation === 'linear' && (!kf.easing || String(kf.easing).toLowerCase() === 'linear')) {
+      return { status: 'fail', message: `Keyframe ${kf.id} uses raw linear interpolation without spring/Bezier easing` };
+    }
+    if (Array.isArray(kf.easing)) curves.push({ shotId: kf.shotId ?? kf.id, kind: 'cubic-bezier', cubicBezier: kf.easing });
+  }
+  for (const curve of curves) {
+    const cb = Array.isArray(curve.cubicBezier) ? curve.cubicBezier : (Array.isArray(curve.value) ? curve.value : null);
+    if (cb) {
+      if (cb[0] === 0 && cb[1] === 0 && cb[2] === 1 && cb[3] === 1) {
+        return { status: 'fail', message: `Raw linear [0, 0, 1, 1] easing on ${curve.shotId ?? 'element'} violates spring/bezier purity` };
+      }
+      try { evaluateBezierEasing(cb, 0.5); }
+      catch (err) { return { status: 'fail', message: `Invalid Bezier curve on ${curve.shotId ?? 'element'}: ${err.message}` }; }
+    }
+    if (String(curve.kind ?? curve.value ?? '').toLowerCase() === 'linear') {
+      return { status: 'fail', message: `Linear curve on ${curve.shotId ?? 'element'} violates spring/bezier purity` };
+    }
+    if (curve.kind === 'spring' && Number(curve.spring?.overshoot ?? 0) > 0.5) {
+      return { status: 'fail', message: `Excessive spring overshoot (${curve.spring.overshoot} > 0.5) on ${curve.shotId ?? 'element'}` };
+    }
+  }
+  if (!curves.length && (scenePlan?.keyframes?.length ?? 0) === 0 && shots.some(s => s.videoShot.static !== true)) {
+    return { status: 'pass', message: 'no uncalibrated linear transform easing detected' };
+  }
+  return { status: 'pass', message: `${curves.length} curve/spring definition(s) verified non-linear` };
+}
+
+function checkPoint13MorphParity(edit, shots, scenePlan) {
+  const morphs = [
+    ...(Array.isArray(edit?.video?.morphs) ? edit.video.morphs : []),
+    ...shots.filter(s => s.videoShot.morph).map(s => ({ id: s.id, ...s.videoShot.morph })),
+    ...(scenePlan?.operations ?? [])
+      .filter(op => op?.params?.fromPath && op?.params?.toPath)
+      .map(op => ({ id: op.id, fromPath: op.params.fromPath, toPath: op.params.toPath }))
+  ];
+  if (!morphs.length) return { status: 'pass', message: 'no SVG shape morphs declared' };
+  for (const m of morphs) {
+    const fromPath = m.fromPath ?? m.from;
+    const toPath = m.toPath ?? m.to;
+    if (typeof fromPath !== 'string' || typeof toPath !== 'string') {
+      return { status: 'fail', message: `SVG morph ${m.id ?? 'shape'} is missing fromPath or toPath` };
+    }
+    try {
+      const rawFrom = new SVGPathCommander(fromPath).segments;
+      const rawTo = new SVGPathCommander(toPath).segments;
+      const eq = equalizePaths(fromPath, toPath);
+      if (rawFrom.length !== rawTo.length || m.equalized === false) {
+        return {
+          status: 'fail',
+          message: `SVG morph ${m.id ?? 'shape'} has unequal segments (${rawFrom.length} vs ${rawTo.length}); equalize via src/design/equalizePaths.mjs (target ${eq.segmentCount} segments)`
+        };
+      }
+    } catch (error) {
+      return { status: 'fail', message: `SVG morph ${m.id ?? 'shape'} invalid path: ${error.message}` };
+    }
+  }
+  return { status: 'pass', message: `${morphs.length} SVG morph pair(s) share equalized segment counts` };
+}
+
+function checkPoint17AvSync(edit, resolved, shots) {
+  if (edit?.video?.silent === true) return { status: 'pass', message: 'explicit silent film' };
+  const fps = Number(edit?.fps ?? resolved?.fps ?? 30);
+  const cues = [];
+  for (const c of edit?.video?.sfxCues ?? []) {
+    const frame = Number.isFinite(c?.frame) ? Number(c.frame) : (Number.isFinite(c?.timeSeconds) ? Math.round(c.timeSeconds * fps) : NaN);
+    if (Number.isFinite(frame)) cues.push({ frame, targetFrame: c.targetFrame, id: c.id ?? `sfx-${cues.length}` });
+  }
+  for (const b of edit?.video?.beats ?? []) {
+    const frame = typeof b === 'number' ? b : (Number.isFinite(b?.frame) ? Number(b.frame) : (Number.isFinite(b?.timeSeconds) ? Math.round(b.timeSeconds * fps) : NaN));
+    if (Number.isFinite(frame)) cues.push({ frame, id: `beat-${frame}` });
+  }
+  for (const s of resolved?.sound ?? []) {
+    if (['detail', 'hero', 'signal'].includes(s.role) && Array.isArray(s.film)) {
+      cues.push({ frame: s.film[0], id: s.entryId });
+    }
+  }
+  const impacts = [];
+  for (const i of edit?.video?.impacts ?? []) {
+    if (Number.isFinite(i)) impacts.push({ id: `impact-${i}`, frame: Number(i) });
+    else if (Number.isFinite(i?.frame)) impacts.push({ id: i.id ?? `impact-${i.frame}`, frame: Number(i.frame) });
+  }
+  for (const shot of shots) {
+    const frame = shot.videoShot.impactFrame ?? shot.videoShot.peakFrame ?? shot.videoShot.hook?.peakFrame;
+    if (Number.isFinite(frame)) impacts.push({ id: shot.id, frame: Number(frame) });
+  }
+  if (!impacts.length) {
+    return cues.length
+      ? { status: 'pass', message: `${cues.length} SFX/beat cue(s) present (no isolated impact markers exceeded +-2f)` }
+      : { status: 'fail', message: 'Non-silent edit declares neither visual impact frames nor SFX/beat markers' };
+  }
+  if (!cues.length) {
+    return { status: 'fail', message: `Visual impacts [${impacts.map(i => i.frame).join(', ')}] have zero SFX/beat triggers` };
+  }
+  for (const impact of impacts) {
+    const minDelta = Math.min(...cues.map(c => Math.abs(c.frame - impact.frame)));
+    if (minDelta > 2) {
+      return { status: 'fail', message: `Visual impact ${impact.id} at ${impact.frame}f is ${minDelta}f from nearest SFX/beat cue (> +-2f limit)` };
+    }
+  }
+  for (const cue of cues) {
+    if (Number.isFinite(cue.targetFrame) && Math.abs(cue.frame - cue.targetFrame) > 2) {
+      return { status: 'fail', message: `SFX cue ${cue.id} at ${cue.frame}f misses target ${cue.targetFrame}f by ${Math.abs(cue.frame - cue.targetFrame)}f (> +-2f)` };
+    }
+  }
+  return { status: 'pass', message: `${impacts.length} visual impact(s) synced within <= 2f of ${cues.length} SFX/beat marker(s)` };
+}
+
+function checkPoint18AudioLoudness(edit, resolved) {
+  if (edit?.video?.silent === true) return { status: 'pass', message: 'explicit silent film' };
+  const audio = edit?.video?.audio ?? null;
+  if (!audio || typeof audio !== 'object') {
+    return { status: 'fail', message: 'Non-silent edit is missing video.audio (48000 Hz, -14 LUFS, <= -1.0 dBTP) metadata' };
+  }
+  if (Number(audio.sampleRateHz) !== 48000) {
+    return { status: 'fail', message: `Audio sampleRateHz is ${audio.sampleRateHz} (must be 48000)` };
+  }
+  const lufs = Number(audio.targetLufs);
+  if (!Number.isFinite(lufs) || Math.abs(lufs - (-14)) > 1.0) {
+    return { status: 'fail', message: `Audio targetLufs is ${audio.targetLufs} (must be -14 LUFS +-1)` };
+  }
+  const tp = Number(audio.truePeakDbtp);
+  if (!Number.isFinite(tp) || tp > -1.0) {
+    return { status: 'fail', message: `Audio truePeakDbtp is ${audio.truePeakDbtp} (must be <= -1.0 dBTP)` };
+  }
+  const hasNarration = audio.narrationActive === true || (resolved?.sound ?? []).some(s => s.role === 'voice');
+  if (hasNarration) {
+    const duckEnabled = audio.ducking?.enabled === true;
+    const duckDb = Number(audio.ducking?.reductionDb ?? audio.duckingDb ?? 0);
+    const bedDucked = (resolved?.sound ?? []).some(s => s.role === 'ambience' && Number(s.gain_db) <= -6);
+    if (!((duckEnabled && duckDb <= -3) || bedDucked)) {
+      return { status: 'fail', message: 'Narration is active without verified music-bed ducking headroom (<= -3 dB / -6 dB gain)' };
+    }
+  }
+  return { status: 'pass', message: `48000Hz / ${lufs} LUFS / ${tp} dBTP${hasNarration ? ' + ducking headroom' : ''} verified` };
+}
+
+function checkPoint19LedgerClaims(edit, shots, scenePlan, context = {}) {
+  const texts = [];
+  for (const s of shots) {
+    const txt = s.videoShot.text ?? s.trackEntry.caption ?? '';
+    if (txt) texts.push({ id: s.id, text: String(txt), ledgerRef: s.videoShot.ledgerRef ?? s.trackEntry.ledgerRef ?? null });
+  }
+  for (const op of scenePlan?.operations ?? []) {
+    const txt = op?.params?.attributes?.text;
+    if (typeof txt === 'string' && txt) {
+      texts.push({ id: op.elementId ?? op.id, text: txt, ledgerRef: op.params?.attributes?.ledgerRef ?? null });
+    }
+  }
+  for (const item of texts) {
+    if (PLACEHOLDER_RE.test(item.text)) {
+      return { status: 'fail', message: `Placeholder copy detected in ${item.id}: "${item.text}"` };
+    }
+    if (QUANT_CLAIM_RE.test(item.text) && (!item.ledgerRef || /^(unverified|missing|none|null|tbd)$/i.test(String(item.ledgerRef)))) {
+      return { status: 'fail', message: `Quantitative claim in ${item.id} ("${item.text}") lacks a valid ledgerRef` };
+    }
+  }
+  const declaredClaims = [
+    ...(Array.isArray(edit?.video?.claims) ? edit.video.claims : []),
+    ...shots.flatMap(s => Array.isArray(s.videoShot.claims) ? s.videoShot.claims.map(c => ({ shotId: s.id, ...c })) : [])
+  ];
+  const ledgerIds = context.ledger?.claims ? new Set(Object.keys(context.ledger.claims)) : null;
+  for (const claim of declaredClaims) {
+    if (!claim?.ledgerRef || /^(unverified|missing|none|null|tbd)$/i.test(String(claim.ledgerRef))) {
+      return { status: 'fail', message: `Claim "${claim?.text ?? claim?.id ?? 'unknown'}" lacks a valid ledgerRef` };
+    }
+    if (ledgerIds && !ledgerIds.has(claim.ledgerRef)) {
+      return { status: 'fail', message: `Claim ledgerRef "${claim.ledgerRef}" not found in source ledger` };
+    }
+  }
+  if (context.ledgerReport && context.ledgerReport.ok !== true) {
+    return { status: 'fail', message: `product_ledger.py failed verification (${context.ledgerReport.errors ?? 1} error(s))` };
+  }
+  return { status: 'pass', message: `${declaredClaims.length} quantitative claim(s) verified against source ledger` };
+}
+
+function toHex6(color) {
+  const c = parseColor(color);
+  if (!c) return null;
+  const hx = v => Math.round(v).toString(16).padStart(2, '0');
+  return `#${hx(c.r)}${hx(c.g)}${hx(c.b)}`;
+}
+
+function checkPoint20BrandPalette(edit, shots, scenePlan) {
+  const themeName = edit?.video?.theme ?? scenePlan?.theme ?? null;
+  const themeObj = themeName && Object.prototype.hasOwnProperty.call(ASTRYX_THEMES, String(themeName).toLowerCase())
+    ? resolveAstryxTheme(themeName)
+    : null;
+  const rawPalette = edit?.video?.palette ?? {};
+  const accents = new Set();
+  const neutrals = new Set();
+  const addHex = (set, value) => { const h = toHex6(value); if (h) set.add(h); };
+  if (themeObj) {
+    addHex(accents, themeObj.accentPrimary);
+    addHex(neutrals, themeObj.bgSurface);
+    addHex(neutrals, themeObj.cardFill);
+    addHex(neutrals, themeObj.textPrimary);
+    addHex(neutrals, themeObj.textMuted);
+    addHex(neutrals, themeObj.strokeColor);
+  }
+  for (const v of rawPalette.accents ?? []) addHex(accents, v);
+  if (rawPalette.primary) addHex(accents, rawPalette.primary);
+  for (const v of rawPalette.neutrals ?? []) addHex(neutrals, v);
+  for (const v of Object.values(rawPalette.tokens ?? {})) addHex(neutrals, v);
+
+  if (accents.size > 3) {
+    return { status: 'fail', message: `Brand palette declares ${accents.size} accent colors (maximum 3 allowed)` };
+  }
+  const allowed = new Set([...accents, ...neutrals]);
+  const allowedRaw = new Set((rawPalette.allowedRaw ?? []).map(toHex6).filter(Boolean));
+  const usedColors = [];
+  for (const src of Object.values(edit?.sources ?? {})) {
+    if (src?.color) usedColors.push({ where: 'source', hex: toHex6(src.color), raw: src.color });
+  }
+  for (const s of shots) {
+    if (s.trackEntry.bg) usedColors.push({ where: s.id, hex: toHex6(s.trackEntry.bg), raw: s.trackEntry.bg });
+    for (const c of s.videoShot.paletteColors ?? []) usedColors.push({ where: s.id, hex: toHex6(c), raw: c });
+  }
+  for (const op of scenePlan?.operations ?? []) {
+    const attr = op?.params?.attributes ?? {};
+    for (const key of ['material.materialColor', 'materialColor', 'color', 'fill']) {
+      if (attr[key] !== undefined) usedColors.push({ where: op.elementId ?? op.id, hex: toHex6(attr[key]), raw: attr[key] });
+    }
+  }
+  for (const entry of usedColors) {
+    if (!entry.hex) continue;
+    if (UNCALIBRATED_RAW_COLORS.has(entry.hex) && !allowedRaw.has(entry.hex)) {
+      return { status: 'fail', message: `Uncalibrated raw color default ${entry.hex} on ${entry.where}` };
+    }
+    if (allowed.size > 0 && !allowed.has(entry.hex)) {
+      return { status: 'fail', message: `Color ${entry.hex} on ${entry.where} is not in declared theme/palette tokens` };
+    }
+  }
+  return { status: 'pass', message: `${usedColors.length} color(s) resolve to declared theme/palette tokens (${accents.size} <= 3 accents)` };
+}
+
+/**
+ * Evaluate the OpenVideoHarness checklist metrics derived from edit list + scene plan.
+ * Returns per-point deterministic verdicts `{ id, checkId, label, status, message }`.
+ */
+export function evaluateEditListChecklist(edit, resolved, { scenePlan = null, ledger = null, ledgerReport = null } = {}) {
+  const fps = Number(edit?.fps ?? resolved?.fps ?? 30);
+  const shots = mergeShotsForChecklist(edit, resolved, scenePlan);
+  return {
+    1: { checkId: 'hook-45f', label: 'hook entrance peaks within first 45 frames', ...measureShot1Hook(shots, fps, scenePlan) },
+    2: { checkId: 'word-reading-cap', label: '<= 4 words per beat, <= 15 CPS, >= 0.8s hold', ...checkPoint2WordCap(shots, scenePlan, fps) },
+    7: { checkId: 'asymmetric-pacing', label: 'no 3 consecutive shots share identical durations (+-2f)', ...checkPoint7AsymmetricPacing(shots) },
+    8: { checkId: 'energy-arc', label: 'energy scores form non-flatline arc skeleton', ...checkPoint8EnergyArc(shots) },
+    9: { checkId: 'shot-grammar-variety', label: 'consecutive shots vary shotGrammarCard / scale / angle', ...checkPoint9ShotGrammarVariety(shots) },
+    10: { checkId: 'spline-camera-c1', label: 'C1 spline camera position and velocity continuity', ...checkPoint10CameraSplineC1(edit, shots) },
+    11: { checkId: 'fitts-cursor-realism', label: 'Fitts cursor deceleration & 3-6f anticipation/click', ...checkPoint11FittsCursor(edit, shots) },
+    12: { checkId: 'spring-easing-purity', label: 'spring physics or non-linear Bezier easing', ...checkPoint12SpringEasingPurity(edit, shots, scenePlan) },
+    13: { checkId: 'svg-morph-parity', label: 'SVG morph pairs share equalized segment counts', ...checkPoint13MorphParity(edit, shots, scenePlan) },
+    17: { checkId: 'av-impact-sync', label: 'visual impacts align within +-2 frames of SFX/beat', ...checkPoint17AvSync(edit, resolved, shots) },
+    18: { checkId: 'loudness-mix-headroom', label: '48kHz audio at -14 LUFS, <= -1 dBTP, ducking headroom', ...checkPoint18AudioLoudness(edit, resolved) },
+    19: { checkId: 'ledger-claims', label: 'quantitative claims carry valid source ledgerRef', ...checkPoint19LedgerClaims(edit, shots, scenePlan, { ledger, ledgerReport }) },
+    20: { checkId: 'brand-palette-tokens', label: 'brand palette & theme tokens (<= 3 accents, calibrated)', ...checkPoint20BrandPalette(edit, shots, scenePlan) }
+  };
 }

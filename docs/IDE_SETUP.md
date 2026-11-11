@@ -50,7 +50,7 @@ Do this once, before touching any editor.
    ```powershell
    cd refclone
    npm ci                         # refuses to run on a non-Windows platform, by design
-   npm test                       # 649 tests, no Cavalry required
+   npm test                       # 763 tests, no Cavalry required
    node .github/scripts/privacy-scan.mjs
    ```
 

@@ -1,11 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
-  runStaticMotionLint, parseColor, relativeLuminance, contrastRatio, compositeOver,
+  runStaticMotionLint, checkFontIntegrity, checkFocalSubjectCollisions,
+  parseColor, relativeLuminance, contrastRatio, compositeOver,
   extractPlanLayers, WCAG_BODY_CONTRAST, WCAG_LARGE_CONTRAST, STATIC_MOTION_LINT_VERSION
 } from '../../src/vision/lint.mjs';
 import { evaluateStaticGates } from '../../src/pipeline/qa.mjs';
 import { WorkflowError } from '../../src/core.mjs';
+
+const ROOT_DIR = fileURLToPath(new URL('../../', import.meta.url));
+const WORK_DIR = path.join(ROOT_DIR, '.test-work');
 
 const FPS = { num: 30, den: 1 };
 
@@ -225,4 +232,74 @@ test('QA static gates: a scene plan adds the motion-lint gate before geometry', 
   assert.equal(failing.status, 'fail');
   assert.ok(failing.gates[0].findings.some(finding => finding.code === 'LINT_CONTRAST'));
   assert.deepEqual(Object.keys(failing.gates[0].findings[0]).sort(), ['code', 'message', 'severity']);
+});
+
+test('checkFontIntegrity: detects banned fallback fonts, unescaped entities, U+FFFD and animated fontWeight', () => {
+  const clean = checkFontIntegrity(plan());
+  assert.equal(clean.status, 'pass');
+  assert.equal(clean.counts.errors, 0);
+  assert.equal(clean.pythonFontcheck.status, 'skipped');
+
+  const arialPlan = withTitle(attributes => {
+    attributes.font = { font: 'Arial', style: 'Regular' };
+  });
+  const arialDenied = checkFontIntegrity(arialPlan);
+  assert.equal(arialDenied.status, 'fail');
+  assert.ok(arialDenied.findings.some(f => f.code === 'LINT_FONT_BANNED_FALLBACK'));
+  const arialAllowed = checkFontIntegrity(arialPlan, { allowedFonts: ['Arial'] });
+  assert.ok(!arialAllowed.findings.some(f => f.code === 'LINT_FONT_BANNED_FALLBACK'));
+
+  const corrupted = checkFontIntegrity(withTitle(attributes => {
+    attributes.text = 'Broken glyph \uFFFD &amp; entity';
+  }));
+  assert.equal(corrupted.status, 'fail');
+  assert.equal(corrupted.findings.filter(f => f.code === 'LINT_GLYPH_OR_ENTITY').length, 2);
+
+  const animWeightPlan = plan({
+    keyframes: [{
+      id: 'kf-fw', shotId: 's1', sourceEventId: null, elementId: 'title',
+      property: 'fontWeight', attributePath: 'fontWeight',
+      sourceFrame: 0, targetFrame: 20, sourceValue: 400, value: 700,
+      unit: null, interpolation: 'linear', easing: 'spring', supportStatus: 'ready', notes: ''
+    }]
+  });
+  const animRes = checkFontIntegrity(animWeightPlan);
+  assert.equal(animRes.status, 'fail');
+  assert.ok(animRes.findings.some(f => f.code === 'LINT_FONT_WEIGHT_ANIMATED'));
+});
+
+test('checkFontIntegrity: bridges fontcheck.py via spawnSync and custom JSON --fontcheck-bin', async () => {
+  await fs.mkdir(WORK_DIR, { recursive: true });
+  const tmpDir = await fs.mkdtemp(path.join(WORK_DIR, 'font-integrity-'));
+  const missingCss = path.join(tmpDir, 'missing.css');
+  await fs.writeFile(missingCss, "@font-face { font-family: 'Inter'; font-weight: 400; src: url('absent.woff2'); }\n", 'utf8');
+  const pyMissing = checkFontIntegrity(plan(), { runPythonFontcheck: true, cssPath: missingCss });
+  assert.equal(pyMissing.status, 'fail');
+  assert.equal(pyMissing.pythonFontcheck.status, 'fail');
+  assert.ok(pyMissing.findings.some(f => f.code === 'FONT_FILE_MISSING'));
+
+  const customBin = path.join(tmpDir, 'mock_fontcheck.py');
+  await fs.writeFile(customBin, 'import json, sys\nprint(json.dumps({"status": "pass", "findings": [], "summary": "mock-ok"}))\n', 'utf8');
+  const jsonOk = checkFontIntegrity(plan(), { runPythonFontcheck: true, fontcheckBin: customBin, cssPath: missingCss });
+  assert.equal(jsonOk.status, 'pass');
+  assert.equal(jsonOk.pythonFontcheck.summary, 'mock-ok');
+});
+
+test('checkFocalSubjectCollisions: flags text AABBs overlapping focalRegion/subjectBox', () => {
+  const safe = checkFocalSubjectCollisions(plan({
+    project: {
+      width: 1920, height: 1080, fps: FPS, totalFrames: 90, frameRange: { startFrame: 0, endFrame: 89 },
+      focalRegion: { x: 0, y: -250, width: 300, height: 200 }
+    }
+  }));
+  assert.equal(safe.status, 'pass');
+
+  const colliding = checkFocalSubjectCollisions(plan({
+    project: {
+      width: 1920, height: 1080, fps: FPS, totalFrames: 90, frameRange: { startFrame: 0, endFrame: 89 },
+      focalRegion: { x: 100, y: 280, width: 200, height: 120 }
+    }
+  }));
+  assert.equal(colliding.status, 'fail');
+  assert.ok(colliding.findings.some(f => f.code === 'LINT_FOCAL_SUBJECT_COLLISION'));
 });

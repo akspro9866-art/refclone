@@ -16,12 +16,14 @@ import { discoverTests } from '../../test/discover.mjs';
 const repo = path.resolve(import.meta.dirname, '..', '..');
 
 // Quoted counts live in comments and prose, so the sentence may be split across lines.
-const QUOTED = /(\d+)\s+(?:tests?|assertions)\b/g;
+const QUOTED = /(?<![,\d])(\d+)\s+(?:tests?|assertions)\b/g;
 
 // The CI layout checks the stallion sibling out INSIDE this workspace
 // (.ci-siblings/stallion). Its README quotes its own repo's test counts,
 // which have nothing to do with this runner's total — skip it.
-const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', '.test-work', 'jobs', '.ci-siblings']);
+// Also skip .qoder and .agents mirrored skill recipes, which are parity-synced
+// with sibling cavalry-mcp and contain illustrative terminal examples.
+const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', '.test-work', 'jobs', '.ci-siblings', '.qoder', '.agents']);
 
 async function walk(directory) {
   const found = [];

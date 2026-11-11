@@ -5,7 +5,7 @@
   "summary": "在双角色开源项目科普骨架上，强制加入两段可核验的真实操作录屏：GitHub 仓库浏览录屏与 WorkBuddy 使用录屏；支持 12–25 秒短版和 40–50 秒 complete_45s 完整讲解；角色对白仍由 H3 原生音频与口型同步生成并逐句过 whisper ASR 验收。",
   "sourcePackage": {
     "directory": "vendor/wave2/capsule-cinema/dual_role_real_screen_recording.capsule",
-    "manifestSha256": "6450475b6ff43ffc2f03b33352bcc7097b0035d025023f0416986d3cd67561e1",
+    "manifestSha256": "327f43e975965217072da113215a13bf79447690f7330618dda7f1c29310fbbb",
     "upstream": "JuneYaooo/capsule-cinema",
     "recipeVersion": 2,
     "executionMode": "preset",

@@ -5,7 +5,7 @@
   "summary": "通用 GitHub/AI Skills 价值证据展示 + 6:7 白底橙网格视觉模板；保留原仓库截图，并在原图表现力不足时补充可披露的模拟产出图或 SVG 结构图。",
   "sourcePackage": {
     "directory": "vendor/wave2/capsule-cinema/repo_signal_grid.capsule",
-    "manifestSha256": "daf70f09e7ba29778b122ae0cbe1f660aeaf0e4fbfae6f5a9d69e7112fb75b4f",
+    "manifestSha256": "2ee18741f83418bfd1a35290dffcfdac3eb82907003af22b1bc5408778580745",
     "upstream": "JuneYaooo/capsule-cinema",
     "recipeVersion": 12,
     "executionMode": "local_script",

@@ -186,15 +186,37 @@ export function evaluateReviewLoopChecks(input = {}, options = {}) {
     (holdCandidates.length > 0 ? Math.min(...holdCandidates) : 1.15)
   );
 
+  const focalCollisions = Array.isArray(input.focalCollisions) ? [...input.focalCollisions] : [];
+  const focalInputs = [
+    ...(Array.isArray(input.focalRegions) ? input.focalRegions : []),
+    ...(input.focalRegion ? [input.focalRegion] : []),
+    ...(input.subjectBox ? [input.subjectBox] : [])
+  ].filter(Boolean);
+  for (const textEl of textElements) {
+    for (const focal of focalInputs) {
+      const focalBox = focal.bbox ?? focal;
+      if (!focalBox || !Number.isFinite(focalBox.width) || !Number.isFinite(focalBox.height)) continue;
+      if (boxesOverlap(textEl.bbox, focalBox)) {
+        focalCollisions.push({
+          elementId: textEl.id,
+          focalId: focal.id ?? 'focalRegion',
+          reason: 'Text bounding box overlaps focal subject / avatar region.'
+        });
+      }
+    }
+  }
+
   const zeroCollisions = collisions.length === 0;
+  const zeroFocalCollisions = focalCollisions.length === 0;
   const zeroClipping = clipping.length === 0;
   const readabilityHoldOk = minReadabilityHoldSeconds >= 0.7;
 
-  const passed = zeroCollisions && zeroClipping && readabilityHoldOk && safeMarginsOk;
+  const passed = zeroCollisions && zeroFocalCollisions && zeroClipping && readabilityHoldOk && safeMarginsOk;
 
   return {
     passed,
     collisions,
+    focalCollisions,
     clipping,
     minReadabilityHoldSeconds: Number(minReadabilityHoldSeconds.toFixed(3)),
     safeMarginsOk,
@@ -202,6 +224,7 @@ export function evaluateReviewLoopChecks(input = {}, options = {}) {
     titleSafeMarginRatio: Number(titleSafeMarginRatio.toFixed(4)),
     checks: {
       zeroTextCollisions: zeroCollisions,
+      zeroFocalCollisions,
       zeroFrameClipping: zeroClipping,
       readabilityHoldAtLeast070s: readabilityHoldOk,
       safeMarginsVerified: safeMarginsOk
@@ -265,4 +288,32 @@ export function runMotionTransferFilmstripQa(specOrInput = {}, options = {}) {
   };
 
   return report;
+}
+
+/**
+ * Evaluate contact-sheet filmstrip readiness and review-loop checks directly from
+ * a resolved edit list and optional shot metadata (`bin/vh.mjs check` backing helper).
+ */
+export function evaluateEditFilmstrip(edit = {}, resolved = {}, options = {}) {
+  const fps = Number(edit.fps ?? resolved.fps ?? 30);
+  const [width, height] = Array.isArray(edit.size) ? edit.size : [1920, 1080];
+  const shots = Array.isArray(edit.video?.shots) ? edit.video.shots : [];
+  const pictureEntries = (resolved.entries ?? []).filter(entry => entry.kind !== 'sound');
+  const durationFrames = Number(resolved.frames ?? 180);
+  const triggerOrder = (shots.length ? shots : pictureEntries).map((shot, index) => {
+    const startFrame = Number(shot.frames?.[0] ?? 0);
+    const endFrame = Number(shot.frames?.[1] ?? durationFrames);
+    const span = Math.max(1, endFrame - startFrame);
+    return {
+      stepIndex: index,
+      role: shot.id ?? `shot-${index}`,
+      normalizedStartRatio: startFrame / Math.max(1, durationFrames),
+      normalizedDurationRatio: span / Math.max(1, durationFrames),
+      staggerIntervalMs: Number(shot.staggerIntervalMs ?? 60)
+    };
+  });
+  const filmstrip = buildBeatFilmstrip({ fps, durationFrames, width, height, triggerOrder }, options);
+  const reviewInput = options.reviewLoopInput ?? edit.video?.reviewLoopInput ?? {};
+  const reviewLoop = evaluateReviewLoopChecks({ width, height, ...reviewInput }, options);
+  return { filmstrip, reviewLoop };
 }

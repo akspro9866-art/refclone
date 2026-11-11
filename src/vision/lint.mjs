@@ -8,9 +8,19 @@
 // Everything here is a measurement of the plan. A layer without a measured text box, a
 // text without a measurable background, or a scene with no text at all is reported as
 // blocked (needs review), never as a pass: an unrun check is not evidence.
-import { WorkflowError, hashObject } from '../core.mjs';
+import { spawnSync } from 'node:child_process';
+import fsSync from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { WorkflowError, absolutePath, hashObject } from '../core.mjs';
+import { parseFontcheckOutput } from './static-lint.mjs';
 
 export const STATIC_MOTION_LINT_VERSION = '1.0.0';
+const DEFAULT_FONTCHECK_PATH = absolutePath(fileURLToPath(new URL('../../vendor/wave2/xiaoma-studio/fontcheck.py', import.meta.url)));
+export const DEFAULT_BANNED_FALLBACK_FONTS = Object.freeze(['arial', 'times new roman', 'comic sans ms', 'comic sans']);
+const UNESCAPED_ENTITY_RE = /&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-fA-F]+);/;
+const LONE_SURROGATE_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 export const WCAG_BODY_CONTRAST = 4.5;
 export const WCAG_LARGE_CONTRAST = 3;
 export const WCAG_LARGE_TEXT_PX = 24;
@@ -757,4 +767,328 @@ export function staticMotionGateFindings(report) {
   return (report?.findings ?? [])
     .filter(finding => finding.severity === 'error' || finding.severity === 'warning')
     .map(finding => ({ code: finding.code, severity: finding.severity, message: finding.message }));
+}
+
+function normalizeFocalBox(region, width, height, shotId = null, fallbackId = 'focal') {
+  if (!region || typeof region !== 'object') return null;
+  const id = region.id ?? fallbackId;
+  if (Number.isFinite(region.left) && Number.isFinite(region.right) && Number.isFinite(region.bottom) && Number.isFinite(region.top)) {
+    return { id, shotId: region.shotId ?? shotId, left: region.left, right: region.right, bottom: region.bottom, top: region.top };
+  }
+  const w = numeric(region.width, null);
+  const h = numeric(region.height, null);
+  const x = numeric(region.x, null);
+  const y = numeric(region.y, null);
+  if (w === null || h === null || x === null || y === null || w <= 0 || h <= 0) return null;
+  if (region.coord === 'raster' && Number.isFinite(width) && Number.isFinite(height)) {
+    const left = x - width / 2;
+    const right = left + w;
+    const top = height / 2 - y;
+    const bottom = top - h;
+    return { id, shotId: region.shotId ?? shotId, left, right, bottom, top };
+  }
+  return { id, shotId: region.shotId ?? shotId, left: x - w / 2, right: x + w / 2, bottom: y - h / 2, top: y + h / 2 };
+}
+
+/**
+ * Check whether any text layer AABB overlaps a designated focal subject, hero device center,
+ * or avatar region (`focalRegion` / `subjectBox`).
+ */
+export function checkFocalSubjectCollisions(scenePlan, options = {}) {
+  if (!scenePlan || typeof scenePlan !== 'object') fail('LINT_PLAN_INVALID', 'checkFocalSubjectCollisions requires a scene plan object.');
+  const width = numeric(scenePlan.project?.width, 1920);
+  const height = numeric(scenePlan.project?.height, 1080);
+  const frames = sampleFrames(scenePlan, options);
+  const layers = extractPlanLayers(scenePlan);
+  const tracks = buildTracks(scenePlan);
+  const textLayers = layers.filter(layer => layer.kind === 'text');
+  const focalBoxes = [];
+  const pushRegion = (raw, shotId = null, label = 'focal') => {
+    for (const item of Array.isArray(raw) ? raw : [raw]) {
+      const box = normalizeFocalBox(item, width, height, shotId, label);
+      if (box) focalBoxes.push(box);
+    }
+  };
+  pushRegion(options.focalRegions, null, 'option-focal');
+  pushRegion(scenePlan.project?.focalRegion ?? scenePlan.project?.subjectBox, null, 'project-focal');
+  for (const shot of scenePlan.shots ?? []) {
+    pushRegion(shot?.focalRegion ?? shot?.subjectBox, shot?.id ?? null, `shot-${shot?.id ?? 'unknown'}`);
+  }
+  for (const element of scenePlan.elements ?? []) {
+    pushRegion(element?.parameters?.focalRegion ?? element?.parameters?.subjectBox, element?.shotId ?? null, `element-${element?.id ?? 'unknown'}`);
+  }
+  for (const layer of layers) {
+    if (layer.attributes?.focalRegion || layer.attributes?.subjectBox) {
+      pushRegion(layer.attributes.focalRegion ?? layer.attributes.subjectBox, layer.shotId ?? null, layer.id);
+    }
+  }
+  const findings = makeFindings();
+  let checked = 0;
+  for (const frame of frames) {
+    for (const text of textLayers) {
+      if (!visibleAt(text, frame)) continue;
+      const textBox = textGeometry(text, frame, tracks);
+      if (!textBox.measured) continue;
+      for (const focal of focalBoxes) {
+        if (focal.shotId && text.shotId && focal.shotId !== text.shotId) continue;
+        checked += 1;
+        const overlap = intersectionArea(textBox, focal);
+        if (overlap > (options.focalOverlapPx ?? 0)) {
+          findings.add({
+            code: 'LINT_FOCAL_SUBJECT_COLLISION',
+            severity: 'error',
+            message: `Text layer ${text.id} overlaps focal subject ${focal.id} (${Math.round(overlap)} px^2) at frame ${frame}.`,
+            layerIds: [text.id],
+            frames: [frame],
+            evidence: { focalId: focal.id, overlap: Math.round(overlap) }
+          });
+        }
+      }
+    }
+  }
+  const list = findings.list();
+  return {
+    version: STATIC_MOTION_LINT_VERSION,
+    status: list.length ? 'fail' : 'pass',
+    checked: { textLayers: textLayers.length, focalBoxes: focalBoxes.length, comparisons: checked, frames: frames.length },
+    counts: { errors: list.filter(f => f.severity === 'error').length, warnings: list.filter(f => f.severity === 'warning').length },
+    findings: list
+  };
+}
+
+function createTempFontCss(scenePlan) {
+  const fontAssets = (scenePlan.assets ?? []).filter(asset => asset?.type === 'font' && typeof asset.path === 'string' && asset.path.trim());
+  if (!fontAssets.length) return null;
+  const tmpDir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'refclone-fontcheck-'));
+  const rules = fontAssets.map(asset => {
+    const family = asset.fontFamily ?? asset.id ?? 'CustomFont';
+    const styleRaw = String(asset.fontStyle ?? 'Regular').toLowerCase();
+    const weight = styleRaw.includes('bold') ? 700 : styleRaw.includes('medium') ? 500 : styleRaw.includes('light') ? 300 : 400;
+    const rel = path.relative(tmpDir, absolutePath(asset.path)).replaceAll('\\', '/');
+    return `@font-face { font-family: '${family}'; font-weight: ${weight}; src: url('${rel}'); }`;
+  });
+  const cssPath = path.join(tmpDir, 'fonts.css');
+  fsSync.writeFileSync(cssPath, `${rules.join('\n')}\n`, 'utf8');
+  return { tmpDir, cssPath };
+}
+
+function parsePythonFontReport(stdout) {
+  const trimmed = String(stdout ?? '').trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const payload = JSON.parse(trimmed);
+      const list = Array.isArray(payload) ? payload : (payload.findings ?? payload.problems ?? []);
+      const findings = list.map(item => (typeof item === 'string'
+        ? { code: 'FONT_CHECK_PROBLEM', severity: 'error', message: item }
+        : { code: item.code ?? 'FONT_CHECK_PROBLEM', severity: item.severity ?? 'error', message: item.message ?? String(item) }));
+      return { isJson: true, report: payload, findings, summary: payload.summary ?? null };
+    } catch {
+      // fall through to upstream text parser
+    }
+  }
+  const parsed = parseFontcheckOutput(stdout);
+  return { isJson: false, report: null, findings: parsed.findings, summary: parsed.summary };
+}
+
+/**
+ * Validate font-weight lock stability, banned system fallback fonts, missing glyph /
+ * encoding issues, and optionally invoke Python `fontcheck.py` via `spawnSync`.
+ *
+ * @param {object} scenePlan
+ * @param {{
+ *   runPythonFontcheck?: boolean, python?: string, cssPath?: string|null, fontcheckBin?: string|null,
+ *   chars?: string, allowedFonts?: string[], fontLocks?: Record<string,string[]>, requireLocks?: boolean,
+ *   texts?: string[], processTimeoutMs?: number
+ * }} [options]
+ */
+export function checkFontIntegrity(scenePlan, options = {}) {
+  if (!scenePlan || typeof scenePlan !== 'object') fail('LINT_PLAN_INVALID', 'checkFontIntegrity requires a scene plan object.');
+  const {
+    runPythonFontcheck = false,
+    python = 'python',
+    cssPath = null,
+    fontcheckBin = null,
+    chars = '',
+    allowedFonts = [],
+    fontLocks = null,
+    requireLocks = false,
+    texts = [],
+    processTimeoutMs = 30000
+  } = options;
+
+  const layers = extractPlanLayers(scenePlan);
+  const textLayers = layers.filter(layer => layer.kind === 'text');
+  const findings = makeFindings();
+  const unmeasured = [];
+  const lockCount = checkFontLocks({ textLayers, plan: scenePlan, findings, unmeasured, options: { fontLocks } });
+
+  // Detect mid-word / animated fontWeight keyframes or variable weight-run mutations.
+  for (const keyframe of scenePlan.keyframes ?? []) {
+    const prop = String(keyframe?.attributePath ?? keyframe?.property ?? '');
+    if (/font\.?weight|fontstyle|variableweight/i.test(prop)) {
+      findings.add({
+        code: 'LINT_FONT_WEIGHT_ANIMATED',
+        severity: 'error',
+        message: `Animated font-weight keyframe on ${keyframe.elementId ?? 'layer'} (${prop}) breaks glyph metrics mid-word.`,
+        layerIds: keyframe.elementId ? [keyframe.elementId] : [],
+        frames: Number.isInteger(keyframe.targetFrame) ? [keyframe.targetFrame] : []
+      });
+    }
+  }
+  for (const layer of textLayers) {
+    if (layer.attributes.animatedFontWeight === true || Array.isArray(layer.attributes.weightRuns)) {
+      findings.add({
+        code: 'LINT_FONT_WEIGHT_ANIMATED',
+        severity: 'error',
+        message: `Text layer ${layer.id} animates font weight mid-word; lock static or discrete variable weights per layer.`,
+        layerIds: [layer.id],
+        frames: []
+      });
+    }
+  }
+
+  // Banned system fallback font check unless explicitly whitelisted.
+  const whitelist = new Set([
+    ...(Array.isArray(allowedFonts) ? allowedFonts : []),
+    ...(Array.isArray(scenePlan.allowedFonts) ? scenePlan.allowedFonts : [])
+  ].map(name => String(name).trim().toLowerCase()).filter(Boolean));
+  for (const layer of textLayers) {
+    const { family } = layerFont(layer);
+    if (!family) continue;
+    const families = String(family).split(',').map(part => part.trim().replace(/^['"]|['"]$/g, '').toLowerCase()).filter(Boolean);
+    for (const candidate of families) {
+      if (DEFAULT_BANNED_FALLBACK_FONTS.includes(candidate) && !whitelist.has(candidate)) {
+        findings.add({
+          code: 'LINT_FONT_BANNED_FALLBACK',
+          severity: 'error',
+          message: `Text layer ${layer.id} uses banned system fallback font "${candidate}" without explicit whitelist.`,
+          layerIds: [layer.id],
+          frames: [],
+          evidence: { family: candidate }
+        });
+      }
+    }
+  }
+
+  // Missing glyph / encoding corruption check across text strings.
+  const collectedStrings = [];
+  for (const layer of textLayers) {
+    if (typeof layer.attributes.text === 'string') collectedStrings.push({ source: layer.id, text: layer.attributes.text });
+  }
+  for (const operation of scenePlan.operations ?? []) {
+    const text = operation?.params?.text ?? operation?.params?.attributes?.text;
+    if (typeof text === 'string') collectedStrings.push({ source: operation.elementId ?? operation.id ?? 'operation', text });
+  }
+  for (const element of scenePlan.elements ?? []) {
+    if (typeof element?.parameters?.text === 'string') collectedStrings.push({ source: element.id, text: element.parameters.text });
+  }
+  for (const [index, text] of (Array.isArray(texts) ? texts : []).entries()) {
+    if (typeof text === 'string') collectedStrings.push({ source: `text-${index}`, text });
+  }
+  const seenSources = new Set();
+  for (const entry of collectedStrings) {
+    const dedupeKey = `${entry.source}|${entry.text}`;
+    if (seenSources.has(dedupeKey)) continue;
+    seenSources.add(dedupeKey);
+    if (entry.text.includes('\uFFFD') || entry.text.includes('\u0000') || LONE_SURROGATE_RE.test(entry.text)) {
+      findings.add({
+        code: 'LINT_GLYPH_OR_ENTITY',
+        severity: 'error',
+        message: `Text "${entry.source}" contains replacement/invalid glyph characters (\\uFFFD or broken encoding).`,
+        layerIds: [entry.source],
+        frames: []
+      });
+    }
+    const entityMatch = UNESCAPED_ENTITY_RE.exec(entry.text);
+    if (entityMatch) {
+      findings.add({
+        code: 'LINT_GLYPH_OR_ENTITY',
+        severity: 'error',
+        message: `Text "${entry.source}" contains unescaped HTML entity "${entityMatch[0]}".`,
+        layerIds: [entry.source],
+        frames: []
+      });
+    }
+  }
+
+  if (requireLocks && unmeasured.length) {
+    for (const message of [...new Set(unmeasured)]) {
+      findings.add({ code: 'LINT_FONT_LOCK_UNMEASURED', severity: 'error', message, layerIds: [], frames: [] });
+    }
+  }
+
+  const allTextJoined = collectedStrings.map(item => item.text).join('');
+  const uniqueChars = [...new Set(String(chars || allTextJoined))].filter(ch => !/\s/.test(ch)).join('');
+
+  let pythonFontcheck = { enabled: false, status: 'skipped', bin: null, summary: null, report: null, findings: [] };
+  if (runPythonFontcheck || fontcheckBin) {
+    const binPath = fontcheckBin ? absolutePath(fontcheckBin) : DEFAULT_FONTCHECK_PATH;
+    let tempCss = null;
+    try {
+      const targetCss = cssPath ? absolutePath(cssPath) : (tempCss = createTempFontCss(scenePlan))?.cssPath ?? null;
+      if (!targetCss) {
+        pythonFontcheck = {
+          enabled: true, status: 'blocked', bin: binPath, reason: 'NO_FONT_CSS_OR_ASSETS',
+          summary: 'No fonts.css or font asset file paths supplied for fontcheck.py.', report: null, findings: []
+        };
+      } else {
+        const args = [binPath, targetCss];
+        if (uniqueChars) args.push('--chars', uniqueChars);
+        const proc = spawnSync(python, args, { encoding: 'utf8', timeout: processTimeoutMs });
+        if (proc.error) {
+          pythonFontcheck = {
+            enabled: true, status: 'blocked', bin: binPath, reason: proc.error.code ?? 'SPAWN_ERROR',
+            summary: proc.error.message, report: null, findings: []
+          };
+        } else {
+          const parsed = parsePythonFontReport(proc.stdout);
+          const pyFindings = [...parsed.findings];
+          if (proc.status !== 0 && !pyFindings.length) {
+            pyFindings.push({
+              code: 'FONT_CHECK_FAILED',
+              severity: 'error',
+              message: (proc.stderr || proc.stdout || `fontcheck exited ${proc.status}`).trim()
+            });
+          }
+          for (const item of pyFindings) {
+            findings.add({ code: item.code, severity: item.severity ?? 'error', message: item.message, layerIds: [], frames: [] });
+          }
+          pythonFontcheck = {
+            enabled: true,
+            status: proc.status === 0 && pyFindings.length === 0 ? 'pass' : 'fail',
+            bin: binPath,
+            summary: parsed.summary,
+            report: parsed.report,
+            findings: pyFindings
+          };
+        }
+      }
+    } finally {
+      if (tempCss?.tmpDir) {
+        try { fsSync.rmSync(tempCss.tmpDir, { recursive: true, force: true }); } catch {}
+      }
+    }
+  }
+
+  const all = findings.list();
+  const counts = {
+    errors: all.filter(item => item.severity === 'error').length,
+    warnings: all.filter(item => item.severity === 'warning').length
+  };
+  const status = counts.errors > 0 ? 'fail' : pythonFontcheck.status === 'blocked' ? 'blocked' : 'pass';
+  return {
+    version: STATIC_MOTION_LINT_VERSION,
+    status,
+    checked: {
+      textLayers: textLayers.length,
+      fontLocks: lockCount,
+      checkedStrings: seenSources.size,
+      checkedChars: uniqueChars.length,
+      pythonRan: pythonFontcheck.status === 'pass' || pythonFontcheck.status === 'fail'
+    },
+    counts,
+    findings: all,
+    unmeasured: [...new Set(unmeasured)],
+    pythonFontcheck
+  };
 }

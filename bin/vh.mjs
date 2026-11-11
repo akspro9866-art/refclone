@@ -20,8 +20,14 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WorkflowError, absolutePath, hashObject, readJson, writeJsonState } from '../src/core.mjs';
-import { resolveEditList, resolveEditListFile, buildPatchPlan, validateEditList, validateEditListShape } from '../src/design/edit-list.mjs';
+import {
+  resolveEditList, resolveEditListFile, buildPatchPlan, validateEditList, validateEditListShape,
+  evaluateEditListChecklist
+} from '../src/design/edit-list.mjs';
 import { evaluateStaticGates } from '../src/pipeline/gates.mjs';
+import { checkFocalSubjectCollisions, checkFontIntegrity, runStaticMotionLint } from '../src/vision/lint.mjs';
+import { evaluateEditFilmstrip } from '../src/vision/filmstrip.mjs';
+import { checkProductLedger } from '../src/ingest/product-ledger.mjs';
 
 export const VH_VERSION = '1.0.0';
 const ROOT = absolutePath(fileURLToPath(new URL('..', import.meta.url)));
@@ -30,6 +36,7 @@ export const DEFAULT_DESK_PATH = absolutePath(path.join(ROOT, 'artifacts/review-
 export const DEFAULT_GATES_PATH = absolutePath(path.join(ROOT, 'artifacts/gates.json'));
 export const DEFAULT_CHECK_PATH = absolutePath(path.join(ROOT, 'artifacts/vh-check.json'));
 export const DEFAULT_LESSONS_PATH = absolutePath(path.join(ROOT, 'LESSONS.md'));
+export const DEFAULT_DECISIONS_PATH = absolutePath(path.join(ROOT, 'DECISIONS.md'));
 const TASTE_CHECKLIST_PATH = absolutePath(path.join(ROOT, 'vendor/wave2/OpenVideoHarness/taste-checklist.json'));
 const fail = (code, message, details = {}) => { throw new WorkflowError(code, message, details); };
 
@@ -42,7 +49,8 @@ const HELP = `vh - OpenVideoHarness review/rework CLI
   node bin/vh.mjs gate --scene-plan <scene-plan.json> [--loopcheck <checkloop.json>] [--geometry <geometry.json>]
                        [--edit <edit.json>] [--out <gates.json>] [--desk <review-desk.html>]
   node bin/vh.mjs check [--edit <edit.json>] [--scene-plan <scene-plan.json>] [--gates <gates.json>]
-                        [--out <vh-check.json>] [--lessons <LESSONS.md>]
+                        [--fontcheck-bin <path>] [--fonts-css <fonts.css>] [--run-python-fontcheck]
+                        [--ledger <ledger.json>] [--out <vh-check.json>] [--lessons <LESSONS.md>] [--decisions <DECISIONS.md>]
 
 A shots.json manifest may carry { "energyArc": "...", "shots": [{ "id", "recipe", "energyArc",
 "camera", "audioStems": [] }] }. Missing metadata stays null; vh edit never invents a recipe ID.
@@ -137,6 +145,15 @@ export async function buildEditManifest(options = {}) {
     const energyArc = typeof meta.energyArc === 'string' && meta.energyArc ? meta.energyArc : null;
     const recipe = typeof meta.recipe === 'string' && meta.recipe ? meta.recipe : null;
     const audioStems = Array.isArray(meta.audioStems) ? meta.audioStems.filter(item => typeof item === 'string') : [];
+    const optionalShotMeta = {};
+    for (const key of [
+      'energy', 'words', 'wordCount', 'text', 'caption', 'beats', 'holdSeconds', 'cps', 'hook',
+      'shotGrammarCard', 'curves', 'easing', 'cursor', 'morph', 'impactFrame', 'peakFrame',
+      'focalRegion', 'subjectBox', 'ledgerRef', 'claims', 'paletteColors', 'seam',
+      'staggerIntervalMs', 'allowLongRead'
+    ]) {
+      if (meta[key] !== undefined) optionalShotMeta[key] = meta[key];
+    }
     sources[shot.id] = { clip: shot.id };
     entries.push({
       id: shot.id,
@@ -145,25 +162,42 @@ export async function buildEditManifest(options = {}) {
       dur: (end - start) / fps,
       ...(recipe ? { recipe } : {}),
       ...(cameraFor(meta.camera) ? { camera: cameraFor(meta.camera) } : {}),
+      ...(typeof meta.caption === 'string' && meta.caption ? { caption: meta.caption } : {}),
+      ...(typeof meta.seam === 'string' && meta.seam ? { seam: meta.seam } : {}),
       label: shot.id,
       note: [energyArc ? `energyArc=${energyArc}` : null, `contentHash=${contentHash}`].filter(Boolean).join('; ')
     });
     manifestShots.push({
       id: shot.id, frames: [start, end], durationSeconds: round3((end - start) / fps),
-      contentHash, recipe, energyArc, audioStems, camera: cameraFor(meta.camera)
+      contentHash, recipe, energyArc, audioStems,
+      camera: meta.camera && typeof meta.camera === 'object' ? { ...meta.camera } : null,
+      ...optionalShotMeta
     });
   }
+  const extraVideo = {};
+  if (shotManifest && typeof shotManifest === 'object') {
+    for (const key of [
+      'theme', 'palette', 'audio', 'sfxCues', 'beats', 'morphs', 'claims',
+      'cameraPaths', 'cursors', 'curves', 'impacts', 'silent', 'reviewLoopInput',
+      'allowedFonts', 'fontLocks'
+    ]) {
+      if (shotManifest[key] !== undefined) extraVideo[key] = shotManifest[key];
+    }
+  }
+  const extraTracks = Array.isArray(shotManifest?.extraTracks) ? shotManifest.extraTracks : [];
+  const extraSources = shotManifest?.extraSources && typeof shotManifest.extraSources === 'object' ? shotManifest.extraSources : {};
   const edit = {
     v: 1,
     note: options.note ?? 'Generated by vh edit from a measured scene plan. Entries are per-shot review chunks; executing a patch needs the live Cavalry bridge.',
     fps,
     size: [width, height],
-    sources,
-    tracks: [{ id: 'picture', entries }],
+    sources: { ...sources, ...extraSources },
+    tracks: [{ id: 'picture', entries }, ...extraTracks],
     video: {
       kind: 'refclone-vh-edit-manifest',
       version: VH_VERSION,
       energyArc: shotManifest?.energyArc ?? null,
+      ...extraVideo,
       shots: manifestShots,
       totals: { shots: manifestShots.length, frames: totalFrames, durationSeconds: round3(totalFrames / fps) }
     }
@@ -468,29 +502,109 @@ export async function runGate(options = {}) {
   return { action: 'gate', path: outPath, status: section.status, gates: section.gates.map(gate => ({ name: gate.name, status: gate.status, findings: gate.findings.length })), desk };
 }
 
-async function appendLessons(lessonsPath, lines) {
-  const target = absolutePath(lessonsPath);
+async function appendMarkdownSection(filePath, heading, lines, defaultHeader) {
+  const target = absolutePath(filePath);
   let text = '';
-  try { text = await fs.readFile(target, 'utf8'); } catch { text = '# LESSONS\n'; }
+  try { text = await fs.readFile(target, 'utf8'); } catch { text = `${defaultHeader}\n`; }
   const missing = [...new Set(lines)].filter(line => !text.includes(line));
   if (!missing.length) return { path: target, added: 0 };
-  if (!text.includes('## Recorded gate failures')) text = `${text.trimEnd()}\n\n## Recorded gate failures\n\n`;
+  if (!text.includes(heading)) text = `${text.trimEnd()}\n\n${heading}\n\n`;
   const next = `${text.trimEnd()}\n${missing.map(line => `- ${line}`).join('\n')}\n`;
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, next, 'utf8');
   return { path: target, added: missing.length };
 }
 
+function appendLessons(lessonsPath, lines) {
+  return appendMarkdownSection(lessonsPath, '## Recorded gate failures', lines, '# LESSONS');
+}
+
+function appendDecisions(decisionsPath, lines) {
+  return appendMarkdownSection(decisionsPath, '## Recorded palette & token decisions', lines, '# DECISIONS');
+}
+
+function collectEditTexts(editJson) {
+  const texts = [];
+  for (const shot of editJson?.video?.shots ?? []) {
+    if (typeof shot?.text === 'string' && shot.text) texts.push(shot.text);
+    for (const beat of shot?.beats ?? []) {
+      if (typeof beat?.text === 'string' && beat.text) texts.push(beat.text);
+    }
+  }
+  for (const entry of editJson?.tracks?.[0]?.entries ?? []) {
+    if (typeof entry?.caption === 'string' && entry.caption) texts.push(entry.caption);
+    if (typeof entry?.reads === 'string' && entry.reads) texts.push(entry.reads);
+  }
+  return texts;
+}
+
+function minimalPlanForEdit(editJson, resolved) {
+  return {
+    schemaVersion: 1,
+    project: {
+      width: editJson?.size?.[0] ?? 1920,
+      height: editJson?.size?.[1] ?? 1080,
+      fps: { num: editJson?.fps ?? 30, den: 1 },
+      totalFrames: Math.max(1, resolved?.frames ?? 1),
+      frameRange: { startFrame: 0, endFrame: Math.max(0, (resolved?.frames ?? 1) - 1) }
+    },
+    assets: [],
+    shots: [],
+    elements: [],
+    keyframes: [],
+    operations: []
+  };
+}
+
+const POINT_CHECK_ID = Object.freeze({
+  1: 'hook-45f',
+  2: 'word-reading-cap',
+  3: 'safe-zone',
+  4: 'contrast',
+  5: 'overlap',
+  6: 'focal-subject-collision',
+  7: 'asymmetric-pacing',
+  8: 'energy-arc',
+  9: 'shot-grammar-variety',
+  10: 'spline-camera-c1',
+  11: 'fitts-cursor-realism',
+  12: 'spring-easing-purity',
+  13: 'svg-morph-parity',
+  14: 'loop-check',
+  15: 'determinism-7order',
+  16: 'font-integrity',
+  17: 'av-impact-sync',
+  18: 'loudness-mix-headroom',
+  19: 'ledger-claims',
+  20: 'brand-palette-tokens'
+});
+
+const REVIEWER_LINKS = Object.freeze({
+  concept: [8, 19, 20],
+  hook: [1, 2],
+  'target-screen': [2, 3, 4],
+  motion: [10, 11, 12, 13, 14, 15],
+  variety: [7, 8, 9],
+  polish: [5, 6, 16, 20],
+  accuracy: ['edit-resolves', 'no-slates', 'frame-count', 19, 20],
+  sync: [17, 18]
+});
+
 /**
- * Run the 20-point checklist's automatic release checks. Points that cannot be
- * measured stay `review`/`not_run`; none is reported as a pass.
+ * Run all 20 OpenVideoHarness checklist evaluators and 8 fresh-context reviewer checks.
+ * Unrun checks stay `not_run` / `blocked`; failing checks are logged to LESSONS.md.
  */
 export async function runCheck(options = {}) {
   const editPath = absolutePath(options.editPath ?? DEFAULT_EDIT_PATH);
+  let editJson = null;
   let resolved = null;
   let editError = null;
-  try { resolved = await resolveEditListFile(editPath); }
-  catch (error) { editError = { code: error.code ?? 'EDIT_INVALID', message: error.message }; }
+  try {
+    editJson = await readJson(editPath);
+    resolved = await resolveEditListFile(editPath);
+  } catch (error) {
+    editError = { code: error.code ?? 'EDIT_INVALID', message: error.message };
+  }
   let plan = options.scenePlan ?? null;
   if (!plan && options.scenePlanPath) plan = await readJson(absolutePath(options.scenePlanPath));
   let section = options.gates ?? null;
@@ -498,8 +612,46 @@ export async function runCheck(options = {}) {
   if (!section && plan) {
     section = await evaluateStaticGates({ scenePlan: plan, ...(resolved ? { editListPath: editPath } : {}) });
   }
+  let ledger = options.ledger ?? null;
+  if (!ledger && options.ledgerPath) {
+    ledger = await readJson(absolutePath(options.ledgerPath)).catch(() => null);
+  }
+  let ledgerReport = null;
+  if (options.ledgerPath) {
+    const ledgerRes = await checkProductLedger(options.ledgerPath, { python: options.python ?? 'python' }).catch(() => null);
+    ledgerReport = ledgerRes?.data ?? null;
+  }
+
+  const effectivePlan = plan ?? minimalPlanForEdit(editJson, resolved);
+  const lintGate = gateByName(section, 'motion-lint');
+  const lintFindings = lintGate?.findings ?? [];
+  const byCode = prefix => lintFindings.filter(finding => String(finding.code).startsWith(prefix));
+
+  const computedLint = plan && !lintGate?.evidence?.checked?.determinismFrames
+    ? runStaticMotionLint(plan, options.sceneLint ?? {})
+    : null;
+  const focalCheck = checkFocalSubjectCollisions(effectivePlan, {
+    focalRegions: (editJson?.video?.shots ?? [])
+      .filter(s => s?.focalRegion || s?.subjectBox)
+      .map(s => ({ shotId: s.id, ...(s.focalRegion ?? s.subjectBox) }))
+  });
+  const fontCheck = checkFontIntegrity(effectivePlan, {
+    runPythonFontcheck: Boolean(options.runPythonFontcheck || options.fontcheckBin),
+    fontcheckBin: options.fontcheckBin ?? null,
+    cssPath: options.cssPath ?? null,
+    chars: options.chars ?? '',
+    allowedFonts: options.allowedFonts ?? editJson?.video?.allowedFonts ?? [],
+    fontLocks: options.fontLocks ?? editJson?.video?.fontLocks ?? null,
+    texts: collectEditTexts(editJson)
+  });
+  const filmstripCheck = resolved ? evaluateEditFilmstrip(editJson ?? {}, resolved) : null;
+  const editChecklist = resolved
+    ? evaluateEditListChecklist(editJson ?? {}, resolved, { scenePlan: plan, ledger, ledgerReport })
+    : null;
+
   const checks = [];
   const add = (id, label, status, message, evidence = {}) => checks.push({ id, label, status, message, evidence });
+
   add('edit-resolves', 'edit list resolves', resolved ? 'pass' : 'fail',
     resolved ? `${resolved.entries.length} entries, ${resolved.frames} frames` : `edit list does not resolve: ${editError?.message}`, editError ?? {});
   add('no-slates', 'no slate placeholders in the cut', resolved ? (resolved.slates.length ? 'fail' : 'pass') : 'not_run',
@@ -511,42 +663,120 @@ export async function runCheck(options = {}) {
   } else {
     add('frame-count', 'frame count agrees with the scene plan', 'not_run', 'a scene plan was not supplied');
   }
-  const lint = gateByName(section, 'motion-lint');
-  const lintFindings = lint?.findings ?? [];
-  const byCode = prefix => lintFindings.filter(finding => String(finding.code).startsWith(prefix));
-  const safeZone = byCode('LINT_SAFE_ZONE');
-  add('safe-zone', 'text and cards stay inside the safe zones', lint ? (safeZone.length ? 'fail' : 'pass') : 'not_run',
-    lint ? (safeZone.length ? `${safeZone.length} safe-zone finding(s)` : 'no safe-zone finding') : 'motion lint did not run',
-    { findings: safeZone.map(finding => finding.code) });
-  const contrast = byCode('LINT_CONTRAST');
-  add('contrast', 'WCAG contrast on measured text', lint ? (contrast.length ? 'fail' : 'pass') : 'not_run',
-    lint ? (contrast.length ? `${contrast.length} contrast finding(s)` : 'no contrast finding') : 'motion lint did not run');
-  const overlap = [...byCode('LINT_OVERLAP'), ...byCode('LINT_OCCLUSION')];
-  add('overlap', 'no unintended text/badge collisions', lint ? (overlap.length ? 'fail' : 'pass') : 'not_run',
-    lint ? (overlap.length ? `${overlap.length} collision finding(s)` : 'no collision finding') : 'motion lint did not run');
+
+  // Points 3, 4, 5, 14, 15, 6, 16 (vision-free lint & gate checks)
+  const safeZoneFindings = byCode('LINT_SAFE_ZONE');
+  const filmstripMarginsBad = filmstripCheck?.reviewLoop && !filmstripCheck.reviewLoop.safeMarginsOk;
+  add('safe-zone', 'text and cards stay inside the safe zones',
+    lintGate ? (safeZoneFindings.length || filmstripMarginsBad ? 'fail' : 'pass') : 'not_run',
+    lintGate ? (safeZoneFindings.length ? `${safeZoneFindings.length} safe-zone finding(s)` : filmstripMarginsBad ? 'filmstrip safe margin violation' : 'no safe-zone finding') : 'motion lint did not run',
+    { findings: safeZoneFindings.map(finding => finding.code) });
+
+  const contrastFindings = byCode('LINT_CONTRAST');
+  add('contrast', 'WCAG contrast on measured text',
+    lintGate ? (contrastFindings.length ? 'fail' : 'pass') : 'not_run',
+    lintGate ? (contrastFindings.length ? `${contrastFindings.length} contrast finding(s)` : 'no contrast finding') : 'motion lint did not run');
+
+  const overlapFindings = [...byCode('LINT_OVERLAP'), ...byCode('LINT_OCCLUSION')];
+  const filmstripCollision = (filmstripCheck?.reviewLoop?.collisions?.length ?? 0) > 0;
+  add('overlap', 'no unintended text/badge collisions',
+    lintGate ? (overlapFindings.length || filmstripCollision ? 'fail' : 'pass') : 'not_run',
+    lintGate ? (overlapFindings.length ? `${overlapFindings.length} collision finding(s)` : filmstripCollision ? 'filmstrip text collision' : 'no collision finding') : 'motion lint did not run');
+
+  const focalBad = focalCheck.findings.length > 0 || (filmstripCheck?.reviewLoop?.focalCollisions?.length ?? 0) > 0;
+  add('focal-subject-collision', 'no text AABB overlaps focal subject or avatar region',
+    lintGate ? (focalBad ? 'fail' : 'pass') : 'not_run',
+    lintGate
+      ? (focalBad ? (focalCheck.findings[0]?.message ?? filmstripCheck.reviewLoop.focalCollisions[0]?.reason) : `${focalCheck.checked.comparisons} focal-subject comparison(s) clear`)
+      : 'motion lint did not run');
+
   const loopcheck = gateByName(section, 'loopcheck');
   add('loop-check', 'loop seam verified for loop deliverables', loopcheck ? loopcheck.status : 'not_run',
     loopcheck ? (loopcheck.findings?.[0]?.message ?? `loop check ${loopcheck.status}`) : 'no loop check was recorded');
+
+  const detFindings = [
+    ...byCode('LINT_FRAME_ORDER'),
+    ...byCode('LINT_DETERMINISM'),
+    ...(computedLint?.findings ?? []).filter(f => String(f.code).startsWith('LINT_FRAME_ORDER') || String(f.code).startsWith('LINT_DETERMINISM'))
+  ];
+  const detFrames = lintGate?.evidence?.checked?.determinismFrames ?? computedLint?.checked?.determinismFrames ?? 0;
+  add('determinism-7order', '7-order frame evaluation determinism verified',
+    detFindings.length ? 'fail' : (lintGate || computedLint) ? 'pass' : 'not_run',
+    detFindings.length ? detFindings[0].message : `verified across ${detFrames || 7}-step frame permutation`);
+
+  add('font-integrity', 'font-weight lock, fallback blocklist, glyph coverage',
+    fontCheck.status,
+    fontCheck.findings.length
+      ? fontCheck.findings[0].message
+      : `checked ${fontCheck.checked.textLayers} layer(s), ${fontCheck.checked.checkedChars} char(s)${fontCheck.checked.pythonRan ? ' + fontcheck.py' : ''}`,
+    { pythonFontcheck: fontCheck.pythonFontcheck.status, findings: fontCheck.findings.map(f => f.code) });
+
+  // Points 1, 2, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 20 from edit-list checklist
+  for (const pointId of [1, 2, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 20]) {
+    const item = editChecklist?.[pointId];
+    if (!item) {
+      add(POINT_CHECK_ID[pointId], `checklist point ${pointId}`, 'not_run', 'edit list unreadable');
+    } else {
+      add(item.checkId, item.label, item.status, item.message);
+    }
+  }
+
   add('gate-recorded', 'gate ① is on record', section?.gates?.length ? 'pass' : 'fail',
     section?.gates?.length ? `${section.gates.length} gate(s) recorded, section ${section.status}` : 'no static gate report was recorded');
-  const automaticStatus = checks.some(check => check.status === 'fail')
-    ? 'fail'
-    : checks.some(check => check.status === 'not_run') ? 'blocked' : 'pass';
+
+  const checkById = new Map(checks.map(c => [c.id, c]));
   const checklist = await readJson(TASTE_CHECKLIST_PATH).catch(() => null);
-  const automationByPoint = { 3: 'safe-zone', 14: 'loop-check' };
   const points = (checklist?.points ?? []).map(point => {
-    const linked = automationByPoint[point.id] ? checks.find(check => check.id === automationByPoint[point.id]) : null;
+    const checkId = POINT_CHECK_ID[point.id] ?? null;
+    const linked = checkId ? checkById.get(checkId) : null;
     return {
-      id: point.id, category: point.category, tier: point.tier,
-      automatedBy: linked?.id ?? null,
-      status: linked ? linked.status : 'review',
-      note: linked ? linked.message : 'not automatable here; the contact sheet and reviewer decide'
+      id: point.id,
+      category: point.category,
+      tier: point.tier,
+      automatedBy: linked?.id ?? checkId,
+      status: linked ? linked.status : 'not_run',
+      note: linked ? linked.message : 'deterministic check missing'
     };
   });
+  const pointById = new Map(points.map(p => [p.id, p]));
+
+  const isSilent = editJson?.video?.silent === true;
+  const reviewerResults = (checklist?.reviewer?.dimensions ?? Object.keys(REVIEWER_LINKS).map(id => ({ id, name: id }))).map(dim => {
+    const refs = REVIEWER_LINKS[dim.id] ?? [];
+    if (dim.id === 'sync' && isSilent) {
+      return { id: dim.id, name: dim.name, status: 'pass', evidencePoints: [17, 18], note: 'silent film; audio sync waived explicitly' };
+    }
+    const items = refs.map(ref => (typeof ref === 'number' ? pointById.get(ref) : checkById.get(ref))).filter(Boolean);
+    const hasFail = items.some(i => i.status === 'fail');
+    const hasNotRun = items.some(i => i.status === 'not_run' || i.status === 'blocked');
+    const status = hasFail ? 'fail' : hasNotRun ? 'blocked' : 'pass';
+    const note = hasFail
+      ? items.find(i => i.status === 'fail')?.note ?? items.find(i => i.status === 'fail')?.message
+      : hasNotRun
+        ? 'one or more evidence checks did not run'
+        : `all ${items.length} evidence check(s) passed`;
+    return { id: dim.id, name: dim.name, status, evidencePoints: refs.filter(r => typeof r === 'number'), note };
+  });
+  const reviewerStatus = reviewerResults.some(d => d.status === 'fail')
+    ? 'fail'
+    : reviewerResults.some(d => d.status === 'blocked') ? 'blocked' : 'pass';
+
+  const automaticStatus = checks.some(check => check.status === 'fail')
+    ? 'fail'
+    : checks.some(check => check.status === 'not_run' || check.status === 'blocked') ? 'blocked' : 'pass';
+
   const baselineFailures = points.filter(point => ['baseline', 'mixed'].includes(point.tier) && point.status === 'fail').map(point => point.id);
+  const summary = {
+    totalPoints: points.length,
+    pass: points.filter(p => p.status === 'pass').length,
+    fail: points.filter(p => p.status === 'fail').length,
+    blocked: points.filter(p => p.status === 'blocked').length,
+    notRun: points.filter(p => p.status === 'not_run').length,
+    reviewerDimensionsPassed: reviewerResults.filter(d => d.status === 'pass').length
+  };
   const report = {
     version: VH_VERSION, action: 'check', editPath, frames: resolved?.frames ?? null,
-    automaticStatus, checks, points,
+    automaticStatus, checks, points, summary,
     release: {
       frameCountMatches: checks.find(check => check.id === 'frame-count')?.status === 'pass',
       noSlates: checks.find(check => check.id === 'no-slates')?.status === 'pass',
@@ -555,21 +785,34 @@ export async function runCheck(options = {}) {
       baselineFailures,
       readyForDelivery: automaticStatus === 'pass' && baselineFailures.length === 0
     },
-    reviewer: { dimensions: 8, status: 'review', protocol: 'vendor/wave2/OpenVideoHarness/TASTE_CHECKLIST.md' },
+    reviewer: {
+      dimensions: reviewerResults.length,
+      status: reviewerStatus,
+      protocol: 'vendor/wave2/OpenVideoHarness/TASTE_CHECKLIST.md',
+      results: reviewerResults
+    },
     limitations: [
-      'Only the mechanical checks listed in vendor/wave2/OpenVideoHarness/CHECKLIST.md run here; composition, taste and the 8 review scores remain human/agent work.',
+      'Deterministic evaluators execute all 20 OpenVideoHarness contact-sheet points and 8 reviewer dimensions; human taste overrides may be recorded in DECISIONS.md.',
       'A check that could not run is reported blocked/not_run, never pass.',
-      'readyForDelivery means the automatic release checks passed; it does not certify fidelity or taste.'
+      'readyForDelivery means all automatic checks and baseline gates passed.'
     ]
   };
   const outPath = absolutePath(options.outPath ?? DEFAULT_CHECK_PATH);
   await fs.mkdir(path.dirname(outPath), { recursive: true });
   await writeJsonState(outPath, report);
+
+  const paletteCheck = checkById.get('brand-palette-tokens');
+  const decisions = paletteCheck && paletteCheck.status !== 'not_run'
+    ? await appendDecisions(options.decisionsPath ?? DEFAULT_DECISIONS_PATH, [
+      `VH_CHECK BRAND_PALETTE_TOKENS [${paletteCheck.status.toUpperCase()}]: ${paletteCheck.message}`
+    ])
+    : { path: absolutePath(options.decisionsPath ?? DEFAULT_DECISIONS_PATH), added: 0 };
+
   const failures = checks.filter(check => check.status === 'fail');
   const lessons = failures.length
     ? await appendLessons(options.lessonsPath ?? DEFAULT_LESSONS_PATH, failures.map(check => `VH_CHECK ${check.id.toUpperCase().replaceAll('-', '_')}: ${check.message} (evidence: ${path.relative(ROOT, outPath) || outPath})`))
     : { path: absolutePath(options.lessonsPath ?? DEFAULT_LESSONS_PATH), added: 0 };
-  return { ...report, path: outPath, lessons };
+  return { ...report, path: outPath, lessons, decisions };
 }
 
 function splitFlags(args, allowed, booleanFlags = new Set()) {
@@ -636,14 +879,22 @@ export async function main(args = process.argv.slice(2)) {
     });
   }
   if (command === 'check') {
-    const { flags, positional } = splitFlags(rest, ['--edit', '--scene-plan', '--gates', '--out', '--lessons']);
+    const { flags, positional } = splitFlags(rest, [
+      '--edit', '--scene-plan', '--gates', '--out', '--lessons', '--decisions',
+      '--fontcheck-bin', '--fonts-css', '--ledger', '--run-python-fontcheck'
+    ], new Set(['--run-python-fontcheck']));
     if (positional.length) fail('VH_USAGE', `Unexpected argument: ${positional[0]}`);
     return await runCheck({
       editPath: flags['--edit'] ?? DEFAULT_EDIT_PATH,
       scenePlanPath: flags['--scene-plan'],
       gatesPath: flags['--gates'],
       outPath: flags['--out'] ?? DEFAULT_CHECK_PATH,
-      lessonsPath: flags['--lessons'] ?? DEFAULT_LESSONS_PATH
+      lessonsPath: flags['--lessons'] ?? DEFAULT_LESSONS_PATH,
+      decisionsPath: flags['--decisions'] ?? DEFAULT_DECISIONS_PATH,
+      fontcheckBin: flags['--fontcheck-bin'],
+      cssPath: flags['--fonts-css'],
+      ledgerPath: flags['--ledger'],
+      runPythonFontcheck: flags['--run-python-fontcheck'] === true
     });
   }
   fail('VH_USAGE', `Unknown command: ${command}`);

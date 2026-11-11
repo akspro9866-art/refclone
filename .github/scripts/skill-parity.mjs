@@ -100,7 +100,12 @@ if (!canonical) {
         fs.readFile(path.join(localRoot, relative)),
         fs.readFile(path.join(canonicalRoot, relative))
       ]);
-      if (!a.equals(b)) {
+      const equalBytes = a.equals(b);
+      const isText = !a.includes(0) && !b.includes(0);
+      const equalNormalized = equalBytes || (
+        isText && a.toString('utf8').replace(/\r\n/g, '\n') === b.toString('utf8').replace(/\r\n/g, '\n')
+      );
+      if (!equalNormalized) {
         failures++;
         skillFailures++;
         console.error(`skill-parity: ${name}/${relative} differs from canonical ${canonical}; synchronise the copy.`);

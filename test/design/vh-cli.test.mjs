@@ -185,36 +185,208 @@ test('vh desk: one self-contained review page carries findings, filmstrips and d
     errorCode('VH_DESK_EDIT_INVALID'));
 });
 
-test('vh check: a complete gate record passes, an unrun loop check blocks, a slate fails', async () => {
-  await buildEditManifest({ scenePlan: scenePlan(), shots: shotManifest, outPath: editPath });
+function fullValidPlan() {
+  return {
+    schemaVersion: 1,
+    project: {
+      width: 1920, height: 1080, fps: { num: 30, den: 1 }, totalFrames: 192,
+      frameRange: { startFrame: 0, endFrame: 191 },
+      focalRegion: { x: 0, y: -240, width: 320, height: 220 }
+    },
+    assets: [
+      { id: 'font-inter', type: 'font', fontFamily: 'Inter', fontStyle: 'Regular', path: null }
+    ],
+    shots: [
+      { id: 'S01', startFrame: 0, endFrameExclusive: 36, operationIds: ['op-bg-c', 'op-bg-s', 'op-s1-t'], keyframeIds: ['kf-s1-a', 'kf-s1-b'] },
+      { id: 'S02', startFrame: 36, endFrameExclusive: 90, operationIds: ['op-s2-t'], keyframeIds: [] },
+      { id: 'S03', startFrame: 90, endFrameExclusive: 132, operationIds: ['op-s3-t'], keyframeIds: [] },
+      { id: 'S04', startFrame: 132, endFrameExclusive: 192, operationIds: ['op-s4-t'], keyframeIds: [] }
+    ],
+    elements: [],
+    keyframes: [
+      {
+        id: 'kf-s1-a', shotId: 'S01', sourceEventId: null, elementId: 's1Title',
+        property: 'position.y', attributePath: 'position.y',
+        sourceFrame: 0, targetFrame: 0, sourceValue: 260, value: 260, unit: 'px',
+        interpolation: 'linear', easing: [0.22, 1, 0.36, 1], supportStatus: 'ready', notes: ''
+      },
+      {
+        id: 'kf-s1-b', shotId: 'S01', sourceEventId: null, elementId: 's1Title',
+        property: 'position.y', attributePath: 'position.y',
+        sourceFrame: 18, targetFrame: 18, sourceValue: 320, value: 320, unit: 'px',
+        interpolation: 'linear', easing: [0.22, 1, 0.36, 1], supportStatus: 'ready', notes: ''
+      }
+    ],
+    operations: [
+      { id: 'op-bg-c', shotId: 'S01', elementId: 'bg', phase: 'static', action: 'createPrimitive', params: { type: 'rectangle' }, dependsOn: [], preconditions: [] },
+      {
+        id: 'op-bg-s', shotId: 'S01', elementId: 'bg', phase: 'static', action: 'set',
+        params: { attributes: { position: [0, 0], 'generator.dimensions': [1920, 1080], 'material.materialColor': '#0F1115' } },
+        dependsOn: ['op-bg-c'], preconditions: []
+      },
+      {
+        id: 'op-s1-t', shotId: 'S01', elementId: 's1Title', phase: 'static', action: 'createText',
+        params: {
+          attributes: {
+            text: 'Ship 4x faster', ledgerRef: 'claim-speed-4x', holdSeconds: 1.2,
+            fontSize: 48, font: { font: 'Inter', style: 'Regular' },
+            textBoxSize: { x: 420, y: 70 }, position: [-210, 320], 'material.materialColor': '#F3F4F6'
+          }
+        },
+        dependsOn: ['op-bg-s'], preconditions: []
+      },
+      {
+        id: 'op-s2-t', shotId: 'S02', elementId: 's2Title', phase: 'static', action: 'createText',
+        params: {
+          attributes: {
+            text: 'Zero manual rework', holdSeconds: 1.8,
+            fontSize: 44, font: { font: 'Inter', style: 'Regular' },
+            textBoxSize: { x: 460, y: 64 }, position: [-230, 320], 'material.materialColor': '#F3F4F6'
+          }
+        },
+        dependsOn: ['op-bg-s'], preconditions: []
+      },
+      {
+        id: 'op-s3-t', shotId: 'S03', elementId: 's3Title', phase: 'static', action: 'createText',
+        params: {
+          attributes: {
+            text: 'Peak clarity', holdSeconds: 1.4,
+            fontSize: 48, font: { font: 'Inter', style: 'Regular' },
+            textBoxSize: { x: 360, y: 64 }, position: [-180, 320], 'material.materialColor': '#3B82F6'
+          }
+        },
+        dependsOn: ['op-bg-s'], preconditions: []
+      },
+      {
+        id: 'op-s4-t', shotId: 'S04', elementId: 's4Title', phase: 'static', action: 'createText',
+        params: {
+          attributes: {
+            text: 'Ready today', holdSeconds: 2.0,
+            fontSize: 48, font: { font: 'Inter', style: 'Regular' },
+            textBoxSize: { x: 360, y: 64 }, position: [-180, 320], 'material.materialColor': '#F3F4F6'
+          }
+        },
+        dependsOn: ['op-bg-s'], preconditions: []
+      }
+    ]
+  };
+}
+
+function fullValidShotManifest(overrides = {}) {
+  const eqPath = 'M0 0L100 0L100 100L0 100';
+  const eqTarget = 'M10 10L90 10L90 90L10 90';
+  return {
+    energyArc: 'cold-open-peak-resolve',
+    theme: 'neutral',
+    audio: {
+      sampleRateHz: 48000,
+      targetLufs: -14,
+      truePeakDbtp: -1.2,
+      narrationActive: true,
+      ducking: { enabled: true, reductionDb: -6 }
+    },
+    sfxCues: [
+      { id: 'sfx-1', frame: 10 },
+      { id: 'sfx-2', frame: 48 },
+      { id: 'sfx-3', frame: 104 },
+      { id: 'sfx-4', frame: 145 }
+    ],
+    cameraPaths: [{ id: 'main', waypoints: [[0, 0, 0, 1], [60, 120, 40, 1.1], [120, 240, 80, 1.2], [191, 300, 90, 1.0]] }],
+    shots: [
+      {
+        id: 'S01', recipe: 'ui-hero', shotGrammarCard: 'hero-open', energyArc: 'hook', energy: 0.82,
+        text: 'Ship 4x faster', ledgerRef: 'claim-speed-4x', holdSeconds: 1.2, impactFrame: 9,
+        hook: { startFrame: 0, peakFrame: 18 },
+        camera: { size: 'wide', angle: 'eye', move: 'push-in' },
+        curves: [{ kind: 'cubic-bezier', cubicBezier: [0.22, 1, 0.36, 1] }],
+        morph: { fromPath: eqPath, toPath: eqTarget }
+      },
+      {
+        id: 'S02', recipe: 'split-compare', shotGrammarCard: 'split-contrast', energyArc: 'valley', energy: 0.36,
+        text: 'Zero manual rework', holdSeconds: 1.8, impactFrame: 48,
+        camera: { size: 'medium', angle: 'low', move: 'pan', continuous: true, startPosition: [0.5, 0.5, 1.1], endPosition: [0.55, 0.5, 1.15] },
+        curves: [{ kind: 'spring', spring: { stiffness: 150, damping: 14, overshoot: 0.12 } }],
+        cursor: {
+          clickCompressionFrames: 4,
+          trajectory: [[38, 120, 200], [58, 420, 200], [66, 620, 200], [74, 720, 200]]
+        }
+      },
+      {
+        id: 'S03', recipe: 'data-reveal', shotGrammarCard: 'climax-metric', energyArc: 'climax', energy: 0.96,
+        text: 'Peak clarity', holdSeconds: 1.4, impactFrame: 104,
+        camera: { size: 'close', angle: 'eye', move: 'push-in' },
+        curves: [{ kind: 'cubic-bezier', cubicBezier: [0.16, 1, 0.3, 1] }]
+      },
+      {
+        id: 'S04', recipe: 'end-resolve', shotGrammarCard: 'brand-lockup', energyArc: 'resolve', energy: 0.45,
+        text: 'Ready today', holdSeconds: 2.0, impactFrame: 145,
+        camera: { size: 'wide', angle: 'eye', move: 'hold' },
+        curves: [{ kind: 'spring', spring: { stiffness: 130, damping: 16, overshoot: 0.05 } }]
+      }
+    ],
+    ...overrides
+  };
+}
+
+test('vh check: full 20-point checklist and 8 reviewer dimensions pass cleanly; unrun loop blocks, violations log to LESSONS.md', async () => {
+  const fullEditPath = path.join(root, 'full-edit.json');
+  const fullPlanPath = path.join(root, 'full-plan.json');
+  const fullPlan = fullValidPlan();
+  await fs.writeFile(fullPlanPath, JSON.stringify(fullPlan), 'utf8');
+  await buildEditManifest({ scenePlan: fullPlan, shots: fullValidShotManifest(), outPath: fullEditPath });
   const lessonsPath = path.join(root, 'LESSONS.md');
+  const decisionsPath = path.join(root, 'DECISIONS.md');
   await fs.writeFile(lessonsPath, '# LESSONS\n', 'utf8');
+  await fs.writeFile(decisionsPath, '# DECISIONS\n', 'utf8');
+
   const passing = await runCheck({
-    editPath, scenePlan: scenePlan(), gates: gateSection(),
-    outPath: path.join(root, 'check-pass.json'), lessonsPath
+    editPath: fullEditPath, scenePlan: fullPlan, gates: gateSection(),
+    outPath: path.join(root, 'check-pass.json'), lessonsPath, decisionsPath
   });
   assert.equal(passing.automaticStatus, 'pass');
-  assert.deepEqual(passing.checks.map(check => [check.id, check.status]), [
-    ['edit-resolves', 'pass'], ['no-slates', 'pass'], ['frame-count', 'pass'], ['safe-zone', 'pass'],
-    ['contrast', 'pass'], ['overlap', 'pass'], ['loop-check', 'pass'], ['gate-recorded', 'pass']
-  ]);
   assert.equal(passing.points.length, 20);
-  assert.deepEqual(passing.points[2], {
-    ...passing.points[2], id: 3, automatedBy: 'safe-zone', status: 'pass'
+  assert.deepEqual(passing.summary, {
+    totalPoints: 20, pass: 20, fail: 0, blocked: 0, notRun: 0, reviewerDimensionsPassed: 8
   });
-  assert.equal(passing.points[13].automatedBy, 'loop-check');
-  assert.equal(passing.points[13].status, 'pass');
-  assert.ok(passing.points.filter(point => ![3, 14].includes(point.id)).every(point => point.status === 'review' && point.automatedBy === null));
+  assert.ok(passing.points.every(point => point.status === 'pass' && typeof point.automatedBy === 'string' && point.automatedBy.length > 0));
+  assert.equal(passing.reviewer.dimensions, 8);
+  assert.equal(passing.reviewer.status, 'pass');
   assert.deepEqual(passing.release.baselineFailures, []);
   assert.equal(passing.release.readyForDelivery, true);
   assert.equal(passing.lessons.added, 0);
+  assert.equal(passing.decisions.added, 1);
+
+  const decAgain = await runCheck({
+    editPath: fullEditPath, scenePlan: fullPlan, gates: gateSection(),
+    outPath: path.join(root, 'check-pass-2.json'), lessonsPath, decisionsPath
+  });
+  assert.equal(decAgain.decisions.added, 0, 'decisions record is idempotent');
+
+  const customBin = path.join(root, 'fontcheck-cli.py');
+  await fs.writeFile(customBin, 'import json\nprint(json.dumps({"status": "pass", "findings": [], "summary": "ok"}))\n', 'utf8');
+  const cssPath = path.join(root, 'fonts.css');
+  await fs.writeFile(cssPath, '', 'utf8');
+  const cliResult = await main([
+    'check', '--edit', fullEditPath, '--scene-plan', fullPlanPath,
+    '--gates', await (async () => {
+      const gp = path.join(root, 'gates.json');
+      await fs.writeFile(gp, JSON.stringify(gateSection()), 'utf8');
+      return gp;
+    })(),
+    '--fontcheck-bin', customBin, '--fonts-css', cssPath,
+    '--out', path.join(root, 'cli-check.json'),
+    '--lessons', lessonsPath, '--decisions', decisionsPath
+  ]);
+  assert.equal(cliResult.automaticStatus, 'pass');
+  assert.equal(cliResult.summary.pass, 20);
 
   const blocked = await runCheck({
-    editPath, scenePlan: scenePlan(), gates: gateSection({ loopcheck: null }),
-    outPath: path.join(root, 'check-blocked.json'), lessonsPath
+    editPath: fullEditPath, scenePlan: fullPlan, gates: gateSection({ loopcheck: null }),
+    outPath: path.join(root, 'check-blocked.json'), lessonsPath, decisionsPath
   });
   assert.equal(blocked.automaticStatus, 'blocked');
   assert.equal(blocked.checks.find(check => check.id === 'loop-check').status, 'not_run');
+  assert.equal(blocked.points[13].status, 'not_run');
   assert.equal(blocked.release.readyForDelivery, false);
   assert.equal(blocked.lessons.added, 0);
 
@@ -233,7 +405,7 @@ test('vh check: a complete gate record passes, an unrun loop check blocks, a sla
   await fs.writeFile(slatePath, JSON.stringify(slateEdit), 'utf8');
   const failing = await runCheck({
     editPath: slatePath, scenePlan: scenePlan(), gates: gateSection(),
-    outPath: path.join(root, 'check-fail.json'), lessonsPath
+    outPath: path.join(root, 'check-fail.json'), lessonsPath, decisionsPath
   });
   assert.equal(failing.automaticStatus, 'fail');
   assert.equal(failing.checks.find(check => check.id === 'no-slates').status, 'fail');
@@ -244,9 +416,103 @@ test('vh check: a complete gate record passes, an unrun loop check blocks, a sla
   assert.match(lessons, /VH_CHECK NO_SLATES: slates remain: card/);
   const repeated = await runCheck({
     editPath: slatePath, scenePlan: scenePlan(), gates: gateSection(),
-    outPath: path.join(root, 'check-fail.json'), lessonsPath
+    outPath: path.join(root, 'check-fail.json'), lessonsPath, decisionsPath
   });
   assert.equal(repeated.lessons.added, 0, 'recorded failures are appended once');
+});
+
+test('vh check: deliberate violations across checklist points fail and log to LESSONS.md', async () => {
+  const vRoot = path.join(root, 'violations');
+  await fs.mkdir(vRoot, { recursive: true });
+  const lessonsPath = path.join(vRoot, 'LESSONS.md');
+  const decisionsPath = path.join(vRoot, 'DECISIONS.md');
+
+  // 1) > 4 words per beat (Point 2)
+  const wordManifest = fullValidShotManifest();
+  wordManifest.shots[0].text = 'This sentence clearly has six words';
+  const wordEdit = path.join(vRoot, 'words.json');
+  await buildEditManifest({ scenePlan: fullValidPlan(), shots: wordManifest, outPath: wordEdit });
+  const wordCheck = await runCheck({
+    editPath: wordEdit, scenePlan: fullValidPlan(), gates: gateSection(),
+    outPath: path.join(vRoot, 'words-check.json'), lessonsPath, decisionsPath
+  });
+  assert.equal(wordCheck.points.find(p => p.id === 2).status, 'fail');
+  assert.match(await fs.readFile(lessonsPath, 'utf8'), /VH_CHECK WORD_READING_CAP/);
+
+  // 2) 3 consecutive identical shot durations within +-2f (Point 7)
+  const sameDurPlan = fullValidPlan();
+  sameDurPlan.project.totalFrames = 180;
+  sameDurPlan.project.frameRange.endFrame = 179;
+  sameDurPlan.shots = [
+    { id: 'S01', startFrame: 0, endFrameExclusive: 45, operationIds: ['op-bg-c', 'op-bg-s', 'op-s1-t'], keyframeIds: ['kf-s1-a', 'kf-s1-b'] },
+    { id: 'S02', startFrame: 45, endFrameExclusive: 91, operationIds: ['op-s2-t'], keyframeIds: [] },
+    { id: 'S03', startFrame: 91, endFrameExclusive: 136, operationIds: ['op-s3-t'], keyframeIds: [] },
+    { id: 'S04', startFrame: 136, endFrameExclusive: 180, operationIds: ['op-s4-t'], keyframeIds: [] }
+  ];
+  const sameEdit = path.join(vRoot, 'same-dur.json');
+  await buildEditManifest({ scenePlan: sameDurPlan, shots: fullValidShotManifest(), outPath: sameEdit });
+  const sameCheck = await runCheck({
+    editPath: sameEdit, scenePlan: sameDurPlan, gates: gateSection(),
+    outPath: path.join(vRoot, 'same-check.json'), lessonsPath, decisionsPath
+  });
+  assert.equal(sameCheck.points.find(p => p.id === 7).status, 'fail');
+  assert.match(await fs.readFile(lessonsPath, 'utf8'), /VH_CHECK ASYMMETRIC_PACING/);
+
+  // 3) Un-equalized SVG morph segments (Point 13) + unaligned SFX cue (Point 17)
+  const badMorphSfx = fullValidShotManifest();
+  badMorphSfx.shots[0].morph = {
+    fromPath: 'M 0 0 L 100 0 L 50 100 Z',
+    toPath: 'M 0 0 L 100 0 L 100 100 L 50 120 L 0 100 Z'
+  };
+  badMorphSfx.sfxCues = [{ id: 'sfx-late', frame: 60 }, { id: 'sfx-2', frame: 48 }, { id: 'sfx-3', frame: 104 }, { id: 'sfx-4', frame: 145 }];
+  const morphEdit = path.join(vRoot, 'morph-sfx.json');
+  await buildEditManifest({ scenePlan: fullValidPlan(), shots: badMorphSfx, outPath: morphEdit });
+  const morphCheck = await runCheck({
+    editPath: morphEdit, scenePlan: fullValidPlan(), gates: gateSection(),
+    outPath: path.join(vRoot, 'morph-check.json'), lessonsPath, decisionsPath
+  });
+  assert.equal(morphCheck.points.find(p => p.id === 13).status, 'fail');
+  assert.equal(morphCheck.points.find(p => p.id === 17).status, 'fail');
+  const logged = await fs.readFile(lessonsPath, 'utf8');
+  assert.match(logged, /VH_CHECK SVG_MORPH_PARITY/);
+  assert.match(logged, /VH_CHECK AV_IMPACT_SYNC/);
+
+  // 4) Additional point violations: flat energy (8), linear [0,0,1,1] (12), camera teleport (10),
+  // bad Fitts cursor compression (11), focal collision (6), bad font (16), bad LUFS (18),
+  // unbacked quantitative claim (19), uncalibrated #ff0000 palette (20), repeated grammar card (9), late hook (1)
+  const kitchenPlan = fullValidPlan();
+  kitchenPlan.project.focalRegion = { x: 0, y: 310, width: 300, height: 80 };
+  kitchenPlan.operations[2].params.attributes.font = { font: 'Arial', style: 'Regular' };
+  kitchenPlan.operations[2].params.attributes.text = '99% faster \uFFFD';
+  delete kitchenPlan.operations[2].params.attributes.ledgerRef;
+  kitchenPlan.operations[2].params.attributes['material.materialColor'] = '#ff0000';
+  const kitchenManifest = fullValidShotManifest();
+  kitchenManifest.audio = { sampleRateHz: 44100, targetLufs: -9, truePeakDbtp: -0.2, narrationActive: true, ducking: { enabled: false } };
+  kitchenManifest.shots[0].hook = { startFrame: 0, peakFrame: 60 };
+  delete kitchenManifest.shots[0].ledgerRef;
+  kitchenManifest.shots[0].text = '99% faster \uFFFD';
+  kitchenManifest.shots[0].curves = [{ kind: 'cubic-bezier', cubicBezier: [0, 0, 1, 1] }];
+  kitchenManifest.shots[0].shotGrammarCard = 'repeat-card';
+  kitchenManifest.shots[1].shotGrammarCard = 'repeat-card';
+  kitchenManifest.shots[2].shotGrammarCard = 'repeat-card';
+  kitchenManifest.shots[0].camera = { size: 'medium', angle: 'eye', move: 'pan' };
+  kitchenManifest.shots[1].camera = { size: 'medium', angle: 'eye', move: 'pan', continuous: true, teleport: true };
+  kitchenManifest.shots[2].camera = { size: 'medium', angle: 'eye', move: 'pan' };
+  kitchenManifest.shots[1].cursor.clickCompressionFrames = 1;
+  for (const s of kitchenManifest.shots) s.energy = 0.5;
+  const kitchenEdit = path.join(vRoot, 'kitchen.json');
+  await buildEditManifest({ scenePlan: kitchenPlan, shots: kitchenManifest, outPath: kitchenEdit });
+  const kitchenCheck = await runCheck({
+    editPath: kitchenEdit, scenePlan: kitchenPlan, gates: gateSection(),
+    outPath: path.join(vRoot, 'kitchen-check.json'), lessonsPath, decisionsPath
+  });
+  for (const expectedFailId of [1, 6, 8, 9, 10, 11, 12, 16, 18, 19, 20]) {
+    assert.equal(kitchenCheck.points.find(p => p.id === expectedFailId).status, 'fail', `expected point ${expectedFailId} to fail`);
+  }
+  const allLogged = await fs.readFile(lessonsPath, 'utf8');
+  for (const marker of ['HOOK_45F', 'FOCAL_SUBJECT_COLLISION', 'ENERGY_ARC', 'SHOT_GRAMMAR_VARIETY', 'SPLINE_CAMERA_C1', 'FITTS_CURSOR_REALISM', 'SPRING_EASING_PURITY', 'FONT_INTEGRITY', 'LOUDNESS_MIX_HEADROOM', 'LEDGER_CLAIMS', 'BRAND_PALETTE_TOKENS']) {
+    assert.ok(allLogged.includes(marker), `LESSONS.md missing ${marker}`);
+  }
 });
 
 test('vh main: commands parse, help is honest and bad flags are refused', async () => {

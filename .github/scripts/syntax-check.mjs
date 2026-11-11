@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-const roots = ['src', 'test', 'tools', 'integration', '.github/scripts'];
+const roots = ['bin', 'src', 'test', 'tests', 'tools', 'integration', '.github/scripts'];
 const files = [];
 
 async function walk(root) {
