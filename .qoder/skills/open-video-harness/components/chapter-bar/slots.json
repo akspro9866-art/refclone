@@ -1,0 +1,28 @@
+{
+ "version": 1,
+ "name": "chapter-bar",
+ "summary": "A chapter progress bar along the top: a cell a chapter, as wide as its title; the current one fills with a dot at its front and keeps its title; every title shows for a few seconds as each chapter starts.",
+ "tags": ["章节", "章节条", "进度条", "进度", "章节标题", "chapter", "progress bar"],
+ "painters": ["canvas", "dom"],
+ "use": "lay = layout(params, measure) once; st = state(params, t, lay); canvas(ctx, st, params), or els = build(root, params, lay) once and dom(els, st). boxes(params, st, measure) gives window.film.ui(t)'s boxes.",
+ "slots": [
+  {"name": "chapters", "type": "array", "default": [], "text": "[{ t, title, b? }]: each chapter's start (s), its title and its end (default: the next chapter's start)"},
+  {"name": "span", "type": "array|null", "default": null, "text": "[a, b]: when the bar shows (default: the first chapter's start to the last one's end); up on frame 0 when it starts at 0"},
+  {"name": "end", "type": "number|null", "default": null, "unit": "s", "text": "the film's length, the last chapter's end when it names none"},
+  {"name": "y", "type": "number", "default": 64, "unit": "px", "text": "the track's top; the titles sit 58 px under it (keep both in the action-safe box)"},
+  {"name": "size", "type": "number", "default": 46, "min": 46, "unit": "px", "text": "the titles' size; 46 px is the floor for Chinese at 1080p"},
+  {"name": "gap", "type": "number", "default": 20, "unit": "px", "text": "between cells"},
+  {"name": "pad", "type": "number", "default": 56, "unit": "px", "text": "a cell's width beyond its title's"},
+  {"name": "margin", "type": "number", "default": 120, "unit": "px", "text": "the bar's distance from the frame's sides; titles that do not fit side by side get even cells and only the current one shows"},
+  {"name": "all", "type": "number", "default": 3.0, "unit": "s", "text": "how long every title shows from each chapter's start"},
+  {"name": "fadeIn", "type": "number", "default": 0.5, "unit": "s", "text": "the bar's fade in (when it starts after 0)"},
+  {"name": "fadeOut", "type": "number", "default": 0.6, "unit": "s", "text": "the bar's fade out at the end of its span"},
+  {"name": "colors", "type": "object", "default": {"track": "#f0f6fc", "fill": "#f0f6fc", "accent": "#e4572e", "text": "#f0f6fc", "dark": "13,17,23"}, "text": "track (drawn at 28 %), past chapters' fill, the current fill and the dot, the titles, and the dark of the band and the outline as r,g,b"},
+  {"name": "band", "type": "boolean", "default": true, "text": "a dark band from the top edge behind the bar, so it reads over any picture"},
+  {"name": "font", "type": "string", "default": "\"Helvetica Neue\", \"PingFang SC\", sans-serif", "text": "the titles' CSS family list (lib/text.js fontStack(tokens, role) makes one from a style's tokens)"},
+  {"name": "weight", "type": "number", "default": 600, "text": "the titles' weight (PingFang SC has nothing above 600: engines/README.md)"}
+ ],
+ "provenance": [
+  {"repo": "this repository", "path": "engines/canvas-film/template/src/20-ui.js", "license": "MIT", "note": "the canvas-film engine's chapter bar, made a component with a DOM painter"}
+ ]
+}

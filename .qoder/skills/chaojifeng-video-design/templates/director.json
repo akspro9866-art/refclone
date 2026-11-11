@@ -1,0 +1,18 @@
+{
+  "intent": "观众看完应理解或感受到什么",
+  "viewer_start": "观看前的认知或感受",
+  "viewer_end": "希望形成的认知或感受，不伪装成已测试结果",
+  "throughline": "贯穿全片的任务、问题、元素、意象或声音动机",
+  "structure": {"kind": "question-to-evidence", "rationale": "为什么适合此内容和受众"},
+  "entities": [
+    {"id": "entity-01", "kind": "concept", "role": "承载一个可检验关系", "identity_constraints": ["名称与成立条件保持一致"]}
+  ],
+  "beats": [
+    {"id": "story-beat-01", "function": "建立核心变化", "before": "观众尚不清楚关系", "change": "呈现真实证据或明确示意", "after": "观众能够尝试说明关系及条件"}
+  ],
+  "sound_arc": [
+    {"id": "sound-intent-01", "beat_id": "story-beat-01", "role": "reveal", "onset_anchor": "关键关系落定", "energy": "建立后重音再释放", "visual_relation": "声音强化可见揭示，不遮住必要旁白"}
+  ],
+  "iteration": {"max_passes": 2, "stop_rule": "核心意图兑现，必需检查无阻断项；未做的检查明确列出"},
+  "tech_language": {"choices": ["按内容决定结构、材质、精确运动与声音"], "avoid": ["用无关装饰遮住证据"]}
+}

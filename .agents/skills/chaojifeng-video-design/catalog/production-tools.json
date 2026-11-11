@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "scope": "production-tool-routing-guidance",
+  "notes": [
+    "adapter描述本脚本提供的动作，不代表本机已经安装或接入。",
+    "候选不是默认依赖；按镜头允许单用或组合，不继承安装、费用或发布授权。"
+  ],
+  "tools": [
+    {
+      "id": "polyhaven",
+      "name": "Poly Haven",
+      "tasks": [
+        "environment",
+        "material",
+        "prop"
+      ],
+      "adapter": "metadata-search",
+      "purpose": "HDRI、纹理和模型检索；按镜头适配光照与材质。",
+      "source": "https://polyhaven.com/license",
+      "verification": "not_run"
+    },
+    {
+      "id": "blender-mcp",
+      "name": "Blender MCP",
+      "tasks": [
+        "character",
+        "environment",
+        "prop",
+        "camera"
+      ],
+      "adapter": "local-probe",
+      "purpose": "交互检查与修改已有Blender场景；需要实际服务与插件。",
+      "source": "https://github.com/ahujasid/mcp-for-blender",
+      "verification": "not_run"
+    },
+    {
+      "id": "blender-bpy",
+      "name": "Blender / bpy",
+      "tasks": [
+        "character",
+        "motion",
+        "environment",
+        "camera"
+      ],
+      "adapter": "guidance",
+      "purpose": "可编辑模型、骨架、表情与镜头；复用任务环境。",
+      "source": "https://github.com/blender/blender",
+      "verification": "not_run"
+    },
+    {
+      "id": "mixamo",
+      "name": "Mixamo",
+      "tasks": [
+        "motion",
+        "character"
+      ],
+      "adapter": "candidate",
+      "purpose": "动作和角色资源候选；当前许可、适配与接入用前核对。",
+      "source": null,
+      "verification": "not_run"
+    },
+    {
+      "id": "unreal-engine",
+      "name": "Unreal Engine",
+      "tasks": [
+        "environment",
+        "camera"
+      ],
+      "adapter": "candidate",
+      "purpose": "复杂场景与镜头候选；是否切换由表达收益和已有工程决定。",
+      "source": null,
+      "verification": "not_run"
+    },
+    {
+      "id": "three-js",
+      "name": "Three.js",
+      "tasks": [
+        "spatial-explainer",
+        "environment"
+      ],
+      "adapter": "guidance",
+      "purpose": "可计算空间、几何、粒子及关系表达。",
+      "source": "https://github.com/mrdoob/three.js",
+      "verification": "not_run"
+    },
+    {
+      "id": "remotion",
+      "name": "Remotion",
+      "tasks": [
+        "assembly",
+        "spatial-explainer"
+      ],
+      "adapter": "guidance",
+      "purpose": "可复用合成组织媒体、标题、字幕及声音。",
+      "source": "https://www.remotion.dev/docs/ai/skills",
+      "verification": "not_run"
+    },
+    {
+      "id": "aivis-speech-engine",
+      "name": "AivisSpeech Engine",
+      "tasks": [
+        "japanese-narration"
+      ],
+      "adapter": "local-probe",
+      "purpose": "日语旁白候选；支持WAV连接不等于衔接自然，不提供已验证歌唱。",
+      "source": "https://github.com/Aivis-Project/AivisSpeech-Engine",
+      "verification": "not_run"
+    },
+    {
+      "id": "ace-step-1-5",
+      "name": "ACE-Step 1.5",
+      "tasks": [
+        "music"
+      ],
+      "adapter": "guidance",
+      "purpose": "复用已有BGM或歌曲制作路线，原声与工具约束优先。",
+      "source": "https://github.com/ace-step/ACE-Step-1.5",
+      "verification": "not_run"
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "tasks": [
+        "delivery",
+        "audio-assembly"
+      ],
+      "adapter": "local-probe",
+      "purpose": "按交付需要编码、封装与音频组装，最终看听另验。",
+      "source": "https://ffmpeg.org/ffmpeg.html",
+      "verification": "not_run"
+    },
+    {
+      "id": "imagegen",
+      "name": "宿主图像生成",
+      "tasks": [
+        "image-assets"
+      ],
+      "adapter": "host-capability",
+      "purpose": "先查已有素材与资产，只对缺口按宿主规则生成。",
+      "source": null,
+      "verification": "not_run"
+    }
+  ]
+}

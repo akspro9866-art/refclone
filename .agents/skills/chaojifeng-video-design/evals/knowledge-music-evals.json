@@ -1,0 +1,193 @@
+{
+  "skill_name": "chaojifeng-video-design",
+  "schema_version": 1,
+  "scope": "概念知识科普、配方音乐池、直接交付与分阶段交付",
+  "status": "authored-not-run",
+  "notes": [
+    "行为评测提示，尚未运行模型评测或渲染；合同测试不代表创作、听感或传播效果通过。"
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用我选的音乐讲清一个排队现象，一次性完成，别先做10秒试片，也不需要中途确认。",
+      "expected_output": "采用direct，核知识与音乐后连续制作整片、内部审片与必要返修，不交试片停等，不擅自删条件或跳过声音检查。",
+      "assertions": {
+        "must_not": [
+          "先试片等用户确认",
+          "只交分镜",
+          "一次性等于免验收"
+        ]
+      },
+      "files": [
+        "SKILL.md",
+        "references/knowledge-music-direction.md"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "先做开头和最难的一段给我看，我确认后再继续。",
+      "expected_output": "采用staged，在指定节点等待，短段长度由完整镜头任务决定，不先花资源渲染整片。",
+      "assertions": {
+        "must_not": [
+          "忽略指定审阅节点",
+          "固定所有片都10秒"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "直接做完，配乐你定，不用问我。可以优先用收藏的知识神曲。",
+      "expected_output": "核现有音源并自主选择，记录依据，不再为了默认配乐问题或试片确认停工；来源未知的拍点保留候选，不照搬113 BPM。",
+      "assertions": {
+        "must_not": [
+          "重复询问默认神曲",
+          "假报已测拍或听审"
+        ]
+      },
+      "files": [
+        "SKILL.md",
+        "references/music-direction.md"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "照参考视频的113 BPM，把这首119秒的神曲每拍都切一下。",
+      "expected_output": "先核当前音源和实际节奏，说明参考速度不能移植；选择重要事件落拍，保留字幕和机制阅读窗，必要时跨乐句。",
+      "assertions": {
+        "must_not": [
+          "未核音源直接采用113 BPM",
+          "为赶拍省略条件"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "每个关键词都加响亮钟琴，这样一定更吸引人。",
+      "expected_output": "用少量语义一致的提示，先与原曲试混音高、尾音、掩蔽与疲劳；音乐已有重音时可省提示，不承诺效果。",
+      "assertions": {
+        "must_not": [
+          "每字必加音效",
+          "未听就称和谐舒服"
+        ]
+      },
+      "files": [
+        "references/sound-and-rhythm.md"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "当前使用收藏的科普神曲，第二遍从头接到125秒，刚删了前面的一个镜头，其余锚点照旧。",
+      "expected_output": "保留同曲从头续接规则，更新计划哈希与源到成片映射，选择正确重复放置ID，重新派生字幕、动作与声音排程并核接缝。",
+      "assertions": {
+        "must_not": [
+          "沿用旧通过结论",
+          "用第一遍拍位当第二遍整片时刻"
+        ]
+      },
+      "files": [
+        "references/music-direction.md",
+        "scripts/explainer_timing_audit.py"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "没有播放和试听能力，但时序脚本全绿，能写视频好看、好听且容易懂了吗？",
+      "expected_output": "只报告任务表覆盖的排程检查，画面、连续播放、听感与理解分别保留实际缺口；不把结构测试升格为观众效果。",
+      "assertions": {
+        "must_not": [
+          "机器检查替代听审",
+          "虚构观众复述通过"
+        ]
+      },
+      "files": [
+        "references/review-and-revision.md"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "这个协议要讲多个条件，但我喜欢无旁白神曲视频，直接完成整片。",
+      "expected_output": "尊重direct与无旁白，先精简到可解释关系，拆镜或跨乐句保留条件和阅读时间；确实无法在要求时长内讲清时说明具体冲突，不以漂亮动效盖过去。",
+      "assertions": {
+        "must_not": [
+          "擅自加旁白",
+          "强行压到每拍",
+          "新增试片门禁"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "用概念知识科普配方讲一个现象，音乐没有特别要求。",
+      "expected_output": "读取配方当前默认音乐并核本地源，直接采用，不重复询问；默认引用可更换，不把原神曲ID硬编码到选择逻辑。",
+      "assertions": {
+        "must_not": [
+          "每片问是否使用神曲",
+          "默认未核源却说已可播放"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md",
+        "scripts/_recipe_music.py",
+        "scripts/music_library.py"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "这次用我刚给的另一首本地音乐文件，一次性做完。",
+      "expected_output": "用户指定新文件优先，核哈希与实际音频元信息，按新曲乐段反推知识段落与声画，不继承旧曲BPM或续接策略；不擅改配方默认或加进候选。",
+      "assertions": {
+        "must_not": [
+          "强制先入全局库才能用",
+          "沿用旧神曲拍点",
+          "新增试片确认"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md",
+        "scripts/_recipe_music.py",
+        "scripts/music_library.py"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "把另一首歌加入概念知识科普可选音乐，暂时保留现在的默认。",
+      "expected_output": "登记核实的曲目事实、源、时长与使用范围后扩展候选ID，保留默认引用，目录检查池和曲目引用。",
+      "assertions": {
+        "must_not": [
+          "新增候选自动成为默认",
+          "复制音源进配方"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md",
+        "scripts/_recipe_music.py",
+        "scripts/music_library.py"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "把已在候选池里的B曲设为默认。之前A曲项目没有要求重新配乐。",
+      "expected_output": "只更新配方默认引用，新项目无指定时选B；已选A的项目继续沿用，用户显式指定仍最高优先；不更改A曲源或继承A的乐段到B。",
+      "assertions": {
+        "must_not": [
+          "默认写死在代码",
+          "擅自重配旧项目"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md",
+        "scripts/_recipe_music.py",
+        "scripts/music_library.py"
+      ]
+    }
+  ]
+}

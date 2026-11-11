@@ -75,7 +75,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "ajv": "8.20.0",
+    "bezier-easing": "^3.2.0",
     "cavalry-mcp": "git+https://github.com/akspro9866-art/cavalry-mcp.git#ee225492c654c57e9276abf0b8a59bc42ee6abdb",
-    "pngjs": "7.0.0"
+    "pngjs": "7.0.0",
+    "svg-path-commander": "^2.3.3",
+    "yaml": "^2.9.1"
   }
 }

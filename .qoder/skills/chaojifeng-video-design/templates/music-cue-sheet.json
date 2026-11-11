@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "library_id": "jianying-member-20261018",
+  "project_id": "replace-with-project-id",
+  "duration_seconds": 30,
+  "intent": "根据实际故事填写，例如好奇建立、能力展开、温暖落定；不固定三段",
+  "cues": [
+    {
+      "id": "music-placement-01",
+      "track_id": "replace-with-selected-track",
+      "cue_id": "replace-with-selected-candidate-or-omit",
+      "source_sha256": "replace-with-real-source-hash",
+      "source_in": 0,
+      "source_out": 10,
+      "timeline_start": 0,
+      "timeline_end": 10,
+      "playback_rate": 1,
+      "narrative_purpose": "本段为何需要这种情绪与声音职责",
+      "fade_in_seconds": 0.1,
+      "fade_out_seconds": 0.5,
+      "gain_db": -6,
+      "transition_reason": "按实际重叠、静默或接桥填写",
+      "rights": {"status": "unverified", "evidence": []},
+      "audition_status": "not_run"
+    }
+  ]
+}

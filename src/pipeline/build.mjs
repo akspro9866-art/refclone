@@ -4,9 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   WorkflowError, absolutePath, hashFile, hashObject, readJson,
-  validateArtifact, withJobLock, writeJsonState
+  validateArtifact, withJobLock, writeJsonNew, writeJsonState
 } from '../core.mjs';
 import { deriveJobDirectory } from '../design/assets.mjs';
+import { resolveEditListFile } from '../design/edit-list.mjs';
 import { validateScenePlan } from '../design/planner.mjs';
 import { ADAPTER_VERSION, CavalryAdapter, SceneLedger, compileMotionTransferScene } from '../cavalry/cavalry.mjs';
 
@@ -426,6 +427,22 @@ export async function buildScene(planPath, options = {}) {
       state.projectPath = saved.value.path;
       state.projectSha256 = saved.value.sha256;
       state.status = state.verification.ok ? 'built' : 'built_with_mismatches';
+      // An edit list is the film's slate/animatic contract. When one is supplied, the
+      // build pass records its resolved form next to the scene so a later single-shot
+      // patch can find every entry by id without re-deriving the timeline.
+      if (options.editListPath) {
+        const resolvedEdit = await resolveEditListFile(options.editListPath, { sourceDurations: options.editSourceDurations });
+        const resolvedPath = absolutePath(path.join(outputDirectory, 'edit.resolved.json'));
+        await writeJsonNew(resolvedPath, resolvedEdit);
+        state.edit = {
+          editListPath: absolutePath(options.editListPath),
+          resolvedPath,
+          frames: resolvedEdit.frames,
+          duration: resolvedEdit.duration,
+          cuts: resolvedEdit.cuts,
+          slates: resolvedEdit.slates
+        };
+      }
       state.limitations = [
         'The adapter provides no transactional rollback; the numbered checkpoints are the only recovery points.',
         'Rendering happens outside the MCP through the verified numbered-PNG route.',

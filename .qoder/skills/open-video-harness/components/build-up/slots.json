@@ -1,0 +1,25 @@
+{
+ "version": 1,
+ "name": "build-up",
+ "summary": "Pieces (bricks, floors, the spans of a bridge, the parts of a machine) appear one after another by a rule until the whole stands: in order of height, of distance from a point, of index or shuffled with a seed; with a gap between ranks, a jitter, each piece's time and ease; rising, dropping, growing from its base or fading in.",
+ "tags": ["逐渐建成", "建成", "生长", "长出来", "建造", "搭建", "堆叠", "依次出现", "砖", "楼层", "一层层", "楼房", "建筑", "桥", "零件", "拼装", "积木", "三维", "build up", "assemble", "grow", "instanced", "bricks"],
+ "painters": ["canvas", "three"],
+ "use": "P = { pieces: [{ x, y, z, w, h, d, color? }], order, … }; st = state(P, t); canvas(ctx, st, P, view) draws 2.5D blocks (view: origin, scale, angle, color, shade, edge; project(view, x, y, z) is where a point lands); setup(mesh, P, THREE) checks an InstancedMesh of a unit box has an instance a piece and sets their colours once, and three(mesh, st, P, THREE) sets its matrices each frame (canvas-film's Three.js layer: make it and call setup in FILM.three.build, call three() in the shot's pose). plan(P) and duration(P): the ranks, the start times, when the last piece is in; a plan is kept while P's pieces list (the same list, as long) and its order, bucket, start, stagger, jitter, dur, seed, reverse and from stay as they were, and made again when one changes (a piece changed in place is not seen: give P a new pieces list). A wrong value is an error that names it.",
+ "slots": [
+  {"name": "pieces", "type": "array", "default": [], "text": "[{ x, y, z, w, h, d, color? }]: each box's centre and size, y up, in the scene's units (metres in the Three.js layer); color a CSS colour"},
+  {"name": "order", "type": "string", "default": "height", "text": "height (each piece's base, low first), distance (its centre from `from`, near first), index, or random (a hash of seed)"},
+  {"name": "from", "type": "array", "default": [0, 0, 0], "text": "[x, y, z]: the point the distance order measures from"},
+  {"name": "reverse", "type": "boolean", "default": false, "text": "the order turned round: high first, far first, the last index first"},
+  {"name": "bucket", "type": "number", "default": 0, "min": 0, "text": "> 0: keys rounded down to this step, so the pieces in one step start together (a floor's height: the floor rises as one)"},
+  {"name": "start", "type": "number", "default": 0, "unit": "s", "text": "when the first rank starts"},
+  {"name": "stagger", "type": "number", "default": 0.08, "min": 0, "unit": "s", "text": "from one rank's start to the next's"},
+  {"name": "jitter", "type": "number", "default": 0, "min": 0, "unit": "s", "text": "each piece starts up to this much later, by a hash of seed and its index"},
+  {"name": "dur", "type": "number", "default": 0.5, "min": 0, "unit": "s", "text": "how long one piece takes to come in; 0: it is there at its start, a step"},
+  {"name": "ease", "type": "string|array", "default": "outCubic", "text": "its curve: a lib/core.js ease name, a CSS curve or [x1, y1, x2, y2] (a name lib/core.js does not have is an error). One that overshoots (outBack) carries a rising or dropping piece past its place and back; a grown piece's size and a fading one's alpha stop at full"},
+  {"name": "appear", "type": "string", "default": "rise", "text": "rise (from lift below), drop (from lift above), grow (from its base), fade (the three painter draws it as grow)"},
+  {"name": "lift", "type": "number", "default": 1, "text": "how far a rising or dropping piece travels, in the scene's units"},
+  {"name": "seed", "type": "number", "default": 1, "text": "the random order's and the jitter's seed"}
+ ],
+ "sample": {"at": [0.2, 0.7, 1.2, 1.7, 2.2, 2.7, 3.2, 3.7, 4.2, 4.8], "text": "the contact sheet's moments (the canvas painter): a tower by height, floor by floor, rising; a stepped block by distance from its corner, dropping with outBack, so each block passes its place a little and settles"},
+ "provenance": []
+}

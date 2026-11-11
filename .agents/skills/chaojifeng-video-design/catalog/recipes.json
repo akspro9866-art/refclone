@@ -1,0 +1,2921 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "ui-continuity",
+      "name": "同一对象的界面旅程",
+      "intent": "让一个真实任务通过连续状态变化保持可追踪。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "product-demo",
+        "feature-motion"
+      ],
+      "inputs": [
+        "真实初态、操作与终态依据",
+        "稳定主体ID、分离的容器和文字层",
+        "操作事件与结果证据",
+        "是否需要声音或循环的明确要求"
+      ],
+      "required_inputs": [
+        "真实初态、操作与终态依据",
+        "稳定主体ID、分离的容器和文字层",
+        "操作事件与结果证据",
+        "是否需要声音或循环的明确要求"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "让观众知道正在处理什么",
+          "visual_action": "建立真实界面与唯一主体，保留足够辨认时间",
+          "sound_role": "说明任务或保留安静；不使用无关开场轰鸣",
+          "checks": [
+            "界面、版本和主体身份与来源一致。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "看见操作引起状态变化",
+          "visual_action": "游标先按下或拖动，再由同一对象响应；容器形变时文字独立交接",
+          "sound_role": "只在需要的操作/反馈事件发声；先定义触发方向",
+          "checks": [
+            "没有装饰假点击或双份主体。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "理解下一状态如何接续前态",
+          "visual_action": "保持共享几何或对象锚点，镜头只负责构图",
+          "sound_role": "拍点可以辅助交接，但不能挤掉状态阅读",
+          "checks": [
+            "同目标同属性只有明确的控制者。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "确认结果并决定如何结束",
+          "visual_action": "让结果落定；仅在确需循环时安排重置",
+          "sound_role": "需要循环时试听首尾，非循环允许自然收束",
+          "checks": [
+            "起终状态与结果可核；循环位置、速度和声音均连续。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.shared-subject",
+        "transition.shared-morph",
+        "animation.split-edge",
+        "interaction.direct-manip",
+        "text.read-then-move",
+        "production.loop-seam",
+        "visual.target-callout"
+      ],
+      "motion_ids": [
+        "state-swap",
+        "highlight",
+        "reveal",
+        "exit",
+        "camera-focus",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "dark-tech"
+      ],
+      "constraints": [
+        "容器、文字、操作与声音共用状态表；不能把整个配方当一个state-swap。",
+        "循环和弹性均为可选；真实功能与可读性优先。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。",
+        "替换真实产品的输入、处理、结果和主要行动；风格换肤不能只换Logo。",
+        "保留必要运动关系及锁定理由，换长中文/画幅后重新核文字几何。",
+        "接缝写明承载对象、轴、方向和切点；方向一致不代表速度已经连续。"
+      ],
+      "fallback": "减少状态数，改为真实截图或受控录屏加焦点与结果停留；交互未验标概念演示。",
+      "verification_questions": [
+        "能指出每次变化的触发及真实结果吗？",
+        "交接是否复制主体、拉坏文字或遗留上一状态？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/twoclipping-402193.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/verbove-268381.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/okapi-fukugyo-166351.md",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/heygen-apple-motion/01-ui-sting/ledger.json#L1-L98"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "signal-journey",
+      "name": "跟随信号讲清系统",
+      "intent": "追踪具名输入经过的条件、分支与恢复过程。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "knowledge-explainer",
+        "product-demo"
+      ],
+      "inputs": [
+        "输入与输出身份",
+        "有来源的节点、方向与条件",
+        "受众要理解的一项关系",
+        "旁白或静音讲解的实际要求"
+      ],
+      "required_inputs": [
+        "输入与输出身份",
+        "有来源的节点、方向与条件",
+        "受众要理解的一项关系",
+        "旁白或静音讲解的实际要求"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "建立信号身份与图例",
+          "visual_action": "显示输入和少量节点，固定颜色、方向与名称",
+          "sound_role": "旁白命名信号与当前问题，不提前讲未出现分支",
+          "checks": [
+            "图例能区分实体、状态与流向。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "解释当前节点做了什么",
+          "visual_action": "一次跟随一处条件或分支，保留上游锚点",
+          "sound_role": "叙述条件和结果；事件声只辅助定位",
+          "checks": [
+            "能把输出追溯到同一个输入，而非把相关性画成因果。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "理解中断和恢复",
+          "visual_action": "展示断点、等待和恢复后的路径，避免同时展开全部支线",
+          "sound_role": "暂停或收敛背景声音，给关键解释留时间",
+          "checks": [
+            "产品确有该能力，示意与真实运行分开。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "把流程回到学习或任务目标",
+          "visual_action": "回到总览并保留输出与条件",
+          "sound_role": "用一句总结或听觉收束，不另加新机制",
+          "checks": [
+            "未参与设计的人能指出起点、条件、断点和输出。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.follow-unit",
+        "animation.path-reveal",
+        "visual.quantity-progress",
+        "text.read-then-move"
+      ],
+      "motion_ids": [
+        "trace",
+        "connect",
+        "highlight",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "paper-editorial",
+        "product-minimal"
+      ],
+      "constraints": [
+        "信号身份、条件、图例、旁白及时间必须共同编排。",
+        "节点过密时先删支线或拆镜，粒子不能替代逻辑。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。"
+      ],
+      "fallback": "静态流程图逐节点聚焦；没有运行证据时明确图解示意。",
+      "verification_questions": [
+        "观众能复述条件与输出关系吗？",
+        "路径增长与信息流动是否有清楚区分？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/howdevelop-733090.md"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "scale-journey",
+      "name": "从整体进入微观",
+      "intent": "联系整体、部件与更小尺度，并保留参照。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "knowledge-explainer",
+        "feature-motion"
+      ],
+      "inputs": [
+        "有依据的结构层级与包含关系",
+        "真实尺度依据或内部简化用途记录",
+        "部件名称和允许分离方向",
+        "需要聚焦的微观问题"
+      ],
+      "required_inputs": [
+        "有依据的结构层级与包含关系",
+        "真实尺度依据或内部简化用途记录",
+        "部件名称和允许分离方向",
+        "需要聚焦的微观问题"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "建立整体参照",
+          "visual_action": "展示整体与尺度起点，命名将进入的部位",
+          "sound_role": "先说明问题与单位，不用震撼音替代解释",
+          "checks": [
+            "观众知道进入的是哪里。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "说明结构如何包含下一层",
+          "visual_action": "分层揭示或拆开部件，保留身份与朝向",
+          "sound_role": "声音帮助区分层级，旁白跟随已显示结构",
+          "checks": [
+            "没有穿过无依据的结构或虚构装配关系。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "让尺度变化可理解",
+          "visual_action": "镜头下探时同步更换名称、倍率与参照尺",
+          "sound_role": "需要时降低配乐，留给单位与关系解释",
+          "checks": [
+            "标尺、层级与镜头共用时间，不把艺术拉伸当实测比例。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "让关键结构落定",
+          "visual_action": "停留在微观目标，必要时用小总览标位置",
+          "sound_role": "完成本层解释再收束",
+          "checks": [
+            "能指出前后层级的包含关系与示意边界。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.scale-ladder",
+        "camera.focus-frame",
+        "camera.waypoint-travel",
+        "visual.structure-separate",
+        "text.read-then-move",
+        "visual.target-callout"
+      ],
+      "motion_ids": [
+        "camera-focus",
+        "reveal",
+        "highlight",
+        "stagger",
+        "hold"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "dark-tech",
+        "cinematic-photo"
+      ],
+      "constraints": [
+        "连续缩放不能掩盖比例跳变；部件与标尺须有依据。",
+        "科学正确性与视觉连续性分别验收。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。"
+      ],
+      "fallback": "改成有明确层级标签的分镜或静态剖面，不强行单镜穿越。",
+      "verification_questions": [
+        "比例和单位是否连续或明确声明跳转？",
+        "观众能复述整体与局部关系，而非只记得缩放吗？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/acoramaa-053577.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/adomicael-707503.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/btc5887899-288258.md"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "image-to-hero",
+      "name": "真实图片到主画面",
+      "intent": "让有限图片形成选择、重点与转折。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "image-story",
+        "product-demo",
+        "brand-film"
+      ],
+      "inputs": [
+        "图片来源与使用权",
+        "必须保留的主体和证据文字",
+        "排序或选择依据",
+        "画幅、安全区与允许裁切范围"
+      ],
+      "required_inputs": [
+        "图片来源与使用权",
+        "必须保留的主体和证据文字",
+        "排序或选择依据",
+        "画幅、安全区与允许裁切范围"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "知道素材属于什么集合",
+          "visual_action": "按主题或来源建立少量图片阵列",
+          "sound_role": "提供主题语境；不要求每张卡随拍读完",
+          "checks": [
+            "未把艺术排序暗示为事实排名。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "看清为何选中当前图",
+          "visual_action": "高亮有依据的目标，其他素材降到背景",
+          "sound_role": "可用轻提示声，但不制造虚假系统判断",
+          "checks": [
+            "焦点身份与来源可追溯。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "把注意带到关键细节",
+          "visual_action": "匹配取景、受控出框或轻视差；保持主体连续",
+          "sound_role": "声音服务重点或情绪，不遮旁白",
+          "checks": [
+            "无双份主体、错误裁切或虚构深度。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "保留信息或品牌记忆",
+          "visual_action": "主画面落定，必要说明与来源有阅读时间",
+          "sound_role": "按观看目标收束，音乐尾部不突断",
+          "checks": [
+            "最终小屏仍能辨主体与必要文字。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "visual.media-ring",
+        "camera.focus-frame",
+        "transition.match-cut",
+        "transition.frame-breakout",
+        "text.read-then-move"
+      ],
+      "motion_ids": [
+        "highlight",
+        "camera-focus",
+        "mask-wipe",
+        "parallax",
+        "hold"
+      ],
+      "style_ids": [
+        "cinematic-photo",
+        "vivid-collage",
+        "paper-editorial"
+      ],
+      "constraints": [
+        "三维阵列、视差与出框按素材和实测能力选择，不是默认装饰。",
+        "图片运动不等于原人物发生真实动作。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。"
+      ],
+      "fallback": "平面网格选择后切到完整图片；缺分层素材时静态停留或轻推近。",
+      "verification_questions": [
+        "逐图来源和关键裁切是否正确？",
+        "阵列与聚焦是否保持同一个素材身份？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/twoclipping-000267.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/twoclipping-496100.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/raphaelaubryy-687877.md"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "music-event-performance",
+      "name": "音乐事件成为可见动作",
+      "intent": "用声音结构或可见演奏组织视听体验。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "music-visual"
+      ],
+      "inputs": [
+        "授权音轨或原创事件谱",
+        "音乐驱动画面或动作触发声音的明确方向",
+        "视觉母题与段落目标",
+        "音频要求、资源预算及是否循环",
+        "音乐、主题、风格三项可启动三维世界分支；时长/画幅由当前项目或合理默认补齐"
+      ],
+      "required_inputs": [
+        "授权音轨或原创事件谱",
+        "音乐驱动画面或动作触发声音的明确方向",
+        "视觉母题与段落目标",
+        "音频要求、资源预算及是否循环"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "建立声画对应规则",
+          "visual_action": "先用少量物体展示一种可辨映射",
+          "sound_role": "听清主要声音，明确是音频先行还是动作发声",
+          "checks": [
+            "一项视觉响应不同时冒称两种触发方向。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "让事件或频段成为可见动作",
+          "visual_action": "用事件表、实测拍点或频段分析控制映射目标",
+          "sound_role": "逐事件发声或按输入频段驱动，不凭BPM猜每次触发",
+          "checks": [
+            "需要接触的音符有真实可见事件锚点。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "用段落变化建立起落",
+          "visual_action": "间奏减少密度，高潮集中释放；母题身份保持",
+          "sound_role": "声音与视觉并行调整，不在完成后随意铺曲",
+          "checks": [
+            "信息和主角未被闪光、粒子或多声部压住。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "完成表演或闭合循环",
+          "visual_action": "让末态可辨；有循环要求才检查闭合",
+          "sound_role": "试听最终编码音轨和首尾，不以音频流存在判成功",
+          "checks": [
+            "声音完整、无削波、同步与首尾经实际播放核验。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "sound.beat-map",
+        "sound.event-collision",
+        "sound.band-response",
+        "sound.attention-mix",
+        "narrative.energy-arc",
+        "production.loop-seam"
+      ],
+      "motion_ids": [
+        "reveal",
+        "state-swap",
+        "highlight",
+        "stagger",
+        "hold"
+      ],
+      "style_ids": [
+        "vivid-collage",
+        "dark-tech",
+        "cinematic-photo"
+      ],
+      "constraints": [
+        "无需强加产品证明或人物情节；音乐、歌词、环境氛围可选不同分支。",
+        "作曲、音色合成和复杂物理乐器不由拍点合同自动提供。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。",
+        "音乐驱动三维世界沿music-driven-world流程使用真实音轨、统一事件和可复用起步工程；不改变其他音乐表演分支。",
+        "保留用户指定歌曲；新曲、新窗口和新帧率重建受影响时间与检查，不继承旧作品效果。",
+        "诗词乐器分支按当前唱词建立意象接力；声音时刻与运动映射分工，人物和乐器的接触及自然度独立复验。"
+      ],
+      "fallback": "只保留一个可验证事件或一组频段响应；无分析能力时人工标记关键事件，必需声音缺失则先交设计。",
+      "verification_questions": [
+        "声画方向、事件锚点和段落起落是否明确？",
+        "是否实际试听最终导出而非只看帧图？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/kamstudiolabs-440893.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/acoramaa-248467.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/okazaky-084783.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/apoorvjain25-945542.md",
+        "https://www.ifanr.com/1660654",
+        "https://www.nfpeople.com/index.php/article/14095",
+        "../references/music-driven-world.md",
+        "../references/poetry-music-world.md"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "semantic-type",
+      "name": "文字承担叙事动作",
+      "intent": "让文字的形态和运动表达句意，同时保留阅读。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "story-video",
+        "music-visual",
+        "knowledge-explainer"
+      ],
+      "inputs": [
+        "完整文案与语义目标",
+        "真实字体、字宽与语言方向",
+        "关键词和可选视觉隐喻",
+        "画幅、受众与阅读要求"
+      ],
+      "required_inputs": [
+        "完整文案与语义目标",
+        "真实字体、字宽与语言方向",
+        "关键词和可选视觉隐喻",
+        "画幅、受众与阅读要求"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "先读懂基本语句",
+          "visual_action": "建立完整句或必要语义组，保持稳定",
+          "sound_role": "旁白或音乐可选，不能抢掉文字阅读",
+          "checks": [
+            "词序、长中文和小屏布局正确。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "让关键词承担一种意义",
+          "visual_action": "仅让必要字形变成支撑、路径或动作对象",
+          "sound_role": "声音对应含义或事件，不机械每字发声",
+          "checks": [
+            "文字动作的隐喻能够用内容解释。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "维持运动中的字向和身份",
+          "visual_action": "曲线路径、转向与字向补偿分别控制",
+          "sound_role": "音乐或说话时标只辅助语义重点",
+          "checks": [
+            "没有字距碰撞、双重旋转补偿或无关字形硬变。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "完成语意并留阅读",
+          "visual_action": "回到可读完成态或清楚转折",
+          "sound_role": "给结束句和声音自然完成空间",
+          "checks": [
+            "观众能读出并复述句意，不只记得特效。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "text.semantic-emphasis",
+        "text.path-baseline",
+        "text.counter-rotate",
+        "text.read-then-move",
+        "transition.tangent-depart"
+      ],
+      "motion_ids": [
+        "highlight",
+        "trace",
+        "reveal",
+        "stagger",
+        "hold"
+      ],
+      "style_ids": [
+        "paper-editorial",
+        "mono-diagram",
+        "vivid-collage"
+      ],
+      "constraints": [
+        "隐喻与科学解释分开；只使用当前目标需要的文字能力。",
+        "字形路径或排版测量不可用时不伪称文字仍准确。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。"
+      ],
+      "fallback": "完整静态句配少量关键词强调；取消曲线与离轨，保留意义与时长。",
+      "verification_questions": [
+        "文字在关键时刻是否完整可读？",
+        "动作含义是否服务句意，方向与间距是否实际检查？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/gdgtify-929495.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/gdgtify-989608.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/gdgtify-130294.md"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "data-comparison",
+      "name": "数据与比较讲清差异",
+      "intent": "在共同参照下理解数量、位置或机制差异。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "knowledge-explainer",
+        "news-brief",
+        "product-demo"
+      ],
+      "inputs": [
+        "有来源的值、单位与时间窗",
+        "可比条件与需要固定的变量",
+        "目标差异和允许示意范围",
+        "标签、舍入及旁白要求"
+      ],
+      "required_inputs": [
+        "有来源的值、单位与时间窗",
+        "可比条件与需要固定的变量",
+        "目标差异和允许示意范围",
+        "标签、舍入及旁白要求"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "知道比较什么",
+          "visual_action": "显示来源、单位与共同参照，不先摆结论",
+          "sound_role": "旁白说明口径或保持安静让标签读完",
+          "checks": [
+            "不同来源口径不以裸数值比较。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "看见只改哪个变量",
+          "visual_action": "同步展示同参照对象，固定其他条件",
+          "sound_role": "声音强调变化点，不能暗示不存在的因果",
+          "checks": [
+            "变量和时间域明确，示意标记可见。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "让变化与计量对应",
+          "visual_action": "由真实状态驱动计数、填充或路径，不让数字独立乱跑",
+          "sound_role": "必要时暂停声音密度解释单位和差额",
+          "checks": [
+            "数值守恒、单位一致、图形与值相符。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "读出差异及局限",
+          "visual_action": "保留比较结果、条件和未知",
+          "sound_role": "结语仅复述可支持差异",
+          "checks": [
+            "能说明不同与不能推断什么，而非仅记住大数字。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "visual.quantity-progress",
+        "animation.fill-transfer",
+        "animation.path-reveal",
+        "text.read-then-move",
+        "visual.target-callout"
+      ],
+      "motion_ids": [
+        "count",
+        "highlight",
+        "trace",
+        "connect",
+        "state-swap",
+        "hold"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "paper-editorial",
+        "product-minimal"
+      ],
+      "constraints": [
+        "数据粒子与装饰粒子分开，真实机制与艺术示意分开。",
+        "同参照比较是本配方额外内容合同，不能声称37项目录已涵盖所有数据联动或科学模拟。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。"
+      ],
+      "fallback": "静态对照与精确标注，减少变量和动画；来源不足删值或标未知。",
+      "verification_questions": [
+        "比较的单位、时间窗和固定变量是否相同？",
+        "数字、图形、声音和旁白是否表达同一差异？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/ror-fly-880547.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/stefanostraus-971191.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/kisaka-ki-859326.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/rneayan-417829.md"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。"
+    },
+    {
+      "id": "brand-motif-film",
+      "name": "有表达目标的品牌形象片",
+      "intent": "用可辨母题与真实品牌依据建立感受和记忆。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "brand-film",
+        "product-demo"
+      ],
+      "inputs": [
+        "品牌希望传递的感受或承诺",
+        "真实品牌规则、可用产品事实与授权素材",
+        "观众、渠道、时长及制作上限",
+        "视觉母题与需要保留的身份"
+      ],
+      "required_inputs": [
+        "品牌希望传递的感受或承诺",
+        "真实品牌规则、可用产品事实与授权素材",
+        "观众、渠道、时长及制作上限",
+        "视觉母题与需要保留的身份"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "让观众进入品牌表达",
+          "visual_action": "用低理解成本的母题建立语境，不默认长标志开场",
+          "sound_role": "音乐或环境声建立气氛；有旁白则只承载必要内容",
+          "checks": [
+            "母题能解释与核心表达的关系。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "给感受一个有依据的时刻",
+          "visual_action": "选择真实产品、人物或场景；虚构象征明确边界",
+          "sound_role": "声音帮助情绪推进，不以宏大音效掩盖事实空缺",
+          "checks": [
+            "不编功能、客户、数字或真实经历。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "让变化具有内在关联",
+          "visual_action": "共享对象、几何或视觉母题承接下一场；可克制也可鲜明",
+          "sound_role": "声画共同安排转折，允许按实际片段调整节奏",
+          "checks": [
+            "每场都服务品牌表达，而非硬塞固定科技效果。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "让品牌记忆落定",
+          "visual_action": "回到品牌与表达，保留可辨结尾",
+          "sound_role": "音乐自然收束或按真实用途结束；无需强加CTA",
+          "checks": [
+            "品牌识别清楚，最后仍能说出要传递的感受。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.shared-subject",
+        "narrative.energy-arc",
+        "transition.shared-morph",
+        "camera.focus-frame",
+        "style.token-contract",
+        "text.read-then-move"
+      ],
+      "motion_ids": [
+        "reveal",
+        "state-swap",
+        "camera-focus",
+        "highlight",
+        "parallax",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "cinematic-photo",
+        "paper-editorial",
+        "vivid-collage"
+      ],
+      "constraints": [
+        "品牌形象与完整操作教学的观看任务不同，先写目标再选模板。",
+        "开放叙事先锁表达、身份和制作边界，镜头可保留替代方案；不把导演个人习惯变成固定分镜法。",
+        "这是表达与编排指导；运行时能力、素材授权、连续播放与声音效果须逐项实测。"
+      ],
+      "fallback": "少量真实素材和稳定品牌构图；缺素材或核心表达未定时先交母题/分镜候选，不伪造品牌实绩。",
+      "verification_questions": [
+        "每镜头的目的是否能指回表达？",
+        "品牌是否可覆盖风格，是否保留事实与艺术示意的边界？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/daniel-haida-636937.md",
+        "https://github.com/yihui-dev/awesome-opus5-5-videos/blob/92aee2f586ac0715cb3cbcb6384834f98a33383d/prompts/notdwd-998633.md",
+        "https://www.ifanr.com/1660654",
+        "https://www.nfpeople.com/index.php/article/14095"
+      ],
+      "source_relation": "来源提供表达母题与制作经验；镜头目的、声音职责和验收是研究提出的可选合同，不复制原提示，不声称已复现。 OV336支持克制产品呈现；OV630仅支持品牌愿景方向，不作为克制节奏范例。导演采访只支持表达审核与取舍经验。"
+    },
+    {
+      "id": "product-task-proof",
+      "name": "用真实任务证明产品价值",
+      "intent": "围绕同一个任务交代输入、操作、必要过程与真实产出，让每项主张都有可读证据。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "product-demo",
+        "feature-motion"
+      ],
+      "inputs": [
+        "观众要完成的一项真实任务",
+        "输入/中间态/结果的可核实素材",
+        "产品支持的触发与状态",
+        "观看后的实际下一步及声音要求"
+      ],
+      "required_inputs": [
+        "观众要完成的一项真实任务",
+        "输入/中间态/结果的可核实素材",
+        "产品支持的触发与状态",
+        "观看后的实际下一步及声音要求"
+      ],
+      "story_steps": [
+        {
+          "id": "task",
+          "shot_purpose": "建立同一个任务与价值",
+          "visual_action": "展示具体输入和准确目标；确有摩擦时选一层困难开场。",
+          "sound_role": "建立轻量情绪基底，不用无关冲击声。",
+          "checks": [
+            "不复制样本规模数字或人为贬低旧方案。"
+          ]
+        },
+        {
+          "id": "trigger",
+          "shot_purpose": "看清观众能怎样启动",
+          "visual_action": "聚焦真实操作单元，指针接近、停留、触发后再反馈。",
+          "sound_role": "只在有意义的触发与反馈加少量同族声音。",
+          "checks": [
+            "游标不遮字；实际触发与结果因果准确。"
+          ]
+        },
+        {
+          "id": "process",
+          "shot_purpose": "解释必要过程及真实状态",
+          "visual_action": "保留同一工作对象；扫描只在目标边界，未知进度不计百分比。",
+          "sound_role": "减少装饰，必要时用轻脉冲或留白维持等待。",
+          "checks": [
+            "标明input/intermediate/result；失败和部分完成不自动变成功。"
+          ]
+        },
+        {
+          "id": "proof",
+          "shot_purpose": "用可读证据兑现本段主张",
+          "visual_action": "结果落定；多功能可在稳定舞台逐章节换证据，必要时取消外框放大。",
+          "sound_role": "给结果读取留空间，落定声跟随真实状态。",
+          "checks": [
+            "每章节一项主张及对应真实证据；重建记录来源，缺实际运行结果时缩小主张或改为解释镜头，说明按误认风险与渠道决定。"
+          ]
+        },
+        {
+          "id": "close",
+          "shot_purpose": "给出可信且能执行的下一步",
+          "visual_action": "按用途选价值收束、品牌签名或行动入口，长命令另给可复制文本。",
+          "sound_role": "保留尾音与自然收束；不突然掐断音乐。",
+          "checks": [
+            "行动入口真实可用，品牌与工具标志不暗示未经证实的合作。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.goal-proof",
+        "narrative.shared-subject",
+        "camera.focus-frame",
+        "interaction.direct-manip",
+        "visual.scan-resolve",
+        "visual.target-callout",
+        "text.read-then-move",
+        "sound.event-collision",
+        "production.time-function"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "camera-focus",
+        "stagger",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "paper-editorial",
+        "dark-tech"
+      ],
+      "constraints": [
+        "按内容决定时长比例，不把参考片前半段问题铺陈当固定配比。",
+        "关键结果必须有稳定阅读窗；不要用功能标题列表代替真实成果。",
+        "两个开场/证明分支按需选择，不强迫每片制造失败或包播放器。",
+        "素材、状态、文字、声音与实际产物分层验证；配方不自动执行。"
+      ],
+      "fallback": "精简为真实前态→一次操作→可核结果；结果不足则交明确示意或诚实未完成状态。",
+      "verification_questions": [
+        "观众能指出真实任务、触发与产出之间的关系吗？",
+        "缩到实际观看尺寸，核心证据可辨而不是只剩标题吗？",
+        "删掉第二层困难或播放器外框，是否更清楚？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/index.html#L24-L41",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/cloud-render-launch/compositions/fleet.html#L1-L70",
+        "user-provided:product-film-reference-20261018"
+      ],
+      "source_relation": "用户本地两份参考片的抽帧观察及固定源码支持任务/章节组织；full-film与PR项目高度疑似同源版本，不作独立成功样本。此配方、证据角色与回退为原创适配，未渲染或做用户效果实验。 2026-10-19核实：full-film即该PR项目成片（片内标题与切点同源码时间一致），仍不是独立成功样本；更细的元素见references/launch-film-grammar.md。",
+      "variants": [
+        {
+          "id": "problem-reframe-opening",
+          "name": "递进困难后换一种表达",
+          "intent": "同任务中原始形式难用，合理替代仍有可核实限制，才提出新路径。",
+          "controls": [
+            "0/1/2层困难",
+            "每层新增摩擦",
+            "评价短句",
+            "给结果保留的时长"
+          ],
+          "constraints": [
+            "旧方案足够时省略本分支；不故意制造差体验。"
+          ],
+          "fallback": "一项真实困难后直接演示新方法。"
+        },
+        {
+          "id": "claim-evidence-chapters",
+          "name": "声明与证据分章节",
+          "intent": "固定舞台和标题规则，逐章展示不同的真实证据。",
+          "controls": [
+            "当前主张",
+            "证据角色",
+            "局部焦点",
+            "稳定阅读窗"
+          ],
+          "constraints": [
+            "播放器只是舞台，不证明真实录屏；内外时钟分开。"
+          ],
+          "fallback": "取消外壳，采用短标题与证据近景。"
+        }
+      ]
+    },
+    {
+      "id": "sensory-before-after",
+      "name": "同片段逐层增加能力",
+      "intent": "在同一素材的对齐区间里逐次改变一个感知层，展示功能差异并实际验证。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "product-demo",
+        "feature-motion",
+        "image-story",
+        "music-visual"
+      ],
+      "inputs": [
+        "同一个可授权画面/音频片段及确切源入出点",
+        "基线与唯一要改变的声层或视觉层",
+        "对齐的重放窗口、速度与事件锚点",
+        "相同基础音量/播放条件与实际审看安排"
+      ],
+      "required_inputs": [
+        "同一个可授权画面/音频片段及确切源入出点",
+        "基线与唯一要改变的声层或视觉层",
+        "对齐的重放窗口、速度与事件锚点",
+        "相同基础音量/播放条件与实际审看安排"
+      ],
+      "story_steps": [
+        {
+          "id": "baseline",
+          "shot_purpose": "建立观众可比较的基线",
+          "visual_action": "固定素材区间和速度；无声只在确有表达用途时使用。",
+          "sound_role": "保持本次比较的基础声层，不偷偷加预告声。",
+          "checks": [
+            "基线不是刻意做坏；声明是在演示还是对照实验。"
+          ]
+        },
+        {
+          "id": "first-change",
+          "shot_purpose": "听见或看见一层真实变化",
+          "visual_action": "重放相同区间，只增加目标音效或视觉层。",
+          "sound_role": "动作音起音锚定真正可见事件，保留尾音。",
+          "checks": [
+            "画面、裁切和播放速度一致；实际试听/查看。"
+          ]
+        },
+        {
+          "id": "next-change",
+          "shot_purpose": "理解第二层对整体的作用",
+          "visual_action": "有必要时再次重放相同区间，增加音乐或另一层，其余保持。",
+          "sound_role": "音乐负责情绪/段落，反馈声负责事件，避免覆盖旁白。",
+          "checks": [
+            "不同源入点或长短不等只能称渐增叙事，不称严格A/B。"
+          ]
+        },
+        {
+          "id": "choose",
+          "shot_purpose": "按内容目标选择保留的版本",
+          "visual_action": "用实际观察与听审记录差异，再回到任务和下一步。",
+          "sound_role": "可选择更少音效、静默或保留原版，不预设更响更密更好。",
+          "checks": [
+            "不能据机器标签、波形或源码存在宣称舒服、清晰或提升理解。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "sound.event-collision",
+        "sound.attention-mix",
+        "text.read-then-move",
+        "production.time-function"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "paper-editorial",
+        "dark-tech"
+      ],
+      "constraints": [
+        "源码案例只支持同素材渐增叙事；严格锁定相同源区间、速度和一次只改一层是本Skill新增验证合同。",
+        "固定基础音量与播放条件，另记响度差异；不让更响替代更好。",
+        "视觉A/B同样固定画面事实；去水印、伪造对比或改变关键内容不属于此配方。",
+        "没有实际回听能力时只交带明确未听审状态的候选，不将audio标passed。"
+      ],
+      "fallback": "缩为两版短对照；素材或执行能力不足则交明确设计与缺口，不假装已经比较通过。",
+      "verification_questions": [
+        "除目标层之外还有哪些变量被改变？",
+        "源区间、内外时间映射和音效起音是否实际对齐？",
+        "哪一版服务本片目标，而不是仅更响或更炫？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/sfx-music-launch/index.html#L48-L112",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/sfx-music-launch/STORYBOARD.md#L74-L100"
+      ],
+      "source_relation": "固定源码接入一条33.8秒发布混音，旧NO AUDIO注释已失效；两次重放源入点1.3/1.1秒、时长3.0/2.1秒，支持同素材渐增叙事，非严格A/B。对齐控制与审看规则为本Skill适配；未观看远程成片、听审或复现分轨。"
+    },
+    {
+      "id": "object-explainer",
+      "name": "物即解释讲清机制",
+      "intent": "用一个其运作就是概念的物体，讲清一个机制或关系。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "knowledge-explainer",
+        "product-demo"
+      ],
+      "inputs": [
+        "一句话关系与受众",
+        "载体物体与部件—要素映射",
+        "真值账本里的数字与来源",
+        "每个比喻的断点"
+      ],
+      "required_inputs": [
+        "一句话关系与受众",
+        "载体物体与部件—要素映射",
+        "真值账本里的数字与来源",
+        "每个比喻的断点"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "立住载体与问题",
+          "visual_action": "载体整体出场，部件闭合，只显示输入与输出",
+          "sound_role": "旁白只说问题与结果，不提前讲部件",
+          "checks": [
+            "能说出载体放进什么、出来什么。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "认识部件",
+          "visual_action": "一次点亮一个部件，铭牌落在部件上，其余降调",
+          "sound_role": "旁白按四问定义术语，一个部件一句",
+          "checks": [
+            "每个部件至少答了是什么与为什么。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "跑一圈",
+          "visual_action": "用账本里的数字运行完整循环，读数与状态在动作到位后一起变化",
+          "sound_role": "旁白跟随动作报数字，不抢在画面之前",
+          "checks": [
+            "画面里的每个数字都能在账本里找到。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "拆开看",
+          "visual_action": "沿真实方向分解一层，选中的部件点亮，收回时反序",
+          "sound_role": "旁白说明拆开的是哪一层、为什么",
+          "checks": [
+            "拆开时部件不穿插，收回后复原。"
+          ]
+        },
+        {
+          "id": "step-5",
+          "shot_purpose": "回到整体并说明边界",
+          "visual_action": "回到总览，角标写明没有演示的内容",
+          "sound_role": "一句话回顾加边界",
+          "checks": [
+            "观众能说出没有演示什么。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "knowledge.object-is-explanation",
+        "knowledge.part-cast",
+        "knowledge.landed-label",
+        "knowledge.one-full-run",
+        "knowledge.truth-ledger",
+        "visual.structure-separate",
+        "animation.spring-settle"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "connect",
+        "state-swap",
+        "count",
+        "trace",
+        "hold"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "paper-editorial",
+        "product-minimal"
+      ],
+      "constraints": [
+        "一一映射，多余部件视为装饰；载体不能伪造不存在的机制",
+        "数字只来自账本；示意用途与依据保留内部，不渲染制作标签",
+        "这是表达与编排指导；运行时能力、素材授权与理解效果须逐项实测。"
+      ],
+      "fallback": "载体不诚实时，退到过程轨道、数据尺寸或带逐段高亮的关系图。",
+      "verification_questions": [
+        "遮住映射表，只看画面能说出部件在做什么吗？",
+        "懂行的人能指出机制与事实不符之处吗？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/wheresryan22/anatomy/blob/1482e8469b0a9e0d8cc18ea2740a01423d29ae80/SKILL.md",
+        "https://github.com/wheresryan22/anatomy/blob/1482e8469b0a9e0d8cc18ea2740a01423d29ae80/references/motion.md"
+      ],
+      "source_relation": "来源提供方法启发；镜头目的、声音职责和验收是研究提出的可选合同，不复制来源实现，不声称已复现或已验证。"
+    },
+    {
+      "id": "layered-concept-reveal",
+      "name": "逐层递进讲清抽象概念",
+      "intent": "把抽象概念拆成七层，一层只加一个新负荷，层间有桥接，结尾交代边界。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "knowledge-explainer",
+        "news-brief"
+      ],
+      "inputs": [
+        "受众已知与未知",
+        "要理解的一个关系",
+        "各层的新负荷、桥接与结束检验",
+        "领域标准与术语卡"
+      ],
+      "required_inputs": [
+        "受众已知与未知",
+        "要理解的一个关系",
+        "各层的新负荷、桥接与结束检验",
+        "领域标准与术语卡"
+      ],
+      "story_steps": [
+        {
+          "id": "step-hook",
+          "shot_purpose": "L0 钩子",
+          "visual_action": "只放一个具体问题，载体可以先不出场",
+          "sound_role": "旁白提问，不下定义",
+          "checks": [
+            "能复述这个问题。"
+          ]
+        },
+        {
+          "id": "step-blackbox",
+          "shot_purpose": "L1 黑箱",
+          "visual_action": "载体整体出场，只显示输入与输出",
+          "sound_role": "一句话给出结果，定义本片最核心的一个词",
+          "checks": [
+            "能说出输入、输出与结果。"
+          ]
+        },
+        {
+          "id": "step-cast",
+          "shot_purpose": "L2 部件登场",
+          "visual_action": "一次点亮一个部件，每个部件答四问",
+          "sound_role": "术语首次出现即定义，一句一个部件",
+          "checks": [
+            "能说出每个部件记什么、做什么。"
+          ]
+        },
+        {
+          "id": "step-relation",
+          "shot_purpose": "L3 关系",
+          "visual_action": "把两个部件并排，用一条连线或一个动作显示一条关系",
+          "sound_role": "只讲这一条关系",
+          "checks": [
+            "给出一个输入，能说出对应输出。"
+          ]
+        },
+        {
+          "id": "step-run",
+          "shot_purpose": "L4 完整一圈",
+          "visual_action": "用真实数字走完整个循环",
+          "sound_role": "旁白跟随动作报数字",
+          "checks": [
+            "能按顺序说出各步内容。"
+          ]
+        },
+        {
+          "id": "step-why",
+          "shot_purpose": "L5 反例与边界",
+          "visual_action": "拿掉或改变一个部件，让后果可见",
+          "sound_role": "解释为什么不能更简单",
+          "checks": [
+            "能说出去掉它会出什么问题。"
+          ]
+        },
+        {
+          "id": "step-recap",
+          "shot_purpose": "L6 回顾与指路",
+          "visual_action": "回到总览，写明没有演示什么，给出具体读物",
+          "sound_role": "一句话回顾，说出模型边界",
+          "checks": [
+            "能说出边界与下一步。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "knowledge.layered-reveal",
+        "knowledge.layer-bridge",
+        "knowledge.part-cast",
+        "knowledge.one-full-run",
+        "knowledge.counterfactual-probe",
+        "knowledge.model-boundary",
+        "knowledge.controlled-register",
+        "knowledge.truth-ledger"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "connect",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "paper-editorial",
+        "product-minimal"
+      ],
+      "constraints": [
+        "一层只加一个新负荷，层间写桥接，最后一层是L6",
+        "30至45秒保留L0、L1、L4、L6；超过8分钟分章，章内重新从L2往上",
+        "这是表达与编排指导；分档是设计启发，没有经过观众实验验证。"
+      ],
+      "fallback": "时长不足时只保留L0、L1、L4、L6，仍保留各层的结束检验。",
+      "verification_questions": [
+        "每层的new_load是不是只有一件事？",
+        "新手读者能在每层末答出该层的exit_test吗？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/wheresryan22/anatomy/blob/1482e8469b0a9e0d8cc18ea2740a01423d29ae80/SKILL.md",
+        "用户提供的一篇讲解AI生成科普视频的公众号文章与评论区（2026-10-19；无公开链接，评论为个人经验，不作统计结论）"
+      ],
+      "source_relation": "来源提供方法启发；镜头目的、声音职责和验收是研究提出的可选合同，不复制来源实现，不声称已复现或已验证。"
+    },
+    {
+      "id": "evidence-board-brief",
+      "name": "证据板讲清资讯",
+      "intent": "用证据板把事件、依据、变化与未知分开讲清。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "news-brief"
+      ],
+      "inputs": [
+        "事件与发生时间",
+        "每条事实的原始来源与日期",
+        "数字与口径",
+        "未确认、有争议与未知的内容"
+      ],
+      "required_inputs": [
+        "事件与发生时间",
+        "每条事实的原始来源与日期",
+        "数字与口径",
+        "未确认、有争议与未知的内容"
+      ],
+      "story_steps": [
+        {
+          "id": "step-1",
+          "shot_purpose": "事件一句话",
+          "visual_action": "只放事件、时间与截至日期",
+          "sound_role": "旁白一句话说清谁在何时做了什么",
+          "checks": [
+            "能复述事件与截至日期。"
+          ]
+        },
+        {
+          "id": "step-2",
+          "shot_purpose": "证据板登场",
+          "visual_action": "事实卡挂来源标签，空槽留给未核实内容",
+          "sound_role": "旁白说明每张卡的来源，不评论",
+          "checks": [
+            "每条事实都能指出来源与日期。"
+          ]
+        },
+        {
+          "id": "step-3",
+          "shot_purpose": "时间线与口径",
+          "visual_action": "时间轨按同一刻度，数字量具按同一口径",
+          "sound_role": "旁白只说变化，不混用口径",
+          "checks": [
+            "不同口径没有被放进同一把尺。"
+          ]
+        },
+        {
+          "id": "step-4",
+          "shot_purpose": "核对一条证据链",
+          "visual_action": "沿一条事实从原始来源走到数字再到结论",
+          "sound_role": "旁白逐步报来源与推导",
+          "checks": [
+            "能说出结论由哪些事实推出。"
+          ]
+        },
+        {
+          "id": "step-5",
+          "shot_purpose": "未知与争议",
+          "visual_action": "点亮空槽并写明为什么空；候选原因标“候选”",
+          "sound_role": "旁白明确说出未知，不用语气掩盖",
+          "checks": [
+            "未知被说出而不是被版式藏起来。"
+          ]
+        },
+        {
+          "id": "step-6",
+          "shot_purpose": "回顾与来源",
+          "visual_action": "回到板面总览，写明截至日期与来源指路",
+          "sound_role": "一句话回顾与信息边界",
+          "checks": [
+            "能说出还缺什么、去哪里核对。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "knowledge.evidence-board",
+        "knowledge.truth-ledger",
+        "knowledge.layered-reveal",
+        "knowledge.model-boundary",
+        "knowledge.controlled-register",
+        "visual.target-callout",
+        "visual.quantity-progress"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "count",
+        "stagger",
+        "trace",
+        "hold"
+      ],
+      "style_ids": [
+        "paper-editorial",
+        "mono-diagram",
+        "dark-tech"
+      ],
+      "constraints": [
+        "资讯包要求每条事实有as_of，并列出未确认内容",
+        "事实、评论与推测分开；候选原因不画成因果",
+        "这是表达与编排指导；不承诺自动事实核查或实时完整覆盖，来源与日期须逐条核实。"
+      ],
+      "fallback": "无法核实则删去或标未确认；没有数据时用带来源的文字说明。",
+      "verification_questions": [
+        "每条事实能追溯到原始来源与日期吗？",
+        "未知与争议是否被说出？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/wheresryan22/anatomy/blob/1482e8469b0a9e0d8cc18ea2740a01423d29ae80/SKILL.md",
+        "https://github.com/op7418/guizang-product-video-skill/blob/18842e0f49a9eb2b8c00cc065ec37b314e235aaa/extras/news-video/README.md"
+      ],
+      "source_relation": "来源提供方法启发；镜头目的、声音职责和验收是研究提出的可选合同，不复制来源实现，不声称已复现或已验证。"
+    },
+    {
+      "id": "launch-film-arc",
+      "name": "发布片情绪弧",
+      "intent": "把产品发布片组织成痛点→转折→自证→行动→落款，每次场景变化由可见动作引起，转折在底色与声音上先后落地。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "product-demo",
+        "feature-motion"
+      ],
+      "inputs": [
+        "观众熟悉的真实任务与可度量的困难（数字或产物）",
+        "最自然的替代办法及其真实产出",
+        "产品的真实输入、成品与行动入口",
+        "两块叙事底色与单一强调色",
+        "音乐床的断拍、落拍位置与动作确认音效清单"
+      ],
+      "required_inputs": [
+        "观众熟悉的真实任务与可度量的困难（数字或产物）",
+        "最自然的替代办法及其真实产出",
+        "产品的真实输入、成品与行动入口",
+        "两块叙事底色与单一强调色",
+        "音乐床的断拍、落拍位置与动作确认音效清单"
+      ],
+      "story_steps": [
+        {
+          "id": "hook-input",
+          "shot_purpose": "用一条真实输入交代情境与任务",
+          "visual_action": "最小可读单元满幅，用打字交代意图，发送动作触发拉远。",
+          "sound_role": "音乐床轻起；打字与点击只确认动作，不每字叠声。",
+          "checks": [
+            "输入是用户真话，不是产品口号。",
+            "发送后输入框有可见变化。"
+          ]
+        },
+        {
+          "id": "pain-evidence",
+          "shot_purpose": "让观众亲自看到困难有多大",
+          "visual_action": "真实长列表加速上滚，数字逐位打出，落在最小的数。",
+          "sound_role": "能量抬升但不抢信息；量级靠速度而不是音量。",
+          "checks": [
+            "数字与可见素材同源。",
+            "最后落定的数字停留够读。"
+          ]
+        },
+        {
+          "id": "verdict-ladder",
+          "shot_purpose": "给证据下结论并排除最自然的替代办法",
+          "visual_action": "判决牌→替代办法的真实产出→再一张判决牌；0到2层按需。",
+          "sound_role": "判决牌处留短静默或浅谷。",
+          "checks": [
+            "替代办法不是稻草人。",
+            "每层只加一种新摩擦。",
+            "判决牌停留不短于阅读窗。"
+          ]
+        },
+        {
+          "id": "pivot",
+          "shot_purpose": "世界翻转，从问题进入解答",
+          "visual_action": "底色翻转一次，产品以浮窗出现在舞台上。",
+          "sound_role": "断拍后落拍领先画面翻转（参考起点0.2到0.4秒）。",
+          "checks": [
+            "声音与底色都变了且只变一次。",
+            "落拍相对画面的领先量实测，听审另记。"
+          ]
+        },
+        {
+          "id": "invoke",
+          "shot_purpose": "用一句话启动产品",
+          "visual_action": "打出调用语，发送，出现真实的处理状态。",
+          "sound_role": "发送一次确认音，处理中减少装饰。",
+          "checks": [
+            "处理状态有实际依据或内部案例定义；无运行数据不伪造精确进度，不添加制作标签。"
+          ]
+        },
+        {
+          "id": "proof-chapters",
+          "shot_purpose": "逐章给出成品证据",
+          "visual_action": "承诺句式逐章打出，稳定舞台上播放真实成品节选，内钟压缩。",
+          "sound_role": "章间用快速淡化与同族轻音，不处处whoosh。",
+          "checks": [
+            "每章一个主张、一份成品。",
+            "节选标明n/N。",
+            "压缩后文字仍可读。"
+          ]
+        },
+        {
+          "id": "action",
+          "shot_purpose": "给出观众自己的第一步",
+          "visual_action": "承诺大字→输入框→真实命令或入口→确认反馈。",
+          "sound_role": "确认音一次，保留尾音。",
+          "checks": [
+            "入口真实可用，占位符标明。"
+          ]
+        },
+        {
+          "id": "signoff",
+          "shot_purpose": "品牌签名收束",
+          "visual_action": "品牌动画快速淡化接入，不抢行动的焦点。",
+          "sound_role": "尾音自然收束，不突然掐断。",
+          "checks": [
+            "落款不暗示未经证实的合作。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.pain-to-verdict",
+        "text.typed-voice",
+        "text.verdict-card",
+        "visual.magnitude-whip",
+        "style.two-ground-world",
+        "sound.pivot-drop",
+        "camera.pull-back-reveal",
+        "visual.replica-ui",
+        "transition.action-seam",
+        "narrative.output-as-proof",
+        "narrative.parallel-promise",
+        "production.compressed-inner-clock",
+        "narrative.cta-as-action",
+        "production.dwell-budget",
+        "text.read-then-move",
+        "sound.event-collision",
+        "production.time-function"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "camera-focus",
+        "stagger",
+        "count",
+        "exit",
+        "hold"
+      ],
+      "style_ids": [
+        "dual-ground-launch",
+        "product-minimal",
+        "dark-tech",
+        "paper-editorial"
+      ],
+      "constraints": [
+        "30秒级发布片的弧线与比例来自单个参考片；按内容、阅读窗和受众重新推算，见production.dwell-budget。",
+        "痛点已为人熟知时省略verdict-ladder，不制造差体验。",
+        "转折只发生一次；声音与底色先后翻转，不来回摆。",
+        "工程记录复刻来源和当前行为依据；观众侧说明按误认风险与渠道决定，必要节选范围和占位符仍清楚。",
+        "配方不自动执行；声音事件表与成片审计分别登记。"
+      ],
+      "fallback": "精简为输入→一层判决→转折→一个章节证明→行动；或回到product-task-proof。",
+      "verification_questions": [
+        "静音看，每次场景变化都能说出触发动作吗？",
+        "删掉第二层判决是否更清楚？",
+        "声明的音效时刻与实测起音的偏差在容差内吗？（audio_event_audit.py）",
+        "缩到手机屏幕，主证据还能辨认吗？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/index.html#L24-L41",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/compositions/opener.html",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/compositions/summarize.html",
+        "../references/launch-film-grammar.md",
+        "../references/reference-film-study.md"
+      ],
+      "source_relation": "2026-10-19对HyperFrames「PR → Video」成片的逐帧、源码与音频研究；弧线与元素见references/launch-film-grammar.md。与product-task-proof的关系：后者定任务与证据，本配方细化完整情绪弧。步骤、检查与回退是原创适配，没有观众实验，未渲染也未听审。",
+      "variants": [
+        {
+          "id": "short-arc",
+          "name": "短弧（15到20秒）",
+          "intent": "只留一层判决和一个章节，适合信息流与竖屏。",
+          "controls": [
+            "判决层数（0或1）",
+            "章节数（1）",
+            "行动入口"
+          ],
+          "constraints": [
+            "章节少不等于省略成品证据。"
+          ],
+          "fallback": "回到product-task-proof的最小任务→结果。"
+        },
+        {
+          "id": "known-pain-skip",
+          "name": "痛点已知，从调用开始",
+          "intent": "观众已熟悉旧办法的缺点时，跳过痛点与判决，从真实输入直接进入调用。",
+          "controls": [
+            "开场输入",
+            "调用语",
+            "第一份成品"
+          ],
+          "constraints": [
+            "省略痛点段不省略任务的真实输入。"
+          ],
+          "fallback": "保留一张判决牌建立对比。"
+        }
+      ]
+    },
+    {
+      "id": "feature-chapter-reel",
+      "name": "功能章节串联",
+      "intent": "用同一句式和稳定舞台，把3到4个功能逐章证明，每章一份成品证据。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "feature-motion",
+        "product-demo"
+      ],
+      "inputs": [
+        "3到4个功能及观众自己拥有的名词",
+        "每个功能的真实成品或触发后的真实状态",
+        "稳定的舞台与版式",
+        "可选的节选与进度标注"
+      ],
+      "required_inputs": [
+        "3到4个功能及观众自己拥有的名词",
+        "每个功能的真实成品或触发后的真实状态",
+        "稳定的舞台与版式",
+        "可选的节选与进度标注"
+      ],
+      "story_steps": [
+        {
+          "id": "frame-promise",
+          "shot_purpose": "固定承诺句式与舞台",
+          "visual_action": "打出章标题；舞台、容器与版式确定后不再变化。",
+          "sound_role": "一次轻确认音，不抢后续。",
+          "checks": [
+            "句式只定义一次，后续只换名词。"
+          ]
+        },
+        {
+          "id": "chapter-trigger",
+          "shot_purpose": "每章一次可见触发",
+          "visual_action": "每章用一个真实触发（点击、拖动、选择）引出变化。",
+          "sound_role": "触发确认音按同族。",
+          "checks": [
+            "每章触发与结果因果准确。"
+          ]
+        },
+        {
+          "id": "chapter-proof",
+          "shot_purpose": "每章一份成品证据，停留够读",
+          "visual_action": "成品落定，节选标明n/N；内钟按自然节奏做后压缩。",
+          "sound_role": "给读取留空间，落定声跟随真实状态。",
+          "checks": [
+            "压缩后文字可读。",
+            "实际来源与案例性质在内部区分，画面不添加制作身份标签。"
+          ]
+        },
+        {
+          "id": "chapter-seam",
+          "shot_purpose": "章间用小工具箱接缝",
+          "visual_action": "快速淡化或落到底色，不换样式。",
+          "sound_role": "章间浅谷，不处处whoosh。",
+          "checks": [
+            "接缝样式不超过三种。"
+          ]
+        },
+        {
+          "id": "close-reel",
+          "shot_purpose": "收束到行动或品牌",
+          "visual_action": "最后一章后给真实入口，占位符标明。",
+          "sound_role": "尾音自然收束。",
+          "checks": [
+            "入口真实可用。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.parallel-promise",
+        "text.typed-voice",
+        "narrative.output-as-proof",
+        "production.compressed-inner-clock",
+        "transition.action-seam",
+        "visual.replica-ui",
+        "production.dwell-budget",
+        "text.read-then-move",
+        "narrative.cta-as-action",
+        "sound.event-collision"
+      ],
+      "motion_ids": [
+        "reveal",
+        "stagger",
+        "state-swap",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "dual-ground-launch",
+        "paper-editorial"
+      ],
+      "constraints": [
+        "章数以3到4个为界（推断）；章间版式不变。",
+        "承诺名词应是观众自己拥有的东西。",
+        "每章必须有成品证据，标题不能代替成果。",
+        "节选必须标明范围。",
+        "配方不自动执行。"
+      ],
+      "fallback": "合并为一屏并列，或只保留最有证据的一章。",
+      "verification_questions": [
+        "只看章标题能复述承诺吗？",
+        "删掉一章是否更好？",
+        "压缩后文字读得出吗？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/compositions/feature-code.html",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/compositions/feature-flow.html",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/compositions/feature-discussion.html",
+        "https://github.com/heygen-com/hyperframes-launches/blob/d7ac35069d74a3a437780579b3b7fe2f3eeace5f/pr-to-video-launch/compositions/feature-credits.html",
+        "../references/launch-film-grammar.md"
+      ],
+      "source_relation": "2026-10-19对HyperFrames「PR → Video」成片的逐帧、源码与音频研究；弧线与元素见references/launch-film-grammar.md。与product-task-proof的关系：后者定任务与证据，本配方细化完整情绪弧。步骤、检查与回退是原创适配，没有观众实验，未渲染也未听审。"
+    },
+    {
+      "id": "product-music-story",
+      "name": "产品音乐叙事",
+      "intent": "让歌词、乐段与同一主体的变化共同讲述产品任务，用真实证据兑现承诺，并按用途和关系变奏回收品牌。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "product-demo",
+        "brand-film",
+        "music-visual"
+      ],
+      "inputs": [
+        "目标观众、真实任务及当前产品行为与结果依据",
+        "可唱的核心主张、必要限制、品牌读法与实际渠道约束",
+        "已获准音轨或实际可用的歌曲生成能力及资源上限",
+        "贯穿主体、素材职责与可编辑部件",
+        "实际音频的段落、歌词或重音依据及本次验证范围"
+      ],
+      "required_inputs": [
+        "目标观众、真实任务及当前产品行为与结果依据",
+        "可唱的核心主张、必要限制、品牌读法与实际渠道约束",
+        "已获准音轨或实际可用的歌曲生成能力及资源上限",
+        "贯穿主体、素材职责与可编辑部件",
+        "实际音频的段落、歌词或重音依据及本次验证范围"
+      ],
+      "story_steps": [
+        {
+          "id": "fit-and-proof",
+          "shot_purpose": "确定这款产品适合由谁领拍",
+          "visual_action": "核当前任务的入口、行为与结果，区分产品证据、创作比喻和生活语境。",
+          "sound_role": "选择任务、旁白、歌词或音乐领拍，核功能词与品牌读法。",
+          "checks": [
+            "当前功能由行为和结果支撑，只有字符串不算证明。",
+            "复杂步骤有足够解释，不为押韵丢条件。"
+          ]
+        },
+        {
+          "id": "opening-event",
+          "shot_purpose": "让受众认出对象和观看理由",
+          "visual_action": "按需选择共鸣动作、结果反差或可读意外，让主变化清楚并接回正文。",
+          "sound_role": "声音负责视角、期待或动作确认；静音仍保留理解线索。",
+          "checks": [
+            "开场不被标题和装饰淹没，正文有兑现位置。",
+            "不固定问句、多案或三秒效果保证。"
+          ]
+        },
+        {
+          "id": "task-and-build",
+          "shot_purpose": "交代任务并收拢关键变量",
+          "visual_action": "跟随同一主体进入情境，从具体摩擦到一次有因果的触发。",
+          "sound_role": "主歌交代，蓄力段聚焦；按实际乐段删减合并。",
+          "checks": [
+            "同一主体的身份、初态和触发可辨。",
+            "铺垫增加信息，没有重复放大虚构困难。"
+          ]
+        },
+        {
+          "id": "core-release",
+          "shot_purpose": "让核心承诺得到可见结果",
+          "visual_action": "在真实触发后呈现同一对象的结果，主动作与次级响应错开并留落定。",
+          "sound_role": "用实际重音/乐句安排释放，歌词与事实相符。",
+          "checks": [
+            "结果来自真实产品依据，生成氛围不替代功能证明。",
+            "声音、文字和粒子未遮住关键变化。"
+          ]
+        },
+        {
+          "id": "proof-and-variation",
+          "shot_purpose": "展开次级证据并给重复新的意义",
+          "visual_action": "必要能力逐项证明，或将同一结果带入新的用途、场景与关系。",
+          "sound_role": "间奏可留阅读窗；副歌重复时承担不同任务，不规定次数。",
+          "checks": [
+            "重复新增状态、用途或关系，无法新增则删。",
+            "密集歌词、界面小字与主动作错开。"
+          ]
+        },
+        {
+          "id": "relation-and-close",
+          "shot_purpose": "回收母题并留下品牌或下一步",
+          "visual_action": "桥段按需拓展分享/协作等真实关系，再以用途、品牌或渠道允许的真实行动收束。",
+          "sound_role": "音乐段落回收，尾音和首尾接缝按实际听审。",
+          "checks": [
+            "不自动附二维码、搜索或下载引导，不泛化单片限制。",
+            "分享比喻不冒充产品不存在的自动行为。"
+          ]
+        },
+        {
+          "id": "verify-and-revise",
+          "shot_purpose": "将意图与最终声画逐项对应",
+          "visual_action": "检查实际导出、前后接缝、运动极值和目标观看尺寸；保留局部修改范围。",
+          "sound_role": "以同一有效事件表派生排程，量时粒度与听审状态分别记录。",
+          "checks": [
+            "句级识别与逐字插值不冒称词级实测。",
+            "ASR无词不证明纯伴奏，未听审不判声音通过。",
+            "改歌词后复验演唱、字幕、动作、音效及下游时间。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.goal-proof",
+        "narrative.follow-unit",
+        "narrative.shared-subject",
+        "narrative.energy-arc",
+        "interaction.direct-manip",
+        "transition.match-cut",
+        "transition.occlusion-reveal",
+        "text.semantic-emphasis",
+        "text.read-then-move",
+        "sound.beat-map",
+        "sound.event-collision",
+        "sound.attention-mix",
+        "production.time-function",
+        "production.dwell-budget"
+      ],
+      "motion_ids": [
+        "reveal",
+        "state-swap",
+        "highlight",
+        "stagger",
+        "camera-focus",
+        "mask-wipe",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "vivid-collage",
+        "cinematic-photo",
+        "paper-editorial"
+      ],
+      "constraints": [
+        "先判断任务、旁白、歌词或乐段领拍，不把演唱强加给复杂产品。",
+        "主张、歌词和渠道约束先核准，再试关键句和难镜头；不固定片长、配色、BPM或副歌次数。",
+        "真实产品/事件、重建、创作比喻和生成素材明确区分，观众说明按误认风险及实际渠道决定。",
+        "模板笔记沿现有ID，执行时间从项目唯一有效排程派生；不增加计划必填字段。",
+        "素材、音乐、模型和分轨按实际可得能力选择，不自动安装、付费或更换已锁原声。",
+        "这是单案例提炼的指导，结构检查、机器测量与创作效果分别验收。"
+      ],
+      "fallback": "复杂操作改由任务或实测旁白领拍；演唱能力不成立时保留短音乐动机；减少重复、简化动作或改用真实素材，必需声音缺失则说明交付缺口。",
+      "verification_questions": [
+        "同一对象是否经历任务、触发、结果和用途变化？",
+        "每句功能歌词是否对应当前行为与可读证据？",
+        "每次重复是否新增意义，开场承诺是否在正文兑现？",
+        "时间依据与量时粒度是否明确，改歌词后依赖是否重验？",
+        "最终文件是否实际看听，未验证的理解与传播效果是否保留缺口？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "../references/product-music-story.md",
+        "../references/asset-routing.md",
+        "../references/opening-design.md",
+        "../references/sources.md#产品音乐叙事与创作过程研究"
+      ],
+      "source_relation": "用户于2026-10-20确认从一部产品音乐短片的对话、版本、分镜、素材、代码与交付记录提炼。步骤和失败回退为原创适配；工程测量及抽帧与听审/观众效果分开，不分发原始私有对话、声音或项目素材，不继承案例验收状态。"
+    },
+    {
+      "id": "knowledge-music-explainer",
+      "name": "概念知识科普",
+      "intent": "围绕一个概念或机制，按所选音乐的乐段反推知识段落与镜头节奏，保留事实、阅读窗与一次性交付能力。",
+      "status": "guidance",
+      "scenario_ids": [
+        "knowledge-explainer"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "paper-editorial",
+        "product-minimal"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "connect",
+        "trace",
+        "hold"
+      ],
+      "expression_ids": [
+        "knowledge.truth-ledger",
+        "knowledge.controlled-register",
+        "knowledge.layered-reveal",
+        "knowledge.layer-bridge",
+        "knowledge.model-boundary",
+        "narrative.follow-unit",
+        "text.read-then-move",
+        "sound.beat-map",
+        "sound.event-collision",
+        "sound.attention-mix",
+        "production.time-function",
+        "production.dwell-budget"
+      ],
+      "story_steps": [
+        {
+          "id": "facts-and-mode",
+          "shot_purpose": "锁定知识关系与交付节奏",
+          "visual_action": "从一个具体问题确定受众与成立条件，选字幕或旁白领拍。",
+          "sound_role": "核指定音轨与声音职责，旁白以实际音频量时。",
+          "checks": [
+            "真值账本和术语有依据。",
+            "direct不增加试片等待。"
+          ]
+        },
+        {
+          "id": "music-map",
+          "shot_purpose": "选曲后反推知识段落与声画锚点",
+          "visual_action": "根据所选曲子的铺垫、推进、留白和释放分配问题、解释、揭示与收束，保留必要阅读窗。",
+          "sound_role": "先解析用户指定、项目已选或配方默认音乐，地图绑定音源哈希，候选与核听证据分开。",
+          "checks": [
+            "不照抄113 BPM。",
+            "源区间与成片区间分别记录。"
+          ]
+        },
+        {
+          "id": "knowledge-and-reading",
+          "shot_purpose": "让一个关系看得懂",
+          "visual_action": "保持同一焦点，展示初态、变化、终态，落定后留阅读窗。",
+          "sound_role": "少量音乐化提示对应重要事件，其他动作可静音。",
+          "checks": [
+            "不赶拍删条件。",
+            "不以动画起始帧代替结果可见时刻。"
+          ]
+        },
+        {
+          "id": "produce-in-mode",
+          "shot_purpose": "按用户节奏完成影片",
+          "visual_action": "direct直接制作整片并内部返修；其他任务按必要风险检查，staged只在指定节点等待。",
+          "sound_role": "沿现有事件表与ID派生音乐和音效，检查接缝与尾音。",
+          "checks": [
+            "用户不要求试片时不强制先渲染10秒。",
+            "一次性交付仍完成实际成片与审片。"
+          ]
+        },
+        {
+          "id": "audit-and-review",
+          "shot_purpose": "核当前版本的声画与知识",
+          "visual_action": "检查任务表、实际尺寸、关键帧和连续播放，局部修改后重验依赖。",
+          "sound_role": "排程审计、音效分轨实测和主观听审分别记录。",
+          "checks": [
+            "计划哈希与源映射当前有效。",
+            "机器检查不冒充听感或理解通过。"
+          ]
+        },
+        {
+          "id": "feedback-and-transfer",
+          "shot_purpose": "用真实反馈修订方法",
+          "visual_action": "对照不同关系类型题目的问题与返工，保留失败条件。",
+          "sound_role": "记录节奏、掩蔽和疲劳的具体时间点再修改。",
+          "checks": [
+            "同平台相近内容比较，不设通用留存承诺。",
+            "一个案例不宣称通用稳定。"
+          ]
+        }
+      ],
+      "constraints": [
+        "先核受众、关系、事实与术语，无旁白为选项，不覆盖复杂内容的旁白需要。",
+        "用户明确一次性完成、直接成片或无需试片时采用direct，不强制先渲染10秒或中途确认，最终检查与必要返修继续完成。",
+        "staged仅在用户要求的节点等待，其他任务的内部短段检查不自动成为用户门禁。",
+        "拍点、乐句和段落分开，事实与阅读优先于卡点，不固定BPM、配色、镜头数和转折秒点。",
+        "音源地图绑定哈希，候选和核验分开，时间从现有计划与cue sheet派生，不新增主计划必填字段。",
+        "选曲优先级为用户指定、当前项目选择、配方默认；未指定时直接采用配方默认，不重复询问。单次指定不改音乐池或默认，新增候选和更换默认分别依据用户明确要求。",
+        "新曲先核音源哈希、乐段和实际拍点，再反推知识段落与镜头；不继承旧曲的速度、时刻、调性或续接规则。"
+      ],
+      "fallback": "阅读不足则改短、拆镜或跨乐句；机制太复杂改由实测旁白领拍；未测音乐保留候选状态；减少音效与动作，缺实际导出能力则准确说明。",
+      "verification_questions": [
+        "每镜是否新增一个关系并保留条件？",
+        "文字完整可读后是否留足阅读与对照时间？",
+        "可见结果、音乐源锚点与SFX起音是否分别核验？",
+        "是否遵从direct或staged并避免额外确认？",
+        "实际看听与观众、平台反馈是否分开登记？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "../references/knowledge-music-direction.md",
+        "../references/music-direction.md",
+        "../references/layered-reveal.md",
+        "../references/sources.md#音乐推进知识科普"
+      ],
+      "source_relation": "2026-10-21用户确认参考教程研究后的扩展，并明确需支持一次性完成、无需先试片。四步来自本机字幕与关键帧观察；分层同步、双领拍与时序合同为原创适配。未完成整片连续听审、观众或传播验证，不分发原片与音乐。 用户随后确认命名为概念知识科普，以配方音乐池和可更换默认音乐管理曲目；当前神曲为初始默认，支持用户指定新曲反推编排。",
+      "music_policy": {
+        "candidate_track_ids": [
+          "user-knowledge-sharing-theme"
+        ],
+        "default_track_id": "user-knowledge-sharing-theme",
+        "planning_mode": "music_first",
+        "default_requires_confirmation": false
+      }
+    },
+    {
+      "id": "knowledge-rap-explainer",
+      "name": "嘻哈知识科普",
+      "intent": "用准确可唱的歌词推进知识，以真实素材、音乐段落和逐句声画任务形成直接进入主题的视听讲解。",
+      "status": "guidance",
+      "tier": "组合配方",
+      "scenario_ids": [
+        "knowledge-explainer",
+        "music-visual",
+        "news-brief"
+      ],
+      "inputs": [
+        "受众、可复述知识关系及事实与术语依据",
+        "歌词与主张ID、必要条件及禁止夸大内容",
+        "获准音轨或歌曲制作能力、资源上限与用户约束",
+        "事实画面的检索候选、使用范围与生成缺口",
+        "实际唱词、音轨哈希、量时粒度与唯一有效排程"
+      ],
+      "required_inputs": [
+        "受众、可复述知识关系及事实与术语依据",
+        "歌词与主张ID、必要条件及禁止夸大内容",
+        "获准音轨或歌曲制作能力、资源上限与用户约束",
+        "事实画面的检索候选、使用范围与生成缺口",
+        "实际唱词、音轨哈希、量时粒度与唯一有效排程"
+      ],
+      "story_steps": [
+        {
+          "id": "facts-and-lyrics",
+          "shot_purpose": "建立可复述关系与准确歌词",
+          "visual_action": "核事实、术语、条件和歌词主张，按层新增信息。",
+          "sound_role": "核专有词、断句与可唱负荷，不为押韵改事实。",
+          "checks": [
+            "每句有主张或明确情绪职责。",
+            "不把自报与推论唱成确定事实。"
+          ]
+        },
+        {
+          "id": "source-and-stage",
+          "shot_purpose": "给事实与比喻选择正确素材",
+          "visual_action": "先查原始资料，记录候选、权利和缺口，再补图表或非证据画面。",
+          "sound_role": "按内容留声音空间，不以音乐掩盖证据缺失。",
+          "checks": [
+            "生成图不冒充现场。",
+            "素材按运动余量和编辑需要准备。"
+          ]
+        },
+        {
+          "id": "cold-open",
+          "shot_purpose": "前三秒明确观看价值",
+          "visual_action": "首帧进入对象与场景，具体变化或后果在开场可见，正文兑现。",
+          "sound_role": "首句承载内容，不留无信息长前奏；剪辑核原声约束和接缝。",
+          "checks": [
+            "核实际导出的首句与字幕。",
+            "三秒设计不保证留存。"
+          ]
+        },
+        {
+          "id": "verse-explain",
+          "shot_purpose": "用乐句推进知识",
+          "visual_action": "按时间、因果、对照或机制展示证据与图形，主动作有落定。",
+          "sound_role": "用实际演唱窗口、关键词和重音安排动作；解释跨拍时留阅读。",
+          "checks": [
+            "逐句核实际唱词。",
+            "逐行核字幕与图示阅读。"
+          ]
+        },
+        {
+          "id": "hook-and-variation",
+          "shot_purpose": "回收核心认识并新增关系",
+          "visual_action": "副歌按需回收母题，重复增加代价、关系或证据，无新内容则删。",
+          "sound_role": "重音与段落承担不同任务，节奏旋律有疏密和释放。",
+          "checks": [
+            "不固定副歌、三幕或理想骨感结构。",
+            "辅助动作不抢主焦点。"
+          ]
+        },
+        {
+          "id": "bridge-and-close",
+          "shot_purpose": "转向边界并完整收束",
+          "visual_action": "按需展开反例与条件，以主体或因果接力回收开场。",
+          "sound_role": "声音接桥，间奏留消化窗，结尾尾音连续。",
+          "checks": [
+            "模型边界准确。",
+            "结尾不默认导流。"
+          ]
+        },
+        {
+          "id": "verify-and-revise",
+          "shot_purpose": "让实际产物满足必要要求",
+          "visual_action": "核当前音轨、字幕动作、运动极值、接缝和完整文件。",
+          "sound_role": "词音、声线、节奏旋律、混音接缝分别核；换音轨重置检查。",
+          "checks": [
+            "必要要求未解决保留候选。",
+            "未听审不判声音通过，不增加direct用户门禁。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "knowledge.truth-ledger",
+        "knowledge.controlled-register",
+        "knowledge.layered-reveal",
+        "knowledge.layer-bridge",
+        "knowledge.model-boundary",
+        "narrative.follow-unit",
+        "narrative.energy-arc",
+        "text.semantic-emphasis",
+        "text.read-then-move",
+        "sound.beat-map",
+        "sound.event-collision",
+        "sound.attention-mix",
+        "transition.match-cut",
+        "transition.occlusion-reveal",
+        "production.time-function",
+        "production.dwell-budget"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "connect",
+        "trace",
+        "mask-wipe",
+        "hold"
+      ],
+      "style_ids": [
+        "vivid-collage",
+        "paper-editorial",
+        "mono-diagram",
+        "cinematic-photo"
+      ],
+      "constraints": [
+        "只在说唱讲知识的意图下自动选择，背景音乐科普与产品音乐叙事按目标分流。",
+        "事实、单位、数字与成立条件先核，押韵和画面不能扩大主张。",
+        "信息流默认首帧进入主题，前三秒给具体观看价值；原声锁定及其他媒介要求优先。",
+        "事实画面先检索原始素材，缺口有记录后补图表或生成非证据画面。",
+        "每句关联claim、lyric、音轨、scene、asset和beat，动作落定与阅读窗明确；时间由同一有效排程派生。",
+        "换音轨、删前奏、变速或重排后重新核唱词、字幕、动作、音效与下游时间。",
+        "局部拼修持续失败扩大到完整乐句或乐段；是否整首重做按当前用户约束决定。",
+        "不继承其他配方默认音乐，不固定BPM、时长、副歌次数、音色或引擎，不自动安装或付费。",
+        "必要要求未通过保留候选，结构、听审、理解和传播分别记账。"
+      ],
+      "fallback": "知识过密拆句拆镜或跨乐句；素材缺失用有依据图表或换镜头；拼接持续失败扩大修复范围，整首重做遵守当前约束；必需能力不足准确交代候选和缺口。",
+      "verification_questions": [
+        "每句实际唱词与事实是否对应，并保留数字、否定和条件？",
+        "事实画面是否先检索原始素材并核使用范围？",
+        "首帧与前三秒、首句与字幕是否进入同一主题？",
+        "关键词、重音、动作落定、逐行阅读及跨镜接力是否对应？",
+        "换音轨后是否重核全部受影响排程？",
+        "声音分项与必要要求是否成立，未听审与候选是否如实登记？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "../references/knowledge-rap-direction.md",
+        "../references/asset-routing.md",
+        "../references/opening-design.md",
+        "../references/sound-and-rhythm.md",
+        "../references/sources.md#说唱科普与成品反馈"
+      ],
+      "source_relation": "2026-10-25用户确认从同一作品的制作及多轮返修提炼。配方与失败检查为原创归纳；同源会话不作独立成功样本，不分发私人对话、声音或工程，不继承旧片测量与接受状态。"
+    },
+    {
+      "id": "interview-commentary-explainer",
+      "name": "访谈解读",
+      "aliases": [
+        "超级峰解读",
+        "黄叔精读",
+        "Interview Commentary"
+      ],
+      "intent": "用冷开场引语抓住注意，揭示人物与来源，再用三段“原话、图解、本人判断”把外文访谈讲成中文解读，收尾给每类受众一个自检问题。",
+      "status": "guidance",
+      "tier": "完整影片模板",
+      "scenario_ids": [
+        "interview-commentary",
+        "knowledge-explainer",
+        "news-brief"
+      ],
+      "inputs": [
+        "已取得原声的访谈、演讲、播客或发布会素材",
+        "转写与可引用片段的时间",
+        "解读者自己的判断与证据等级",
+        "目标受众与对照问题"
+      ],
+      "required_inputs": [
+        "访谈来源、发布日期与可用的原声音轨",
+        "受众与他们的真实问题",
+        "解读者已有的相关判断与证据等级",
+        "画幅、时长与发布用途，可从项目补齐"
+      ],
+      "template_path": "templates/interview-commentary.md",
+      "method_path": "references/interview-commentary-direction.md",
+      "story_steps": [
+        {
+          "id": "cold-open-quote",
+          "shot_purpose": "先让观众听到访谈里最有冲突的一句原话",
+          "visual_action": "素材片段直接开场，保留原声；人物条短暂出现，双语字幕中文为主、英文为辅，右上角标注来源。",
+          "sound_role": "说话人原声为主，不用音乐盖住人声。",
+          "checks": [
+            "首帧可辨，前三秒听得到原话并读得到中文字幕。",
+            "引语完整，没有剪出相反的意思。"
+          ]
+        },
+        {
+          "id": "reveal-speaker-source",
+          "shot_purpose": "交代说话人凭什么值得听，随后直接进入主题；出处只由右上角的出处角标署名",
+          "visual_action": "人物静帧缓推，名字卡与头衔逐项出现。默认不放来源介绍卡（用户 2026-11-05 要求直接进入主题），出处由右上角的出处角标署名；用户点名要时，才加一张来源卡，显示缩略图、频道、标题与数据，并注明数据截止日期。",
+          "sound_role": "旁白一句话揭示人物，随即进入主题，不单独交代出处与长度。",
+          "checks": [
+            "姓名、头衔、机构与来源一致。",
+            "来源署名始终可见。"
+          ]
+        },
+        {
+          "id": "roadmap-two-audiences",
+          "shot_purpose": "说明这段话与哪两类观众有关，并给出要听的三个问题",
+          "visual_action": "路线图卡逐项出现，当前项高亮、其余变暗，面向对象的标签依次出现。",
+          "sound_role": "旁白先交代语境与对象，再逐个说出三个问题。",
+          "checks": [
+            "三个问题观众能复述。",
+            "两类受众都被点到。"
+          ]
+        },
+        {
+          "id": "quote-card-judgement",
+          "shot_purpose": "每一段先听原话，再看拆解，再听解读者自己的判断",
+          "visual_action": "引语片段，接着人物静帧或纯色底上的解读图表与图形（圆环、环形任务图、重叠圆、雷达、趋势曲线、天平、等式、流程连线等随这句话的逻辑关系选择，没有合适图形时才用文字卡），同一时刻只出现一个；需要图解时可整屏盖住访谈画面，原声继续。",
+          "sound_role": "原声与旁白分时段，旁白用第一人称给判断，关键词与卡片元素同步出现。",
+          "checks": [
+            "每段引语后面都有解读。",
+            "图形或卡片结构对应这句话的逻辑结构。",
+            "第一人称事实有证据等级，没有编造的经历与案例。",
+            "引语合计不超过原片的三分之一。"
+          ]
+        },
+        {
+          "id": "self-check-close",
+          "shot_purpose": "让每类受众带走一个今天就能对照自己的问题",
+          "visual_action": "对照面板依次出现每类受众的自检问题，随后是一段固定的品牌落款（山峰波形加字标）；屏幕上不放评论邀请与行动号召。",
+          "sound_role": "完整尾句与自然淡出，不重复总结全文。",
+          "checks": [
+            "每个问题都能马上对照自己回答。",
+            "最后一个词与尾音没有被截断。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "knowledge.truth-ledger",
+        "knowledge.controlled-register",
+        "knowledge.evidence-board",
+        "narrative.output-as-proof",
+        "text.semantic-emphasis",
+        "text.read-then-move",
+        "sound.attention-mix",
+        "production.time-function",
+        "production.dwell-budget",
+        "production.capability-fallback"
+      ],
+      "motion_ids": [
+        "reveal",
+        "stagger",
+        "highlight",
+        "count",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "style_ids": [
+        "dark-tech",
+        "opuscar-dark-keynote"
+      ],
+      "constraints": [
+        "引语总量不超过原片的三分之一，单段 5 到 30 秒；素材只在本地使用，不再分发原片。",
+        "对外文本全部过创作风格审计；英文行不使用破折号、冒号与分号；来源署名只作事实标注，格式为“频道名 访谈 · 年.月”，不带“素材 · ”前缀。",
+        "每条字幕句末不带标点，句中标点保留。",
+        "时间线以实际配音为准，图表与卡片元素用句内短语引用定时，口播改动后自动跟随。",
+        "本人音色与参考录音只用于授权的本人讲解，不进入公开示例；听感没有听审时保持 not_checked。",
+        "可执行流水线、脚本与已验证参数在 chaojifeng-interview-commentary，本配方只给设计合同。"
+      ],
+      "fallback": "素材或下载受限时改用用户提供或已授权的片段；缺少本地配音能力时交稿件、字幕与时间表并说明缺口；时长不足时保留冷开场、一段主体与收尾。",
+      "verification_questions": [
+        "每段引语后面是否都有解读，引语总量是否在三分之一以内？",
+        "图形或卡片结构是否对应这句话的逻辑结构，同一时刻是否只有一个？",
+        "每条第一人称事实是否有证据等级，有没有没依据的案例？",
+        "听感、观众理解是否如实登记为未验证？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "partial",
+          "evidence": [
+            {
+              "environment": "macOS arm64；Playwright 无头 Chromium 渲染叠加层",
+              "scope": "第一期样例 25 个画面的抽帧联系表，目视检查字幕、卡片、遮挡与人脸位置",
+              "artifact": "第一期项目内的抽帧记录（项目内部，不随库分发）",
+              "note": "只覆盖抽样帧，没有逐帧观看"
+            }
+          ]
+        },
+        "exported": {
+          "status": "partial",
+          "evidence": [
+            {
+              "environment": "macOS arm64；ffmpeg 4.4.1；本地 Qwen3-TTS 与 Whisper",
+              "scope": "第一期样例成片 5 分 31 秒，1920×1080，25 fps；−16.0 LUFS，真峰值 −1.4 dBFS；口播回听汉字错误率 0.015；引语字幕召回 0.966",
+              "artifact": "第一期项目内的成片 interpretation-andrew-ng-v1.mp4（不随库分发）",
+              "note": "听感与观众理解没有验证"
+            },
+            {
+              "environment": "macOS arm64；ffmpeg 4.4.1；本机 ACE-Step 1.5；Playwright 无头 Chromium 渲染叠层；Whisper 抽窗回听",
+              "scope": "第三期（v3）成片 5 分 25 秒（324.7 秒），1920×1080，25 fps；−16.1 LUFS，真峰值 −1.4 dBFS；图形画面占 77.1%，最长纯访谈段 13.96 秒；叠层 122 段全部在位；铺底相对人声（300 Hz 到 3 kHz 强语音帧）均值 −30.2 dB；抽窗回听 28 处汉字错误率 0.009",
+              "artifact": "第三期项目内的成片 interpretation-andrew-ng-v3.mp4（不随库分发）",
+              "note": "只有工具实测：没有人耳听过铺底、音效与旁白，用户尚未验收；音效密度每分钟 15.9 个，高于第二期口径；ACE 生成内容的商用授权只是厂方声明，未逐项核实；曲线与图形只画走向，不是真实数据"
+            }
+          ]
+        }
+      },
+      "source_refs": [
+        "references/interview-commentary-direction.md",
+        "templates/interview-commentary.md",
+        "chaojifeng-interview-commentary 技能（完整样例与脚本，含第三期的图表场景与 ACE 声音流水线）"
+      ],
+      "source_relation": "依据 2026-11-05 第一期实际制作（Economist 对吴恩达的访谈，原片 7 分 06 秒，成片 5 分 31 秒）和用户提供的三条参考解读视频的形式观察提炼；同日第三期（v3）按用户的反馈改为图表优先、本机 ACE 生成铺底与音效、字幕句末不带标点、去掉“素材 · ”前缀、收尾不放评论邀请并增加可复用的品牌落款，用户尚未验收。不分发原始素材、参考片与本人声音，不把单期结果外推为整类验证。"
+    },
+    {
+      "id": "product-split-explainer",
+      "name": "极简左右讲解",
+      "aliases": [
+        "Minimal Split Explainer",
+        "极简左右结构"
+      ],
+      "intent": "用结果开场、左右讲解和证据变奏串起产品价值，以成果与产品名自然收束。",
+      "status": "guidance",
+      "tier": "完整影片模板",
+      "scenario_ids": [
+        "product-promo",
+        "product-demo"
+      ],
+      "inputs": [
+        "产品入口、平台版本和目标用户",
+        "可核实的核心价值及实际功能",
+        "已有真实界面、操作与结果素材；参考模式另给可读参考",
+        "发布用途、画幅与声音要求，可从项目补齐"
+      ],
+      "required_inputs": [
+        "产品入口、平台版本和目标用户",
+        "可核实的核心价值及实际功能",
+        "已有真实界面、操作与结果素材；参考模式另给可读参考",
+        "发布用途、画幅与声音要求，可从项目补齐"
+      ],
+      "entry_modes": [
+        {
+          "id": "reference",
+          "name": "提供参考素材",
+          "method": "拆解可读参考的首幕、主体、尾幕与声画，映射当前产品事实。"
+        },
+        {
+          "id": "template",
+          "name": "选择模板名称",
+          "method": "精确名称、别名或 ID 加载此模板，从产品项目补齐素材，无需另给参考片。"
+        }
+      ],
+      "template_path": "templates/product-split-explainer.md",
+      "method_path": "references/product-promo-direction.md",
+      "story_steps": [
+        {
+          "id": "opening-result",
+          "shot_purpose": "让观众先看见产品能带来的结果",
+          "visual_action": "完成作品或核心成果先出现，再引出产品名称与一句价值；明确参考需要时可采用品牌图形与承诺开场。",
+          "sound_role": "旁白自然引入价值，音乐建立轻量情绪。",
+          "checks": [
+            "首帧可辨，前三秒有所得；开场承诺在主体兑现。"
+          ]
+        },
+        {
+          "id": "value-proof",
+          "shot_purpose": "逐段讲清并证明一项价值",
+          "visual_action": "左侧短标题与价值，右侧实际界面或作品，沿同一任务展示输入、操作、变化及结果。",
+          "sound_role": "连贯旁白解释价值，音乐适度降低，字幕跟随实际声音。",
+          "checks": [
+            "操作与旁白一致，关键终态有稳定阅读窗。"
+          ]
+        },
+        {
+          "id": "evidence-variation",
+          "shot_purpose": "让细节与差异看得清",
+          "visual_action": "必要时全屏成果、操作近景、前后对比或多图组合，再接回主结构或下一章。",
+          "sound_role": "随语义与真实动作承接，不用无关音效遮住讲解。",
+          "checks": [
+            "变奏服务当前证据，不强迫每幕左文右机；同一作品连续。"
+          ]
+        },
+        {
+          "id": "brand-close",
+          "shot_purpose": "回收成果与产品记忆",
+          "visual_action": "回到完成作品或核心成果，产品名与自然品牌句落定；明确转化目标时才加入已核实入口。",
+          "sound_role": "完整尾句、尾音和自然淡出。",
+          "checks": [
+            "回应开场，画面停留足够；不截断最后发声或突然黑屏。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.output-as-proof",
+        "narrative.goal-proof",
+        "camera.focus-frame",
+        "visual.target-callout",
+        "text.read-then-move",
+        "sound.attention-mix",
+        "production.dwell-budget"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal"
+      ],
+      "constraints": [
+        "首幕与尾幕是必选段落，中段左右结构可按证据切全屏、近景、对比或多图。",
+        "白或近白底、粗标题、少量品牌色、底部固定字幕；画幅变化优先保证阅读。",
+        "旁白讲价值，画面证明；按真实音频排时，不绑定产品、时长、曲目或配音引擎。",
+        "某个工具失败不静默删去必需的人声、音乐或镜头。"
+      ],
+      "fallback": "复用已有真实素材与可用制作能力，缩小到能证明的价值；必要能力缺失如实记录，未完成不宣称成片通过。",
+      "verification_questions": [
+        "首幕是否建立具体结果并引出产品？",
+        "每项价值是否有清晰操作和可见结果？",
+        "左右结构与必要变奏是否服务证据？",
+        "结尾是否回到成果与产品名，并完整保留声音？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "references/product-promo-direction.md",
+        "templates/product-split-explainer.md",
+        "references/sources.md"
+      ],
+      "source_relation": "依据用户提供的产品宣传创作对话、参考片和迭代结果观察，按 2026-10-29 用户确认提炼；不分发私有原始素材，不将抽帧或来源成片状态视为本模板已渲染或跨产品验证。"
+    },
+    {
+      "id": "product-source-explainer",
+      "name": "源码说明片",
+      "aliases": [
+        "Source-Driven Product Explainer",
+        "源码驱动产品宣传",
+        "产品源码说明片"
+      ],
+      "intent": "从产品源码和用户给的选题侧重点出发，核实事实、取得当前版本的真实证据，做成先抛观众的疑问、再揭晓产品、再按侧重点分章讲怎么操作、首尾回扣的说明类产品宣传片。",
+      "status": "guidance",
+      "tier": "完整影片模板",
+      "scenario_ids": [
+        "product-promo",
+        "product-demo"
+      ],
+      "inputs": [
+        "产品源码目录，含平台、版本、对外名称与目标用户",
+        "选题侧重点：用户想强调的几项价值，顺序即优先级",
+        "当前版本可运行的真实界面，或可核对的官方素材",
+        "画幅、声音与时长要求，可从产品补齐；本人音色仅在用户明确指定时使用"
+      ],
+      "required_inputs": [
+        "产品源码目录，含平台、版本、对外名称与目标用户",
+        "选题侧重点：用户想强调的几项价值，顺序即优先级",
+        "当前版本可运行的真实界面，或可核对的官方素材"
+      ],
+      "entry_modes": [
+        {
+          "id": "source",
+          "name": "提供产品源码与选题侧重点",
+          "method": "读取源码建立事实账本，把侧重点映射成章节，按证据阶梯取得当前版本的真实证据；开场先替观众说出麻烦与疑问再揭晓产品，章节用极简左右讲解的视觉语法制作。"
+        }
+      ],
+      "template_path": "templates/product-source-explainer.md",
+      "method_path": "references/product-source-explainer.md",
+      "story_steps": [
+        {
+          "id": "opening-hook",
+          "shot_purpose": "让观众先认出自己的麻烦，带着疑问等答案",
+          "visual_action": "3 到 4 句观众的话：麻烦、顾虑、疑问，一句一幕，独立构图，不放真实界面；疑问句里的期待按章节顺序列出。用户明确要结果先行时，改为先放排在首位的侧重点的完成结果，再引出产品名。",
+          "sound_role": "语气像替观众发问；乐床不进鼓，用渐快的脉冲托住疑问，揭晓前留一拍真空。",
+          "checks": [
+            "首句 0.3 秒内开口，钩子约 15 秒以内；每句是观众的话而不是产品主张；顾虑句没有说出边界禁止的反面承诺；期待与章节、片尾清单顺序一致。"
+          ]
+        },
+        {
+          "id": "reveal-and-result",
+          "shot_purpose": "给出答案，回收期待，并马上兑现一个结果",
+          "visual_action": "疑问逐个翻成对勾，产品名与形态落定，一句概括回收期待；随后放最有画面感的结果作为答案的第一个证明。",
+          "sound_role": "揭晓处落点并进鼓，旁白更笃定、句首留一拍。",
+          "checks": [
+            "概括句挂的证据在后面各章；开场的结果在对应章节兑现；首帧可辨，前三秒有所得。"
+          ]
+        },
+        {
+          "id": "emphasis-chapter",
+          "shot_purpose": "一章证明一项侧重点",
+          "visual_action": "标题给出对外说法，证据按前态、操作、结果连续展开，需要时局部放大；章节时长随侧重点权重和证据厚度分配。",
+          "sound_role": "旁白讲价值，画面证明；字幕与切点来自同一份词级排程。",
+          "checks": [
+            "每条口播主张在画面上有同一件事的证据；证据来自当前版本的运行或已核对的素材。"
+          ]
+        },
+        {
+          "id": "beyond-emphasis",
+          "shot_purpose": "可选：一句话带过侧重点之外的能力",
+          "visual_action": "不独立成章，用已有证据的画面快速带过，不引入新的未证实主张。",
+          "sound_role": "语速不变，不增加新信息。",
+          "checks": [
+            "不出现账本里 unknown 或不成立的事实。"
+          ]
+        },
+        {
+          "id": "brand-close",
+          "shot_purpose": "回收成果与产品记忆",
+          "visual_action": "回到开场的成果，产品名与一句有事实支撑的品牌句落定；明确转化目标时才加入已核实入口。",
+          "sound_role": "完整尾句、尾音和自然淡出。",
+          "checks": [
+            "回应开场，画面停留足够；不截断最后发声，不突然黑屏。"
+          ]
+        }
+      ],
+      "expression_ids": [
+        "narrative.output-as-proof",
+        "narrative.goal-proof",
+        "camera.focus-frame",
+        "visual.target-callout",
+        "text.read-then-move",
+        "sound.attention-mix",
+        "production.dwell-budget",
+        "production.capability-fallback"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "style_ids": [
+        "product-minimal"
+      ],
+      "constraints": [
+        "源码确认事实与限制，镜头来自真实运行的结果；每条口播主张都对应账本里已核实且可对外的事实。",
+        "侧重点是约束：章节、时长和证据向侧重点倾斜，其余能力最多一句话带过；不成立的侧重点收窄或告知，不编造。",
+        "证据按阶梯取：重建的界面进成片前须与真实证据对照，不凭空绘制；取证不触发真实发布、支付或删除，先脱敏再入库。",
+        "旁白整稿一次合成；字幕、切点与闪避从同一份词级排程派生；本人音色只在用户明确指定时使用。",
+        "开场默认先替观众说出麻烦与疑问，再揭晓产品，再讲怎么操作；开场里替观众说话的句子登记为 framings，不当作产品主张，顾虑句要写明由哪条边界收住。",
+        "账本、工作单与取证原图留在内部，对外文字、文件名和音轨不加制作身份标签。"
+      ],
+      "fallback": "源码读不全或产品无法运行时，缩小到已核实且有证据的价值，取不到的证据就降低主张；保留账本与缺口说明，不把方案当成成片。",
+      "verification_questions": [
+        "每个侧重点是否有章节，或已告知为何收窄或不成立？",
+        "每条口播主张是否有同一件事的真实证据，证据在哪一层？",
+        "有没有触碰账本里的口径边界，或让个人信息出现在画面、字幕和文件名里？",
+        "开场的疑问是否让目标观众在前几秒认出自己的麻烦，顾虑有没有被说成产品承诺？",
+        "手机尺寸下主操作与结果是否可辨，首尾是否回扣？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "references/product-source-explainer.md",
+        "templates/product-source-explainer.md",
+        "references/sources.md"
+      ],
+      "source_relation": "依据用户于 2026-11-05 指向的 Kimi Code 产品说明片创作会话（参考片风格、源码调研、真实界面取证、产品代言人口吻、单一排程字幕、同曲乐床闪避等迭代要求）和 2026-10-29 已沉淀的极简左右讲解归纳；账本、证据阶梯与检查脚本为本库的原创整理；开场先抛观众疑问、再揭晓产品、再讲怎么操作的顺序，由用户于 2026-11-05 听片后提出，并在“一键发”一部片上实做。不分发私有会话、原始素材、个人声音或项目路径，不将来源会话的成片状态视为本配方已渲染或跨产品验证。"
+    },
+    {
+      "id": "water-liquid",
+      "name": "水与液体构建",
+      "aliases": [
+        "液体构建",
+        "水的构建方法",
+        "Liquid Construction"
+      ],
+      "intent": "按元素、表现重点与镜头尺度构建水、咖啡、茶、雨水等液体的形态、光泽、运动与交互。",
+      "status": "guidance",
+      "tier": "物体形象构建配方",
+      "scenario_ids": [],
+      "style_ids": [],
+      "motion_ids": [],
+      "expression_ids": [],
+      "method_path": "objects/water-liquid/METHOD.md",
+      "engineering_path": "objects/water-liquid/ENGINEERING.md",
+      "template_path": "templates/liquid-construction.md",
+      "inputs": [
+        "液体元素及表现重点",
+        "尺度、边界、相机与照明",
+        "已有工程、素材、引擎与主计划"
+      ],
+      "story_steps": [
+        {
+          "id": "identify",
+          "shot_purpose": "确定液体在镜头中的作用",
+          "visual_action": "明确元素、表现重点、尺度、边界与观众必须看见的变化",
+          "sound_role": "确定液体声音是否承担叙事，不自动添加音效",
+          "checks": [
+            "镜头意图与构建路线匹配"
+          ]
+        },
+        {
+          "id": "construct",
+          "shot_purpose": "建立可信的形态、光泽与运动",
+          "visual_action": "依次构建空间边界、多尺度运动、反射折射与厚度响应",
+          "sound_role": "必要声音沿主计划事件，不另建时钟",
+          "checks": [
+            "轮廓、光学、接触与运动协调"
+          ]
+        },
+        {
+          "id": "interact",
+          "shot_purpose": "让变化与接触原因一致",
+          "visual_action": "将波纹、水花、泡沫、湿润和漂浮连接到统一事件",
+          "sound_role": "入水与流动声音按实际落点编排",
+          "checks": [
+            "事件连续且无明显穿插"
+          ]
+        },
+        {
+          "id": "verify",
+          "shot_purpose": "完成可重复的镜头表现",
+          "visual_action": "核相同初态重放、关键连续片段、参数联动与真实输出",
+          "sound_role": "按本片要求听审，静音镜头不强加声音",
+          "checks": [
+            "未检查项不登记通过"
+          ]
+        }
+      ],
+      "constraints": [
+        "元素级方法不覆盖已有整片配方，不建立第二条时间线。",
+        "开放液面、有限液面、附着液滴、液流与混合分别选择实现。",
+        "尺度、边界、光学、运动与接触联动调整，不能只换颜色。",
+        "方法指导与实际实现、渲染、导出及视觉验收分开。",
+        "开放海面先加载可执行配方与参数预设，运行结果不自动继承视觉验收。"
+      ],
+      "fallback": "先验证关键镜头；缺失的形变、交互或光学能力须补齐实现，确有阻塞时保存工程并报告未完成项，不自行降低已确定的效果目标。",
+      "verification_questions": [
+        "液体是否服务当前内容和镜头？",
+        "形态、光泽、运动和边界是否协调？",
+        "参数与时间状态能否恢复？",
+        "实际连续片段是否兑现表现重点？"
+      ],
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "source_refs": [
+        "references/object-construction.md",
+        "objects/water-liquid/METHOD.md",
+        "objects/water-liquid/ENGINEERING.md"
+      ],
+      "source_relation": "本库按元素、表现重点与镜头尺度组织构建方法；开放海面有独立实现与参数预设，其他液体按各自方法选择实现。运行、画面与参考质量分别验证。",
+      "implementation_path": "objects/water-liquid/OCEAN.md",
+      "quality_path": "objects/water-liquid/QUALITY.md"
+    }
+  ]
+}

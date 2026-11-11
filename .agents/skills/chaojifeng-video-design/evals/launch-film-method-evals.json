@@ -1,0 +1,183 @@
+{
+  "skill_name": "chaojifeng-video-design",
+  "schema_version": 1,
+  "scope": "product launch films and reference-film research: launch-film-arc, feature-chapter-reel, event-map sound audit, evidence levels",
+  "status": "authored-not-run",
+  "notes": [
+    "These are review prompts with expected behaviour. They have not been run against any model; no pass rate is claimed.",
+    "Each case is judged by reading the produced plan, beat sheet, event map and answer. film_probe.py and audio_event_audit.py only measure cuts, loudness, energy and onset times, never whether a film looks good, sounds good or works on viewers."
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "给我们的修图App做一条30秒的发布片，要有说服力，但别吹牛。",
+      "expected_output": "A beat sheet starts from current product behaviour and real results, derives reading windows and scene triggers, records rebuilt material provenance, and decides necessary viewer-facing disclosure by misrepresentation risk and actual channel constraints. No invented product capability.",
+      "assertions": {
+        "uses": [
+          "launch-film-arc",
+          "production.dwell-budget",
+          "transition.action-seam"
+        ],
+        "arc_is_a_menu": "every segment can be dropped with a stated reason; a known pain skips the verdict ladder",
+        "evidence_first": "inventory of real inputs, outputs and first step before any storyboard",
+        "length_is_derived": "per-shot minimum window with its basis, total = sum + seams; over target means cut shots, not speed up",
+        "must_not": [
+          "copying the reference film's proportions or numbers as defaults",
+          "inventing statistics, user counts or store availability",
+          "claiming the film was rendered, listened to or tested on viewers"
+        ],
+        "rebuild_provenance_and_disclosure": "current behaviour and result verified; provenance recorded; viewer-facing explanation chosen for actual risk/channel, without a mandatory persistent label"
+      },
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "只要一条10秒的功能小片，展示新增的“四角自由调整”。",
+      "expected_output": "A short feature clip uses one or two elements with an initial state, visible trigger and evidence-backed result. Rebuilt states retain provenance and necessary viewer disclosure by actual risk and channel. The result has a readable hold; no whole launch arc is forced.",
+      "assertions": {
+        "uses": [
+          "product-task-proof",
+          "transition.action-seam",
+          "text.read-then-move"
+        ],
+        "not_whole_arc": "no verdict ladder, no chapter reel, no sign-off animation for a 10 second clip",
+        "trigger_to_result": "initial state, trigger, final state; the result is held for its reading window",
+        "must_not": [
+          "padding the clip with a pain segment to look like a launch film"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "我们的产品是个滑块和图片预览为主的App，没有命令行也没有输入框，怎么套用发布片的“打字叙述者”和“行动即调用”？",
+      "expected_output": "The answer transfers the cause-and-effect idea instead of copying the typing gimmick: typing becomes selecting, dragging or scanning; the call to action shows the real first step in the product; every visible pointer lands on something. It says plainly when an element does not apply.",
+      "assertions": {
+        "uses": [
+          "text.typed-voice",
+          "narrative.cta-as-action",
+          "transition.action-seam"
+        ],
+        "transfer_not_copy": "a drag or selection replaces typing; the action-to-change causality is kept",
+        "first_step_is_real": "the call to action matches how people actually start using the product; placeholders are marked as placeholders",
+        "must_not": [
+          "adding a fake command line or chat box the product does not have"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "成片里有十几个音效，我不想事后发现声音和画面对不上。",
+      "expected_output": "An event map is written before the timeline is built, with scheduled onset = action time + onset offset generated from the same data as the visuals. After rendering, audio_event_audit.py runs on an effects-only stem and the report separates ok, late, early, missing and schedule_drift. Listening stays not_run unless it really happened.",
+      "assertions": {
+        "uses": [
+          "sound.event-collision",
+          "sound.pivot-drop",
+          "production.time-function"
+        ],
+        "event_map_first": "audio-event-map.json with visual_time_s, intended_offset_s, sound_start_s, onset_offset_s, tolerance_s",
+        "regenerate_on_retiming": "changing scene length, playback rate or deleting a shot regenerates the schedule",
+        "audit_input": "an effects-only stem, because a music bed puts energy near every beat",
+        "report_statuses": [
+          "ok",
+          "late",
+          "early",
+          "missing",
+          "schedule_drift"
+        ],
+        "listening_status": "not_run unless actually listened",
+        "must_not": [
+          "declaring sound sync verified from timestamps alone",
+          "auditing a mix with music and trusting nearest-onset matches"
+        ]
+      },
+      "files": [
+        "templates/audio-event-map.json"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "再研究一部别人的产品发布片，把方法抽出来补进这个Skill。",
+      "expected_output": "A study that follows the research ladder: probe the film with film_probe.py, read the pinned source when it exists, grade every claim as observation, measurement or inference, say whether the sample is independent of earlier samples, keep counterexamples and blemishes, and state that no one listened or tested viewers. Abstractions are written as principle, starting parameters, failure signals and a transfer test.",
+      "assertions": {
+        "uses": [
+          "film_probe.py",
+          "reference-film-study.md"
+        ],
+        "evidence_levels": [
+          "E1 source",
+          "E2 frames and cuts",
+          "E3 instrument measurement not listened",
+          "E4 inference"
+        ],
+        "same_source_disclosed": "a second film from the same project is not independent evidence",
+        "counterexamples_kept": "defects in the reference are recorded instead of smoothed over",
+        "numbers_are_starting_points": true,
+        "must_not": [
+          "claiming one film proves a method works",
+          "claiming the film was heard when only measured",
+          "shipping the reference film's footage, brand, fonts or music inside the skill"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用户已经很熟悉“旧办法有多麻烦”，还要不要做痛点和判决那一段？",
+      "expected_output": "The answer skips the pain and verdict segments and starts from a real input and the invocation, keeping at most one verdict card for contrast. It explains that the verdict ladder exists to show why the usual approach fails and is not a required ritual, and it does not stage a straw-man alternative.",
+      "assertions": {
+        "uses": [
+          "launch-film-arc",
+          "narrative.pain-to-verdict"
+        ],
+        "variant": "known-pain-skip",
+        "must_not": [
+          "inventing a bad experience to fill the slot",
+          "attacking a named competitor without evidence"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "产品有六个功能，我想在一条片里逐个证明。",
+      "expected_output": "The plan limits chapters to what a viewer can hold (three or four, an inference not a measurement), groups or drops the rest with a reason, locks the sentence pattern and stage across chapters, gives each chapter one real output, labels excerpts as n/N, and re-checks reading windows after compressing inner timelines.",
+      "assertions": {
+        "uses": [
+          "feature-chapter-reel",
+          "narrative.parallel-promise",
+          "narrative.output-as-proof",
+          "production.compressed-inner-clock"
+        ],
+        "chapter_limit_is_stated_as_inference": true,
+        "each_chapter_has_a_real_output": true,
+        "excerpts_labelled": "n/N or an equivalent note",
+        "after_compression": "reading windows and sound events re-checked",
+        "must_not": [
+          "a title card standing in for a result",
+          "chapters that change layout or sentence pattern"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "照着那部参考片来，字体、配乐、品牌配色、吉祥物都用它的，这样最像。",
+      "expected_output": "The answer separates what can be learned (structure, timing logic, causality, event-map discipline) from what cannot be copied (the reference film's brand, mascot, fonts, music and footage). It proposes the product's own tokens and its own or properly licensed audio, and records that nothing from the reference is shipped inside the skill or the new film.",
+      "assertions": {
+        "uses": [
+          "style.two-ground-world",
+          "style.token-contract"
+        ],
+        "own_identity": "the product's own brand tokens, fonts and audio replace the reference's",
+        "license_check": "third-party audio and fonts are checked before use and credited as required",
+        "must_not": [
+          "reusing the reference brand, mascot, fonts, music or footage",
+          "implying any affiliation with the reference's makers"
+        ]
+      },
+      "files": []
+    }
+  ]
+}

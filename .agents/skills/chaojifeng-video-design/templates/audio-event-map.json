@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "notes": [
+    "结构样例，时间只是示意，不是任何成片的实测。",
+    "visual_time_s：画面动作可见的那一帧，整片绝对秒。",
+    "intended_offset_s：声音有意领先（负）或滞后（正）画面多少；转折落拍常取负值，其余动作确认取0。",
+    "sound_start_s：声音文件放在时间线上的起点；onset_offset_s：文件内真正起音的位置。两者相加是排定的起音时刻，可省略 sound_start_s 只做设计期登记。",
+    "由同一份数据同时生成画面动作和声音排程；时间重排（改场景长度、timeScale、删镜）后重新生成，再运行 audio_event_audit.py。",
+    "有音乐床时音乐重拍会让每个时刻附近都有能量起跳，审计请用只含音效的混音。"
+  ],
+  "events": [
+    {
+      "id": "paste-link",
+      "role": "引用外部实物",
+      "sound_id": "pop",
+      "visual_time_s": 2.1,
+      "intended_offset_s": 0.0,
+      "sound_start_s": 2.1,
+      "onset_offset_s": 0.0,
+      "tolerance_s": 0.08
+    },
+    {
+      "id": "send-tap",
+      "role": "动作确认",
+      "sound_id": "click",
+      "visual_time_s": 2.3,
+      "intended_offset_s": 0.0,
+      "sound_start_s": 2.28,
+      "onset_offset_s": 0.02,
+      "tolerance_s": 0.08
+    },
+    {
+      "id": "pull-back",
+      "role": "空间移动",
+      "sound_id": "whoosh-soft",
+      "visual_time_s": 2.55,
+      "intended_offset_s": 0.0,
+      "sound_start_s": 2.55,
+      "onset_offset_s": 0.0,
+      "tolerance_s": 0.12
+    },
+    {
+      "id": "pivot-drop",
+      "role": "段落转折",
+      "sound_id": "drop-hit",
+      "visual_time_s": 12.3,
+      "intended_offset_s": -0.3,
+      "sound_start_s": 12.0,
+      "onset_offset_s": 0.0,
+      "tolerance_s": 0.08
+    }
+  ]
+}

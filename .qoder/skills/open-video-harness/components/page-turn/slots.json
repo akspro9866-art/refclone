@@ -1,0 +1,20 @@
+{
+ "version": 1,
+ "name": "page-turn",
+ "summary": "A book page: half of the current picture turns over in perspective, its back is the next picture's other half, the uncovered half lies under a shade that lifts. The turn itself is the cut.",
+ "tags": ["翻页", "翻书", "书页", "纸面", "转场", "page turn", "book"],
+ "painters": ["canvas"],
+ "use": "st = state(params, u) for u 0 → 1 over the turn; canvas(ctx, st, A, B, params) with A and B the two pictures as full-frame canvases (lib/paint.js offscreen()). leaf() and drawLeaf() are the geometry and its drawing, for other folds.",
+ "slots": [
+  {"name": "ease", "type": "string|array", "default": "inOutCubic", "text": "how the turn runs over u: a lib/core.js ease name, a CSS curve or [x1, y1, x2, y2]"},
+  {"name": "backward", "type": "boolean", "default": false, "text": "turn the left half over to the right (paging back)"},
+  {"name": "slices", "type": "number", "default": 48, "min": 8, "text": "vertical slices the leaf is drawn in; fewer show as facets"},
+  {"name": "perspective", "type": "number", "default": 2600, "unit": "px", "text": "the viewer's distance; smaller bends the leaf more"},
+  {"name": "dark", "type": "number", "default": 0.5, "min": 0, "max": 1, "text": "the leaf's shade when it stands edge-on"},
+  {"name": "under", "type": "number", "default": 0.35, "min": 0, "max": 1, "text": "the shade on the uncovered half at the start, lifting as the turn ends"}
+ ],
+ "sample": {"at": [0.4, 1.3, 1.4, 1.5, 1.6, 2.5, 3.4, 3.5, 3.6, 4.6], "text": "the contact sheet's moments: the middle of each seam"},
+ "provenance": [
+  {"repo": "this repository", "path": "engines/canvas-film/template/src/30-transitions.js", "license": "MIT", "note": "canvas-film's turn transition and its leaf, made engine-free"}
+ ]
+}

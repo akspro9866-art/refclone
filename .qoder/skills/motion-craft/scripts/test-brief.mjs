@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { fixtureArgs } from './brief-test-fixture.mjs';
+const scripts = path.dirname(fileURLToPath(import.meta.url));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'brief-gate-'));
+const run = (script, args) => spawnSync(process.execPath, [path.join(scripts, script), ...args], {cwd: tmp, encoding:'utf8'});
+try {
+  for (const script of ['plan-motion.mjs','scenes.mjs','draw-style.mjs','scaffold-remotion.mjs']) {
+    const args = ['--brief','buatkan saya video motion graphics', script.startsWith('scaffold') ? '--target' : '--out', path.join(tmp, 'absent')];
+    const result = run(script,args);
+    assert.notEqual(result.status,0);
+    assert.match(result.stderr,/BRIEF_REQUIRED/);
+    assert.equal(fs.existsSync(path.join(tmp,'absent')),false);
+  }
+  const args = fixtureArgs(tmp, ['--brief','Tutorial Git untuk Reels','--style','44','--aspect','9:16','--out',path.join(tmp,'plan')]);
+  const file = args.at(-1);
+  const brief = JSON.parse(fs.readFileSync(file));
+  delete brief.decisions.fps;
+  fs.writeFileSync(file,JSON.stringify(brief));
+  assert.match(run('plan-motion.mjs',args).stderr,/unresolved fields: fps\./);
+  assert.equal(fs.existsSync(path.join(tmp,'plan')),false);
+  brief.decisions.fps = {value:29.97,source:'delegated',evidence:'Sisanya pilihkan'};
+  brief.decisions.width.value = 2160; brief.decisions.height.value = 3840;
+  fs.writeFileSync(file,JSON.stringify(brief));
+  let result = run('plan-motion.mjs',args);
+  assert.equal(result.status,0,result.stderr);
+  const plan = JSON.parse(fs.readFileSync(JSON.parse(result.stdout).planPath));
+  assert.equal(plan.width,2160); assert.equal(plan.height,3840); assert.equal(plan.fps,29.97);
+  assert.equal(plan.resolvedBrief.decisions.fps.source,'delegated');
+  assert.match(run('plan-motion.mjs',[...args,'--fps','60']).stderr,/BRIEF_CONFLICT/);
+  const scaffold = path.join(tmp,'project');
+  result = run('scaffold-remotion.mjs',['--brief-file',file,'--target',scaffold,'--template','T101']);
+  assert.equal(result.status,0,result.stderr);
+  const starter = fs.readFileSync(path.join(scaffold,'src/antislop/AppleInteractiveStarter.tsx'),'utf8');
+  assert.match(starter, /"width": 2160/);
+  assert.match(starter, /"height": 3840/);
+  assert.equal(fs.existsSync(path.join(scaffold,'public/words.json')),false);
+  brief.decisions.width.value = 1920;
+  fs.writeFileSync(file,JSON.stringify(brief));
+  assert.match(run('plan-motion.mjs',args).stderr,/resolution conflicts/);
+  brief.decisions.width.value = 2160;
+  brief.decisions.fps.evidence = '';
+  fs.writeFileSync(file,JSON.stringify(brief));
+  assert.match(run('plan-motion.mjs',args).stderr,/BRIEF_INCOMPLETE/);
+  fs.writeFileSync(file,'{');
+  assert.notEqual(run('plan-motion.mjs',args).status,0);
+  console.log('Brief gates verified: all entry points, no writes when unresolved, partial fields, delegation, resolution, conflicts, malformed input.');
+} finally { fs.rmSync(tmp,{recursive:true,force:true}); }

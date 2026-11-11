@@ -146,10 +146,12 @@ test('lazy schema registration compiles every existing artifact with strict cros
   const filenames = await fs.readdir(path.join(project, 'schemas'));
   const names = filenames.filter(name => name.endsWith('.schema.json') && name !== 'common.schema.json')
     .map(name => name.slice(0, -'.schema.json'.length));
-  // 17 artifact schemas (+ common.schema.json = 18 total): the original pipeline,
+  // 22 artifact schemas (+ common.schema.json = 23 total): the original pipeline,
   // the reference-agnostic component catalog, the computer-vision first-pass record,
-  // the procedural promotion and perceptual diff schemas, and motion-transfer-spec.
-  assert.equal(names.length, 17);
+  // the procedural promotion and perceptual diff schemas, motion-transfer-spec, and the
+  // five Wave-2 artifacts (capsule-recipe, edit-list, product-ledger, photo-trace-report,
+  // split-logo-report).
+  assert.equal(names.length, 22);
   await Promise.all(names.map(name => assert.rejects(validateArtifact(name, {}), errorCode('SCHEMA_INVALID', error => {
     assert.ok(error.details.errors.length > 1, name);
     assert.ok(error.details.errors.every(entry => entry.keyword === 'required'), name);

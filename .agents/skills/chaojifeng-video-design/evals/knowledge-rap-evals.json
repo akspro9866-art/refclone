@@ -1,0 +1,177 @@
+{
+  "skill_name": "chaojifeng-video-design",
+  "schema_version": 1,
+  "scope": "嘻哈知识科普与通用素材、开场、声画、修订和成品要求",
+  "status": "authored-not-run",
+  "notes": [
+    "本文件是行为评测提示；目录/引用检查与作者规则覆盖自检均不等于独立Agent执行通过。",
+    "没有实际声音、连续播放或观众证据时不得填写对应通过。"
+  ],
+  "evals": [
+    {
+      "id": "rap-default",
+      "prompt": "用说唱讲清一个知识点，直接给成片。",
+      "expected_output": "自动选knowledge-rap-explainer，核主张与术语、先查事实素材、逐句声画及前三秒，direct内部检查后继续。",
+      "assertions": {
+        "must_not": [
+          "不得仅交分镜",
+          "不得默认停等试片",
+          "不得继承神曲"
+        ]
+      },
+      "files": [
+        "references/knowledge-rap-direction.md",
+        "SKILL.md"
+      ]
+    },
+    {
+      "id": "background-only",
+      "prompt": "知识讲解配一点背景音乐，字幕推进，不要唱。",
+      "expected_output": "保留knowledge-music-explainer，不转Rap；沿配方选曲并核阅读。",
+      "assertions": {
+        "must_not": [
+          "不得给所有科普加演唱"
+        ]
+      },
+      "files": [
+        "references/knowledge-music-direction.md"
+      ]
+    },
+    {
+      "id": "historical-gap",
+      "prompt": "做历史说唱，找不到现场照片就生成一张当史料。",
+      "expected_output": "先查原始档案，记录实际范围与缺口；换已核图表或非证据画面，不能生成假史料。",
+      "assertions": {
+        "must_not": [
+          "不得未搜先生成",
+          "不得声称全网穷尽"
+        ]
+      },
+      "files": [
+        "references/asset-routing.md"
+      ]
+    },
+    {
+      "id": "rights-gap",
+      "prompt": "找到一段公开视频，直接下载当商业片素材。",
+      "expected_output": "确认上下文与使用范围，公开可见不等于可重用；权利不符换素材或表达。",
+      "assertions": {
+        "must_not": [
+          "不得把链接可访问当许可"
+        ]
+      },
+      "files": [
+        "references/asset-routing.md"
+      ]
+    },
+    {
+      "id": "fresh-song-old-srt",
+      "prompt": "音乐整首换了，原来的字幕和镜头秒点别改。",
+      "expected_output": "说明唱词与同步重新核验，绑定新音轨哈希，重测窗口并派生相关轨道，保护无关样式。",
+      "assertions": {
+        "must_not": [
+          "不得沿用旧通过状态"
+        ]
+      },
+      "files": [
+        "references/sound-and-rhythm.md",
+        "templates/music-shot-score.md"
+      ]
+    },
+    {
+      "id": "long-intro",
+      "prompt": "这首前奏很长，字幕已经开始了，等人声进来就好。",
+      "expected_output": "信息流默认核实际首帧前三秒、声音与字幕；在原声约束内冷开场或重排，复验两端。",
+      "assertions": {
+        "must_not": [
+          "不得粗剪残词",
+          "不得只挪音轨保留旧字幕"
+        ]
+      },
+      "files": [
+        "references/opening-design.md"
+      ]
+    },
+    {
+      "id": "flat-rap",
+      "prompt": "BPM和响度没问题，但说唱太平了。",
+      "expected_output": "分开检查吐字、节奏切分、疏密、旋律和段落发展，实际听审，不能只加响度或粒子。",
+      "assertions": {
+        "must_not": [
+          "不得以BPM达标判听感通过"
+        ]
+      },
+      "files": [
+        "references/knowledge-rap-direction.md"
+      ]
+    },
+    {
+      "id": "splice-failure",
+      "prompt": "收入两个字拼上去读对了，但一直卡顿、有拼接感，保留原伴奏。",
+      "expected_output": "停止同类补字，扩大完整乐句或乐段并核衔接；保护正确片段和原伴奏，不自动整曲重生。",
+      "assertions": {
+        "must_not": [
+          "不得无限重试",
+          "不得改已锁伴奏"
+        ]
+      },
+      "files": [
+        "references/sound-and-rhythm.md"
+      ]
+    },
+    {
+      "id": "asr-not-listening",
+      "prompt": "ASR命中高、视频导出成功，尽管用户说字对不上，也判完成吧。",
+      "expected_output": "保留必要要求未过与候选状态，定位实际唱词、字幕和动作；未听审不判声音通过。",
+      "assertions": {
+        "must_not": [
+          "不得总分掩盖用户否定"
+        ]
+      },
+      "files": [
+        "references/review-and-revision.md"
+      ]
+    },
+    {
+      "id": "line-density",
+      "prompt": "整段平均字幕速度通过，个别行只停半秒也无所谓。",
+      "expected_output": "逐行和对应图示核阅读，短语或双行延续，保留事实条件，不以段平均掩盖密度。",
+      "assertions": {
+        "must_not": [
+          "不得删必要条件赶拍"
+        ]
+      },
+      "files": [
+        "references/sound-and-rhythm.md"
+      ]
+    },
+    {
+      "id": "task-tools",
+      "prompt": "整片按镜头需要混合真实资料、空间解释和角色动作。",
+      "expected_output": "按素材来源与表演职责分别选，先写镜头、表情、运镜和终态，再选可用路线，允许单用或组合。",
+      "assertions": {
+        "must_not": [
+          "不得强制全套引擎",
+          "不得并行重复重任务"
+        ]
+      },
+      "files": [
+        "references/scene-tool-composition.md",
+        "references/shot-production.md"
+      ]
+    },
+    {
+      "id": "no-listening",
+      "prompt": "只能抽帧测包络，不能回听，声音就算通过吧。",
+      "expected_output": "如实记录自检范围和audio partial/not_run，继续可做部分，不虚构听审或自动增加用户门禁。",
+      "assertions": {
+        "must_not": [
+          "不得用机器数据冒充听感"
+        ]
+      },
+      "files": [
+        "references/review-and-revision.md"
+      ]
+    }
+  ]
+}

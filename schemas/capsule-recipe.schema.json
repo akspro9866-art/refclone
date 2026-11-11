@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/capsule-recipe.schema.json",
+  "title": "Portable capsule recipe package",
+  "description": "A capsule-cinema capsule package loaded from capsule.yaml plus its contracts/, parsed from YAML to JSON without inventing fields. Field names and enum values are derived from the real capsules (schema_version capsule.package.v1, profile video.okf.capsule.v1); optional fields appear only where upstream capsules actually carry them. sourceHash is the SHA-256 of the capsule.yaml file. Contract interiors that upstream leaves open (runtime output_contract, source_material_contract, rule expectations) stay open maps; their semantics are checked in code, not guessed here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "directory", "recipe", "contracts"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "directory": { "$ref": "common.schema.json#/definitions/absolutePath" },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "profile", "name", "display_name", "version", "status", "execution_mode", "category", "primary_workflow", "summary", "capabilities", "tags", "when_to_use", "when_not_to_use", "read_order", "entrypoints"],
+      "properties": {
+        "schema_version": { "type": "string", "const": "capsule.package.v1" },
+        "profile": { "type": "string", "const": "video.okf.capsule.v1" },
+        "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "display_name": { "type": "string", "minLength": 1 },
+        "version": { "type": "integer", "minimum": 1 },
+        "status": { "type": "string", "enum": ["active", "draft"] },
+        "execution_mode": { "type": "string", "enum": ["local_script", "preset"] },
+        "category": { "type": "string", "minLength": 1 },
+        "primary_workflow": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string" },
+        "capabilities": { "$ref": "common.schema.json#/definitions/stringList" },
+        "tags": { "$ref": "common.schema.json#/definitions/stringList" },
+        "when_to_use": { "$ref": "common.schema.json#/definitions/stringList" },
+        "when_not_to_use": { "$ref": "common.schema.json#/definitions/stringList" },
+        "read_order": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["routing", "planning", "generation", "qa", "learning"],
+          "properties": {
+            "routing": { "$ref": "common.schema.json#/definitions/stringList" },
+            "planning": { "$ref": "common.schema.json#/definitions/stringList" },
+            "generation": { "$ref": "common.schema.json#/definitions/stringList" },
+            "qa": { "$ref": "common.schema.json#/definitions/stringList" },
+            "learning": { "$ref": "common.schema.json#/definitions/stringList" }
+          }
+        },
+        "entrypoints": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "local_script": { "type": "string", "minLength": 1 },
+            "preset": { "type": "string", "minLength": 1 }
+          }
+        },
+        "format_family": { "type": "string", "minLength": 1 },
+        "evidence_level": { "type": "string", "minLength": 1 },
+        "production_capabilities": { "$ref": "common.schema.json#/definitions/stringList" },
+        "quality_gate_profile": { "type": "string", "minLength": 1 }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_schema", "runtime"],
+      "properties": {
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fields"],
+          "properties": {
+            "schema_version": { "type": "string", "const": "capsule.input_schema.v1" },
+            "fields": {
+              "type": "object",
+              "propertyNames": { "type": "string", "minLength": 1 },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["required", "type"],
+                "properties": {
+                  "required": { "type": "boolean" },
+                  "type": { "type": "string", "enum": ["string", "boolean", "array", "integer", "number", "object", "file"] },
+                  "default": { "description": "Upstream default value; any JSON value. Absence means no default, never an invented one." },
+                  "description": { "type": "string" },
+                  "enum": { "type": "array", "description": "Upstream allowed-value list for this field; any JSON values. Preserved verbatim, semantics checked in code." },
+                  "minimum": { "type": "number", "description": "Upstream numeric lower bound carried by some capsule fields." },
+                  "maximum": { "type": "number", "description": "Upstream numeric upper bound carried by some capsule fields." }
+                }
+              }
+            }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["roles", "output_contract", "video_elements"],
+          "properties": {
+            "schema_version": { "type": "string", "const": "capsule.runtime.v1" },
+            "roles": { "type": "object", "additionalProperties": true },
+            "output_contract": {
+              "type": "object",
+              "description": "Upstream output contract (bgm, clip_audio, on_frame_text, subtitle, voice). Values are upstream enums kept as strings; semantics are checked in code.",
+              "additionalProperties": true
+            },
+            "video_elements": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fixed", "defaults"],
+              "properties": {
+                "fixed": {
+                  "type": "object",
+                  "description": "Fixed visual contract: aspect_ratio, output_width_px, output_height_px, safe zones and element policies. Keys stay open to upstream evolution; numeric bounds are checked in code.",
+                  "additionalProperties": true
+                },
+                "defaults": {
+                  "type": "object",
+                  "description": "Default design tokens (colors, target_duration, safe-zone mode). Null/absence is unresolved, not a license to invent.",
+                  "additionalProperties": true
+                },
+                "user_overridable": { "type": "object", "additionalProperties": true },
+                "forbidden": { "$ref": "common.schema.json#/definitions/stringList" }
+              }
+            },
+            "source_material_contract": { "type": "object", "additionalProperties": true },
+            "copywriting_structure_contract": { "type": "object", "additionalProperties": true },
+            "runtime_requirements": { "type": "object", "additionalProperties": true }
+          }
+        },
+        "content_scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["series_fixed", "episode_variable", "forbidden_reusable_literals", "policies"],
+          "properties": {
+            "schema_version": { "type": "string", "const": "capsule.content_scope.v1" },
+            "series_fixed": { "$ref": "common.schema.json#/definitions/stringList" },
+            "episode_variable": { "$ref": "common.schema.json#/definitions/stringList" },
+            "forbidden_reusable_literals": { "$ref": "common.schema.json#/definitions/stringList" },
+            "policies": { "type": "object", "additionalProperties": true }
+          }
+        },
+        "quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rules", "release_gates"],
+          "properties": {
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["id", "category", "type"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "category": { "type": "string", "minLength": 1 },
+                  "type": { "type": "string", "minLength": 1 },
+                  "rule": { "type": "string" }
+                }
+              }
+            },
+            "release_gates": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["gates"],
+              "properties": {
+                "gates": {
+                  "type": "array",
+                  "description": "Upstream release gates: rule-id strings and/or structured gate-binding objects (id, phase, severity, checker, params). Preserved verbatim; semantics checked in code.",
+                  "items": {
+                    "anyOf": [
+                      { "type": "string" },
+                      { "type": "object", "additionalProperties": true }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

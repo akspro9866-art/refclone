@@ -1,0 +1,361 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/edit-list.schema.json",
+  "title": "Resumable multi-entry edit list (edit.json)",
+  "description": "The OpenVideoHarness edit.json animatic/slate contract (engines/EDIT.md, vendored at vendor/wave2/OpenVideoHarness/EDIT.md). Structural shape only: gap/overlap/sub-frame timing, reference resolution, slate delivery bans, transition rejection between real sources and single-shot patch windows are checked in code (src/design/edit-list.mjs). A null src is a slate gray card and is never deliverable. Time values are seconds, 'm:ss.s' strings, or reference strings ('@l4', '@l4:word', '@l4>', '@|S03', '@|S03>', '@#e2', optionally +/- seconds); unresolved references stay unresolved in code, never defaulted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "fps", "size", "sources", "tracks"],
+  "properties": {
+    "v": { "type": "integer", "const": 1 },
+    "note": { "type": "string" },
+    "fps": { "type": "integer", "minimum": 1, "description": "Integer frames per second (24, 25, 30, 50, 60). Fractional rates such as 29.97 are rejected." },
+    "size": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": { "type": "integer", "minimum": 1 },
+      "description": "[width, height] in CSS px."
+    },
+    "refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeline": { "type": "string", "minLength": 1 },
+        "lead": { "type": "string", "minLength": 1 },
+        "music": { "type": "string", "minLength": 1 },
+        "timemap": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/definitions/source" }
+    },
+    "tracks": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "entries"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "entries": { "type": "array", "items": { "$ref": "#/definitions/entry" } }
+        }
+      }
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["t", "title"],
+        "properties": {
+          "t": { "$ref": "#/definitions/time" },
+          "title": { "type": "string" }
+        }
+      }
+    },
+    "covers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "t"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "t": { "$ref": "#/definitions/time" },
+          "title": { "type": "string" }
+        }
+      }
+    },
+    "video": { "description": "Storyboard/review-desk video, same as shots.json; the renderer does not read it." },
+    "approval": { "description": "Recorded for the review page; the renderer does not read it." },
+    "removed": { "description": "Recorded for the review page; the renderer does not read it." }
+  },
+  "definitions": {
+    "time": {
+      "anyOf": [
+        { "type": "number" },
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["$music"],
+          "properties": {
+            "$music": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0 } }
+          }
+        }
+      ],
+      "description": "Seconds, 'm:ss.s', a reference string with optional +/- seconds, or a music bar/beat pair."
+    },
+    "sourceTime": {
+      "anyOf": [
+        { "type": "number" },
+        {
+          "type": "object", "additionalProperties": false, "required": ["f"],
+          "properties": { "f": { "type": "integer", "minimum": 0 } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["sync"],
+          "properties": { "sync": { "type": "number" } }
+        }
+      ],
+      "description": "Source-local time: seconds, {'f': frame} or {'sync': M} (sync-group time, clips only)."
+    },
+    "soundSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "enum": ["voice", "ambience", "detail", "hero", "signal"] },
+        "gain_db": { "type": "number" },
+        "fade": {
+          "anyOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0 } }
+          ]
+        },
+        "lead": { "type": "number", "minimum": 0 },
+        "lag": { "type": "number", "minimum": 0 }
+      }
+    },
+    "soundOrFalse": {
+      "anyOf": [
+        { "$ref": "#/definitions/soundSpec" },
+        { "type": "boolean", "const": false }
+      ]
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["page", "clock"],
+          "properties": {
+            "page": { "type": "string", "minLength": 1 },
+            "clock": { "type": "string", "enum": ["film", "local"] },
+            "asset": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["image"],
+          "properties": {
+            "image": { "type": "string", "minLength": 1 },
+            "asset": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["color"],
+          "properties": {
+            "color": { "type": "string", "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["clip"],
+          "properties": {
+            "clip": { "type": "string", "minLength": 1 },
+            "asset": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+            "sound": { "$ref": "#/definitions/soundSpec" },
+            "sync": { "type": "object", "additionalProperties": true }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["film", "version"],
+          "properties": {
+            "film": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 },
+            "asset": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+            "sound": { "$ref": "#/definitions/soundSpec" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["sound"],
+          "properties": {
+            "sound": { "type": "string", "minLength": 1 },
+            "role": { "type": "string", "enum": ["voice", "ambience", "detail", "hero", "signal"] },
+            "gain_db": { "type": "number" },
+            "asset": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+          }
+        }
+      ]
+    },
+    "move": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/definitions/view" },
+        "to": { "$ref": "#/definitions/view" },
+        "ease": { "type": "string", "enum": ["linear", "inOut"] }
+      },
+      "description": "Image push/pull: [cx, cy, z] with cx/cy in 0-1 and z >= 1. inOut is (1 - cos(pi*p))/2."
+    },
+    "view": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": { "type": "number" }
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": { "type": "string", "minLength": 1 },
+        "angle": { "type": "string", "minLength": 1 },
+        "move": { "type": "string", "minLength": 1 },
+        "axis": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "src"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_]+$", "description": "Stable across revisions; patch --shot and '@|S03' references find entries by it." },
+        "src": { "type": ["string", "null"], "description": "A sources key, or null for a slate gray card (never deliverable)." },
+        "start": { "$ref": "#/definitions/time" },
+        "end": { "$ref": "#/definitions/time" },
+        "dur": { "type": "number", "exclusiveMinimum": 0 },
+        "in": { "$ref": "#/definitions/sourceTime" },
+        "out": { "$ref": "#/definitions/sourceTime" },
+        "speed": { "type": "number", "minimum": 0.25, "maximum": 4 },
+        "hold": { "type": "boolean" },
+        "fit": { "type": "string", "enum": ["contain", "cover"] },
+        "bg": { "type": "string", "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        "move": { "$ref": "#/definitions/move" },
+        "sound": { "$ref": "#/definitions/soundOrFalse" },
+        "transition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "duration"],
+          "properties": {
+            "type": { "type": "string", "minLength": 1 },
+            "duration": { "type": "number", "minimum": 0 }
+          },
+          "description": "Not rendered yet: hard cut next to slates; between two real sources render stops and edit check fails."
+        },
+        "segment": { "type": "string" },
+        "reads": {
+          "anyOf": [
+            { "type": "string" },
+            { "$ref": "common.schema.json#/definitions/stringList" }
+          ]
+        },
+        "label": { "type": "string" },
+        "unsure": { "type": "string" },
+        "frame": { "$ref": "#/definitions/time" },
+        "at": { "$ref": "#/definitions/time" },
+        "why": { "type": "string" },
+        "caption": { "type": "string" },
+        "recipe": { "type": "string" },
+        "seam": { "type": "string" },
+        "note": { "type": "string" },
+        "camera": { "$ref": "#/definitions/camera" }
+      }
+    },
+    "resolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The resolved edit list (out/edit.resolved.json shape): references solved, integer frames only, byte-identical for identical inputs. Persisted by src/design/edit-list.mjs after validation against this definition.",
+      "required": ["v", "fps", "size", "frames", "duration", "entries", "runs", "cuts", "slates", "notes"],
+      "properties": {
+        "v": { "type": "integer", "const": 1 },
+        "fps": { "type": "integer", "minimum": 1 },
+        "size": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1 } },
+        "frames": { "type": "integer", "minimum": 0 },
+        "duration": { "type": "number", "minimum": 0 },
+        "edit": { "$ref": "common.schema.json#/definitions/file" },
+        "refs": { "type": "object", "additionalProperties": { "$ref": "common.schema.json#/definitions/file" } },
+        "files": { "type": "object", "additionalProperties": true },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "frames", "start", "end", "kind"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+              "frames": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0 }, "description": "[firstFrame, nextEntryFirstFrame); end-exclusive." },
+              "start": { "type": "number", "minimum": 0 },
+              "end": { "type": "number", "minimum": 0 },
+              "kind": { "type": "string", "enum": ["page", "still", "slate", "color", "clip", "film", "sound"] },
+              "clock": { "type": ["string", "null"], "enum": ["film", "local", null] },
+              "src": { "type": ["string", "null"] },
+              "j0": { "type": ["integer", "null"], "minimum": 0 },
+              "ref": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "frames", "params"],
+            "properties": {
+              "kind": { "type": "string", "enum": ["page", "still", "slate", "color", "clip"] },
+              "frames": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0 } },
+              "params": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "sound": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "cuts": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "slates": { "$ref": "common.schema.json#/definitions/stringList" },
+        "chapters": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "covers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+      }
+    },
+    "patchPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single-shot patch plan (tools/film/patch.mjs semantics): changed entries expand to keyframe windows (A = last keyframe <= span start, B = first keyframe > span end, else totalFrames); touching windows merge. The film keeps its frame count and every differently-drawn frame must fall inside a re-drawn window, else the plan is refused. Persisted after validation against this definition.",
+      "required": ["fps", "size", "frames", "changedEntryIds", "windows", "redrawFrameCount", "keepFrameCount", "refused", "checks"],
+      "properties": {
+        "fps": { "type": "integer", "minimum": 1 },
+        "size": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1 } },
+        "frames": { "type": "integer", "minimum": 0 },
+        "changedEntryIds": { "$ref": "common.schema.json#/definitions/identifierList" },
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["A", "B", "entryIds"],
+            "properties": {
+              "A": { "type": "integer", "minimum": 0, "description": "First re-drawn frame: the keyframe at or before the span start." },
+              "B": { "type": "integer", "minimum": 0, "description": "End-exclusive: the first keyframe after the span end, or totalFrames." },
+              "entryIds": { "$ref": "common.schema.json#/definitions/identifierList" }
+            }
+          }
+        },
+        "redrawFrameCount": { "type": "integer", "minimum": 0 },
+        "keepFrameCount": { "type": "integer", "minimum": 0 },
+        "refused": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reason", "entryIds"],
+              "properties": {
+                "reason": { "type": "string", "minLength": 1 },
+                "entryIds": { "$ref": "common.schema.json#/definitions/identifierList" }
+              }
+            }
+          ]
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["frameCountUnchanged", "differingFramesInsideWindows", "outsideWindowsIdentical"],
+          "properties": {
+            "frameCountUnchanged": { "type": "boolean" },
+            "differingFramesInsideWindows": { "type": "boolean" },
+            "outsideWindowsIdentical": { "type": "boolean", "description": "Run params of kept frames are unchanged; the byte/PSNR verification itself runs at patch time (seam PSNR infinite, kept frames >= 40 dB, no PSNR = failure)." }
+          }
+        }
+      }
+    }
+  }
+}

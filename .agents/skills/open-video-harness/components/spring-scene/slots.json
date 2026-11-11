@@ -1,0 +1,24 @@
+{
+ "version": 1,
+ "name": "spring-scene",
+ "summary": "One shape that never cuts: it grows, shrinks and recolours on a timetable, content swaps in and out on it, the camera and a cursor follow; every change a closed-form spring, so a timetable edit is a data edit.",
+ "tags": ["弹簧", "弹性", "一镜到底", "形变", "变形", "光标", "spring", "morph"],
+ "painters": ["canvas", "dom"],
+ "use": "state(params, t) → g; canvas(ctx, g, params, drawLayer) or dom({ world, shape, layers, cursor }, g, params). The tracks are built once a params object: change a copy, not the object.",
+ "slots": [
+  {"name": "center", "type": "array", "default": [960, 540], "text": "where the camera centres the world on screen, CSS px"},
+  {"name": "SH", "type": "object", "default": {"pill": {"w": 320, "h": 96, "r": 48, "bg": "#1f6feb", "cam": 1}, "card": {"w": 760, "h": 420, "r": 36, "bg": "#161b22", "cam": 1.08}}, "text": "the shape's states by name: width, height, corner radius (capped at half the shape), colour (#rrggbb) and the camera's scale in that state"},
+  {"name": "start", "type": "string", "default": "pill", "text": "the state at t = 0 (a key of SH)"},
+  {"name": "SEQ", "type": "array", "default": [[1.4, "card"]], "text": "the timetable: [seconds, state] in time order; each change is one spring from where the value is"},
+  {"name": "spring", "type": "string|array", "default": "morph", "enum": ["morph", "fast", "slow", "soft", "cam", "instant"], "text": "the shape's spring: a preset of lib/motion.js SPRINGS, or [w rad/s, zeta]; morph is 15 rad/s at zeta 0.84, about 3 % overshoot"},
+  {"name": "camSpring", "type": "string|array", "default": "cam", "text": "the camera's spring (critically damped by default: it never overshoots)"},
+  {"name": "intro", "type": "number|null", "default": 0.1, "min": 0, "unit": "s", "text": "when the shape springs in from 55 % (null: on screen from the first frame)"},
+  {"name": "shapePress", "type": "array", "default": [1.2], "unit": "s", "text": "times the shape is pressed (a 3.5 % squeeze and back), for a click that lands on it"},
+  {"name": "layers", "type": "array", "default": [], "text": "content on the shape: [{ id, tin, tout, anchor: c|l|t, o: { din, lin, lout, blur } }]; each swaps in after a beat and out fast, so two never overlap"},
+  {"name": "cursor", "type": "object|null", "default": null, "text": "{ keys: [[t, x, y], …] in world px, clicks: [t], drags: [[t0, t1]] }: a hand's path on a slight arc, a press at each click"},
+  {"name": "domBlur", "type": "boolean", "default": false, "text": "let the DOM painter blur a layer as it swaps (playbook/03 §4 animates only transform, opacity and clip-path in the DOM; the canvas painter always blurs)"}
+ ],
+ "provenance": [
+  {"repo": "github.com/Barty-Bart/motion-graphics", "commit": "3d83d987d658601d8a1269eb691622bdcd427335", "path": "skills/motion-broll/engine/motion.js", "license": "MIT", "note": "the scene's state and its DOM wiring; components/NOTICE.md"}
+ ]
+}

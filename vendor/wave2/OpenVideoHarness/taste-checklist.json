@@ -1,0 +1,59 @@
+{
+  "source": "TASTE_CHECKLIST.md",
+  "sourcePath": "vendor/wave2/OpenVideoHarness/TASTE_CHECKLIST.md",
+  "upstream": "wave2-sources/OpenVideoHarness/templates/TASTE_CHECKLIST.md",
+  "license": "MIT",
+  "note": "Machine-readable extraction of the upstream taste checklist for the refclone QA static gates. The Markdown original is authoritative; item text is copied verbatim (Chinese). 'tier' is baseline when the whole point is marked 【底线】, mixed when only part of it is, reference otherwise. The scoring layer is the fresh-context reviewer: 8 dimensions, 1-10 each; it is a human/agent review protocol, not an automatic gate.",
+  "tiers": {
+    "baseline": "【底线】Hard PASS in every concept and tier: legible, readable, factual, no accidents. A baseline FAIL blocks delivery regardless of scores.",
+    "reference": "Common failure modes of model-made films. A 'yes' is an observation, not a failure: state the viewing problem with time and frame, propose one fix; the author may decline with a reason recorded in NOTES.",
+    "mixed": "Only the 【底线】 clause inside the point is a hard gate; the rest is reference."
+  },
+  "points": [
+    { "id": 1, "category": "构图", "tier": "reference", "text": "眯眼看（或缩小到 20%）认不出第一焦点？去色后（`-vf format=gray`）主体和背景分不开（刻意低对比的除外）？一个镜头里有多个焦点在抢？" },
+    { "id": 2, "category": "构图", "tier": "reference", "text": "主视觉不到画面的 40%，或有大块死区？" },
+    { "id": 3, "category": "构图", "tier": "baseline", "text": "【底线】有东西出了安全框、进了竖屏 UI 遮挡区、压到字幕带？" },
+    { "id": 4, "category": "构图", "tier": "reference", "text": "标签离对象超过一格，或元素之间有遮挡？" },
+    { "id": 5, "category": "文字", "tier": "baseline", "text": "【底线】需要观众读完的文字：同屏超过 8 个英文词，或中文每行超过 16 字（竖屏 72px 时 11 字）？停得不够快读一遍？从字完整显示、动画停下那一刻算起，要读的画面文字至少停 max(1.5s, 汉字数 ÷ 7 + 其他非空白字符数 ÷ 20 + 0.8s)，中英双语取慢的那个（1.5s 防一闪而过）；跟着配音走的字幕条每条 ≥ 1.8s，中文不超过 9 字/秒、英文不超过 20 字符/秒。读的那段时间里，字还在 decode 乱码，或被运动模糊抹花？（真实 UI 截图里的文字、背景纹理文字只要求\"看得出是什么\"，不要求读完）进度条里不是当前一章的块、片尾参考页这类导航和暂停页，人本人同意过、写进了 BRIEF 的 `Navigation and pause pages` 一行的，停留时间照那一行算（`playbook/03-motion-design.md` §4）。", "details": ["底线只管读一遍，不是舒服的时长。停多久舒服是默认口味，跟着片子的节奏走：BRIEF 的 `Pace`（relaxed / normal / brisk，默认 normal）定目标，各档读速见 `playbook/03-motion-design.md` §2。观众已经知道的字（字幕说的正是画面刚演过的、术语卡第二次出现）和镜头在走时只起提示作用的短标签（标 `data-read=\"label\"`）按 brisk；卡在音乐上的字落在小节线上，不为凑秒数拖长；为读时拉长停留，音乐不能跟着停。", "有时间表就跑 `bin/vh readcheck`：低于底线 FAIL，要修；只低于 Pace 目标是 WARN，看是不是有意的。"] },
+    { "id": 6, "category": "文字", "tier": "baseline", "text": "【底线】字号低于 BRIEF `Watch on` 那一档的下限（`playbook/03-motion-design.md` §4，1080p 合成里的 px：phone 主标题 84 / 辅助 44 / 字幕 65，desktop 84 / 44 / 48，feed 150 / 80 / 115；镜头里当标题用的那行大字按主标题算；出 4K 照常按 1080p 写，渲染时放大；在 4K 帧上量要先除以 2，或者在 1080p 版上量）？按最终成片里的实际大小量：镜头推近后以推近后为准，而且推近后字不能发虚（被放大的元素挂着 CSS `will-change` 时，浏览器会把小尺寸的位图直接放大）；Manim 等不以 px 定义字号的引擎，从 1080p 成片的 crop 上量像素。GIF 预览不在考核范围内。进度条里不是当前一章的块、片尾参考页这类导航和暂停页的小字，人本人同意过、写进了 BRIEF 的 `Navigation and pause pages` 一行的，不算 FAIL（`playbook/03-motion-design.md` §4）。" },
+    { "id": 7, "category": "文字", "tier": "reference", "text": "用了不止一个无衬线族？用斜体做强调？每个词都在强调？" },
+    { "id": 8, "category": "文字", "tier": "reference", "text": "有写着剧情的牌子、标签、说明文字，而本可以用画面演出来？" },
+    { "id": 9, "category": "色彩", "tier": "reference", "text": "饱和的强调色超过一个？颜色没有语义？" },
+    { "id": 10, "category": "色彩", "tier": "mixed", "text": "出现了并非刻意的紫青渐变、玻璃拟态、渐变字、霓虹？纯黑纯白（类型文档明确要求的除外，比如 3b1b 式讲解的纯黑背景）？黄光叠蓝底变成灰绿？【底线】bloom、扫光或镜头光斑把字烧成白斑（压在字上的光不能比字本身亮）？", "baselineClause": "bloom、扫光或镜头光斑把字烧成白斑（压在字上的光不能比字本身亮）" },
+    { "id": 11, "category": "运动", "tier": "reference", "text": "前 25% 把所有内容倒上屏，然后画面冻结？" },
+    { "id": 12, "category": "运动", "tier": "reference", "text": "默认用 bounce/elastic，卡片呼吸循环，或者匀速 lerp？（卡通、手绘类按 ANIMATION_GUIDE 执行：预备动作、overshoot、表情 take、踩拍的 idle 动作是必需的，不算失败；匀速 lerp 通常显得廉价；立意要的就是机械感时照用）" },
+    { "id": 13, "category": "运动", "tier": "reference", "text": "所有元素同一个缓动、同一个时长、同一方向、同时入场？两只手臂或一群角色完全同步？" },
+    { "id": 14, "category": "运动", "tier": "mixed", "text": "切点两侧运动方向相反、一侧从静止开始，或者用了 crossfade？【底线】循环播放的交付物（GIF、网页背景、平台自动循环），末帧接回首帧时跳一下或停一下？", "baselineClause": "循环播放的交付物（GIF、网页背景、平台自动循环），末帧接回首帧时跳一下或停一下" },
+    { "id": 15, "category": "运动", "tier": "reference", "text": "表情或状态在两帧之间硬切，没有预备和过渡？" },
+    { "id": 16, "category": "运动", "tier": "reference", "text": "反应比原因晚了几帧或同时发生？高潮前没有 0.3–0.75s 的停顿？" },
+    { "id": 17, "category": "节奏", "tier": "baseline", "text": "【底线】某个 read 少于 12 帧（0.5s）就被下一件事盖掉？两个重要 reads 重叠？换字时新旧两句同屏（旧句还没退完，新句已经进来）？" },
+    { "id": 18, "category": "节奏", "tier": "mixed", "text": "超过 3s（短视频）或 8s（讲解）什么都没发生？停拍时声音和镜头同时停死（观众会以为播放卡住了；#16 的停顿要像屏息：低音垫着、镜头慢漂）？【底线】分镜里声明的卡点没对准节拍（±1 帧）？片中（首尾之外）出现数字静音或近乎静音（有声片才查；用户要的无声片不带音轨）？", "baselineClause": "分镜里声明的卡点没对准节拍（±1 帧）；片中（首尾之外）出现数字静音或近乎静音（有声片才查）" },
+    { "id": 19, "category": "内容", "tier": "mixed", "text": "第 1 秒看不出这是什么、为什么要看？【底线】有占位文字、编造的数字（在几个有出处的数之间滚动的读数，停住让人读的只能是有出处的数，不能停在插值算出来的值上）？把不存在的界面当成真实产品的界面展示（立意本身就是一个明显虚构的界面时不算，例如把讲解装进一个仿真的 app）？", "baselineClause": "有占位文字、编造的数字；把不存在的界面当成真实产品的界面展示（立意本身就是一个明显虚构的界面时不算）" },
+    { "id": 20, "category": "内容", "tier": "reference", "text": "把这一帧换到任何别的主题也照样成立（说明它是装饰，不是设计；最常见的通用 AI 装饰是四角的小标签、取景框式的边角线、不带信息的 HUD 读数）？依据实际画面、上屏字和旁白，说不出这一段新增了什么含义，或得靠作者补讲才能接上前因后果？" }
+  ],
+  "reviewer": {
+    "role": "fresh-context harsh director, not the author; receives frames, on-screen text and timing first, restates meaning from them, then scores against the film's own intent (BRIEF concept and Pace, STYLE.md grammar, human-approved trade-offs).",
+    "dimensions": [
+      { "id": "concept", "name": "立意", "question": "选定的立意落到画面上没有：一句话说得出吗？换个题材还成立吗（还成立就只是风格）？形式在讲内容吗？看完会转述哪一个画面？", "evidence": "1 fps 联系表 + BRIEF 的立意一行" },
+      { "id": "hook", "name": "hook", "question": "开头有没有让人想看下去的东西？信息流片看前 2 s 有没有让人停下来的运动、反差或问题；主动点开的讲解、书信体、MV 看开头几秒有没有立起一个问题或一个让人想看下去的画面。", "evidence": "0–3 s 的逐帧 strip；慢开场的片子再加开头 10 s 的联系表" },
+      { "id": "target-screen", "name": "目标屏可读", "question": "按 BRIEF 的 `Watch on` 缩到那块屏幕的大小，必读字还读得出、主体还认得出吗？", "evidence": "目标屏联系表：phone、feed 每格 360 px 宽，desktop 每格 640 px 宽" },
+      { "id": "motion", "name": "运动质量", "question": "运动在实际观看里成不成立：做没做到 STYLE.md 声明的语法，干不干净：重量、跟随、切点衔接、抖动、穿帮？按观看效果和实现缺陷打。", "evidence": "关键动作和转场的 strip，STYLE.md 的 Motion tokens" },
+      { "id": "variety", "name": "变化", "question": "每一段有没有新东西：新构图、新运动或新信息？多久算太久，按 #18（短视频 3 s、讲解 8 s）；立意本身要慢的片子，问每一次停留有没有新的含义，不按秒数。", "evidence": "1 fps 联系表" },
+      { "id": "polish", "name": "构图与完成度", "question": "焦点、留白、对齐、细节有没有打磨到位？", "evidence": "联系表 + crop" },
+      { "id": "accuracy", "name": "内容 / 品牌准确", "question": "事实、数字、产品界面、品牌色和字体是否照实？", "evidence": "crop + NOTES.md 里的出处" },
+      { "id": "sync", "name": "声画同步", "question": "重音、切点、事件是否落拍？停拍时声画是否一起屏息而不是一起停死？", "evidence": "cue check 结果 + 带时间码的 strip" }
+    ],
+    "scale": "1-10 per dimension; no average is used.",
+    "preScoreQuestions": [
+      "只看前 3 s，不听旁白：画面上发生了什么？（记入 hook）",
+      "逐个主镜头，关掉旁白和字幕：它在说什么？答不上来的列出来。（记入立意）"
+    ],
+    "passRules": {
+      "standard": "1 round, no score line; reviewer lists at most 3 most important issues with viewing impact and evidence; author fixes or records a one-line reason for declining.",
+      "studio": "The five craft dimensions (target-screen, motion, polish, accuracy, sync) must all be >= 7. concept/hook/variety are judged against the film's own intent with no threshold; the lowest of the three goes to gate 3 as 'least satisfied'. Silent films score sync N/A and it is excluded from the five.",
+      "rounds": "studio: at least 3 rounds, at most 10 full-film review rounds; each round a fresh context, at most 3 issues, each with a timestamp and one executable fix; only affected time ranges re-render.",
+      "issueClassLimit": "The same checklist point on the same shot/section may be fixed at most 5 times; after that it goes to NOTES 'known limitations' with the last evidence, for a human to decide. Baseline points at the limit also go to a human; no final before the human decides.",
+      "baselineOverride": "A baseline FAIL blocks delivery at any score, in any tier."
+    }
+  }
+}

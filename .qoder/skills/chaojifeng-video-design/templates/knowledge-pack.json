@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "topic": "替换为要讲的主题",
+  "claim": "替换为观众结束时能说出的一句话",
+  "relation_type": "process",
+  "audience": {
+    "level": "novice",
+    "known": ["替换为观众已经知道的东西"],
+    "unknown": ["替换为观众还不知道的东西"]
+  },
+  "domain": {
+    "field": "替换为领域名",
+    "standards": [
+      {
+        "id": "std-none",
+        "title": "尚未登记标准",
+        "kind": "none",
+        "status": "not_found",
+        "reason": "替换为：已查过哪些标准或指南、为什么没有可用的；找到后改为 verified，并写版本、位置和核对日期"
+      }
+    ],
+    "terms": [
+      {
+        "id": "term-example",
+        "preferred": "替换为首选词",
+        "definition": "替换为一句话定义",
+        "source": "替换为这个词的来源",
+        "aliases_forbidden": []
+      }
+    ]
+  },
+  "expression": {
+    "profile": "ste-zh-spoken",
+    "pronunciations": {}
+  },
+  "carrier": {
+    "kind": "diagram",
+    "object": "替换为载体：是什么东西",
+    "mechanism": "替换为它怎样运作，运作的含义是什么",
+    "fallback": "替换为载体不成立时退回什么，如时序表或对照表",
+    "limits": [],
+    "mappings": []
+  },
+  "truth": {
+    "claims": [
+      {
+        "id": "claim-example",
+        "text": "替换为一条要说或要显示的事实",
+        "kind": "illustrative",
+        "disclosure": "填写内部记录：用途、依据与不能支持的结论；不渲染制作身份角标。有来源时改为 sourced 并写 source"
+      }
+    ]
+  },
+  "layers": [
+    {
+      "id": "layer-blackbox",
+      "level": "L1",
+      "goal": "替换为这一层要达到的目标",
+      "new_load": "替换为这一层唯一的新负荷",
+      "exit_test": "替换为观众看完这一层能做到的一件事",
+      "script_ref": "替换为讲稿里这一层的位置"
+    },
+    {
+      "id": "layer-recap",
+      "level": "L6",
+      "goal": "回到总览并交代边界",
+      "new_load": "无新概念：只回顾、划边界和指路",
+      "exit_test": "能说出没有演示什么，以及去哪里继续读",
+      "bridge_from_previous": "替换为上一层的什么变成这一层的什么",
+      "script_ref": "替换为讲稿里结尾的位置",
+      "model_boundary": "替换为这个载体没有演示什么、比喻在哪里会骗人",
+      "extension_pointers": ["替换为继续阅读的位置"]
+    }
+  ],
+  "checks": {
+    "terminology": {"status": "not_run", "evidence": []},
+    "accuracy": {"status": "not_run", "evidence": []},
+    "novice_read": {"status": "not_run", "evidence": []},
+    "peer_read": {"status": "not_run", "evidence": []},
+    "expert_read": {"status": "not_run", "evidence": []}
+  }
+}

@@ -66,6 +66,58 @@
         }
       }
     },
+    "staticGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional vision-free gates that run before the frame comparison: static lint (contrast/overlap/determinism), measured screen-space geometry, the loop seam check and the edit-list slate state. Absent means the caller ran none; an unrun gate is never a pass.",
+      "required": ["status", "checklist", "gates", "limitations"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pass", "needs_review", "fail", "not_run"] },
+        "checklist": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "points", "reviewerDimensions", "authoritative"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "points": { "type": "integer", "const": 20 },
+            "reviewerDimensions": { "type": "integer", "const": 8 },
+            "authoritative": { "type": "string", "minLength": 1 }
+          }
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "status", "findings", "notes"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "enum": ["pass", "fail", "blocked", "skipped", "not_run"] },
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["code", "severity", "message"],
+                  "properties": {
+                    "code": { "type": "string", "minLength": 1 },
+                    "severity": { "type": "string", "enum": ["error", "warning", "info"] },
+                    "message": { "type": "string" }
+                  }
+                }
+              },
+              "notes": { "$ref": "common.schema.json#/definitions/stringList" },
+              "evidence": {
+                "type": "object",
+                "description": "Gate-specific measurements (vendor verdict, seam numbers, slate ids). Keys stay open; claims are checked in code.",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "limitations": { "$ref": "common.schema.json#/definitions/stringList" }
+      }
+    },
     "limitations": { "$ref": "common.schema.json#/definitions/stringList" }
   }
 }

@@ -1,0 +1,122 @@
+{
+  "skill_name": "chaojifeng-video-design",
+  "schema_version": 1,
+  "scope": "knowledge-explainer and news-brief: domain standards first, object-is-explanation, layered reveal, truth ledger",
+  "status": "authored-not-run",
+  "notes": [
+    "These are review prompts with expected behaviour. They have not been run against any model; no pass rate is claimed.",
+    "Each case is judged by reading the produced plan, knowledge pack and answer. The scripts only check structure and wording, never truth or comprehension."
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "做一个90秒视频，给没学过网络的人讲清TCP三次握手。",
+      "expected_output": "A plan with a knowledge pack that registers RFC 9293 with a status, one term per meaning, an object carrier with a one-to-one part mapping and breaks_at, every number in the truth ledger, layers climbing from L0 to L6, and an L6 that names what is not shown.",
+      "assertions": {
+        "standards_registered": true,
+        "standard_status_honest": "verified only if the clause was actually read; otherwise seed with a warning",
+        "carrier_ladder": "starts at a real object or process; falls back with a reason, never a decorative metaphor",
+        "layers": ["L0", "L1", "L2", "L3", "L4", "L5", "L6"],
+        "one_full_run_uses_real_numbers": true,
+        "closing": ["model_boundary", "extension_pointers"],
+        "checks_status": "not_run unless actually done",
+        "scripts": ["validate_plan.py --strict-knowledge", "knowledge_pack.py --strict"],
+        "must_not": ["three arrows and three labels presented as the whole explanation", "seed source claimed as verified", "claiming viewers understood"]
+      },
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用视频解释“为什么做事要先想清楚再动手”。",
+      "expected_output": "The answer states that no honest mechanism carrier exists for this opinion, records carrier kind none or a diagram with a reason and a fallback, and does not invent a machine to fit the idea.",
+      "assertions": {
+        "carrier": "diagram or none, with reason",
+        "standards": "kind none with a reason, not an invented standard",
+        "must_not": ["forced metaphor with no breaks_at", "fake source for an opinion"]
+      },
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "把这则公告做成45秒资讯视频：北辰区图书馆（虚构）自11月1日起，周末闭馆时间由17点改为19点，公告没有说法定节假日是否适用。",
+      "expected_output": "An evidence-board plan: relation_type event, every sourced fact carries a source and as_of date, the extension of 2 hours is a derived claim, the holiday question is an unconfirmed slot, and the film is labelled fictional if the source is fictional.",
+      "assertions": {
+        "relation_type": "event",
+        "as_of_on_every_sourced_claim": true,
+        "derived_claim": "19 minus 17 equals 2 hours, traced to its two sourced claims",
+        "unknown_listed": ["holiday applicability"],
+        "numbers_with_different_scope_on_one_scale": false,
+        "scripts": ["validate_plan.py --strict-knowledge"],
+        "must_not": ["unconfirmed content shown as fact", "tidy layout presented as verification"]
+      },
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "旁白稿里有“大概”“基本上”和一句四十多个字的长句，帮我改到能直接配音。",
+      "expected_output": "The lint output is read first; vague words are replaced by the real figure or a plain statement, the long sentence is split so each sentence carries one idea, terms stay consistent, and letters or abbreviations get a spoken form.",
+      "assertions": {
+        "scripts": ["controlled_lint.py --profile ste-zh-spoken"],
+        "meaning_preserved": true,
+        "must_not": ["shorten by dropping the fact", "claim the lint proves clarity"]
+      },
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "把已经做好的讲解里的序号 100 改成 200。",
+      "expected_output": "The truth ledger is changed first; every derived claim and every line of narration, caption and dial that depends on it is found and changed; the pack and plan are validated again; earlier passed checks are reset to not_run.",
+      "assertions": {
+        "ledger_first": true,
+        "dependents_updated": ["derived claims", "narration", "element content"],
+        "checks_reset": true,
+        "must_not": ["edit only the visible number", "keep an old passed status"]
+      },
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "讲清一个很小众的行业概念，我不确定有没有行业标准。",
+      "expected_output": "The agent searches for standards and consensus, records what it found with a status, writes kind none or not_found with a reason when nothing usable exists, and does not make up a standard number.",
+      "assertions": {
+        "standard_status_honest": true,
+        "consensus_needs_two_independent_sources": true,
+        "must_not": ["invented standard ID or clause", "term card without a source"]
+      },
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "做一个8分钟的课程视频，讲清分布式一致性。",
+      "expected_output": "The long film is cut into chapters; each chapter repeats the climb with a bridge from the last; one new load per layer; a recap and a self-check at each chapter end; extension pointers and a model boundary at the close.",
+      "assertions": {
+        "chapters": true,
+        "bridge_at_each_layer_change": true,
+        "must_not": ["one continuous climb that adds several new things in a single layer", "sections renamed as layers with no new load rule"]
+      },
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "这套方法能让观众理解提升多少？",
+      "expected_output": "The answer states that no audience test has been run, gives no percentage, and proposes how to test: novice, peer and expert readings plus a recall question.",
+      "assertions": {
+        "no_invented_numbers": true,
+        "checks_status": "not_run",
+        "must_not": ["a made-up improvement figure", "claiming the Skill was validated on viewers"]
+      },
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "讲清楚一个机械原理，但我不想要爆炸图，只想要简单一点的画面。",
+      "expected_output": "The plan keeps the one-to-one mapping and one lit focus, uses a simpler carrier or a diagram if that is the honest choice, and does not draw leader lines, balloons or floating labels.",
+      "assertions": {
+        "one_lit_focus_per_layer": true,
+        "landed_labels_only": true,
+        "must_not": ["leader lines", "decorative parts with no concept", "all parts flying out at once"]
+      },
+      "files": []
+    }
+  ]
+}

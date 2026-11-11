@@ -1,0 +1,266 @@
+fields:
+  actionable_takeaway:
+    required: false
+    type: string
+  attention_trigger:
+    required: false
+    type: string
+  audience_care_reason:
+    required: false
+    type: string
+  audience_recall_sentence:
+    required: false
+    type: string
+  audience_stop_reason:
+    required: false
+    type: string
+  background_music_path:
+    description: Alias for bgm_path.
+    required: false
+    type: string
+  add_background_music:
+    default: false
+    description: Enable when bgm_path/background_music_path points to a readable local track.
+    required: false
+    type: boolean
+  bgm_path:
+    description: Local audio file path for the requested BGM.
+    required: false
+    type: string
+  bgm_title:
+    description: Optional label for the user-supplied BGM.
+    required: false
+    type: string
+  comment_trigger:
+    description: Optional preferred debate/question for platform copy or final page.
+    required: false
+    type: string
+  core_user_value:
+    required: false
+    type: string
+  current_alternative:
+    required: false
+    type: string
+  differentiators:
+    required: false
+    type: array
+  facts_to_avoid:
+    description: Optional list of claims or angles to avoid.
+    required: false
+    type: array
+  facts_to_highlight:
+    description: Optional list of source facts the user wants emphasized.
+    required: false
+    type: array
+  ip_metaphor:
+    required: false
+    type: string
+  memory_anchor:
+    required: false
+    type: string
+  non_replaceable_hook:
+    required: false
+    type: string
+  original_topic_hook:
+    description: Original user wording, Feishu topic, or existing title retained verbatim as the title-selection baseline.
+    required: false
+    type: string
+  title_copy_profile:
+    default: structured_evidence_grid
+    description: Repo Signal Grid 专属文案模式；第一行只写用户价值，第二行只写准确项目类型，15 秒内用 4-5 页从判断推进到机制、真实证据与边界。
+    required: false
+    type: string
+  controlled_clickbait_risk_review:
+    description: Final compliance-only check. Block only unrelated bait, fabricated facts or authority, deliberately withheld payoff or off-platform diversion, or illegal, dangerous, or unqualified regulated claims.
+    required: false
+    type: object
+  dominant_hook_asset:
+    description: Single strongest self-media asset selected for the main title.
+    required: false
+    type: string
+  first_screen_coverage:
+    description: Optional mapping of subject, value, proof, and boundary across title, badge, first visual, and first fact card.
+    required: false
+    type: object
+  title_selection_reason:
+    description: Why the selected title beats or preserves the original topic on stop power, memorability, retelling, or share value.
+    required: false
+    type: string
+  not_target_users:
+    required: false
+    type: array
+  primary_audience:
+    required: false
+    type: array
+  production_mode:
+    default: short_silent_repo_signal_grid
+    description: 'Only short_silent_repo_signal_grid is exposed: no voiceover, 4-5 pages,
+      fixed 15-second output, a 6:7 (1080x1260) canvas with compact top/bottom margins,
+      and adaptive middle visual motion.'
+    required: false
+    type: string
+  project_boundaries:
+    required: false
+    type: array
+  target_user:
+    description: The concrete user identity used by the selected topic formula;
+      keep it narrower than generic AI users or the general public.
+    required: false
+    type: string
+  specific_task:
+    description: The concrete, recurring task the target user wants to complete.
+    required: false
+    type: string
+  hard_detail:
+    description: A source-backed identity, resource name, number, timing, action,
+      output, or before/after detail that makes the angle non-generic.
+    required: false
+    type: string
+  evidence_source:
+    description: README, source, config, official page, demo, output, quote, or
+      local test that supports the main claim.
+    required: false
+    type: string
+  forward_receiver:
+    description: The concrete colleague, friend, lead, creator, developer, or
+      other audience the viewer is likely to forward this video to.
+    required: false
+    type: string
+  open_judgment:
+    description: A genuine unresolved use decision such as whether the project
+      is worth installing, can replace an existing route, fits a task, or still
+      needs human review.
+    required: false
+    type: string
+  risk_boundary:
+    description: The source-backed limitation, prerequisite, tradeoff, or claim
+      boundary that must remain attached to the selected angle.
+    required: false
+    type: string
+  proof_asset_paths:
+    required: false
+    type: array
+  core_region_capture_policy:
+    default: core_capture_or_focus_zoom
+    description: Every middle visual should either be captured tightly around the GitHub/README/UI area that proves the scene, or provide scene-level core_focus plus local_zoom so the final motion enlarges that area.
+    required: false
+    type: string
+  browser_capture_profile:
+    default: responsive_landscape_core
+    description: Capture a landscape responsive browser view aligned with the middle source panel instead of a generic full-page or phone-portrait screenshot.
+    required: false
+    type: string
+  core_region_occupancy_min:
+    default: 0.65
+    description: Minimum share of the screenshot occupied by the named proof region after excluding browser shell, navigation, blank margin, and unrelated context.
+    required: false
+    type: number
+  default_core_zoom_amount:
+    default: 0.12
+    description: Recommended local zoom amount when a broader browser screenshot must retain context while emphasizing one proof region.
+    required: false
+    type: number
+  repo_local_path:
+    required: false
+    type: string
+  repo_slug:
+    required: true
+    type: string
+  retention_goal:
+    description: Optional user-provided retention goal or audience pressure to prioritize.
+    required: false
+    type: string
+  scene_count:
+    default: 5
+    maximum: 5
+    minimum: 4
+    required: false
+    type: integer
+  scene_duration_seconds:
+    default: 3
+    required: false
+    type: number
+  share_save_reason:
+    description: Optional reason the viewer should save, share, or forward the video.
+    required: false
+    type: string
+  source_asset_manifest:
+    description: Generated per-middle-visual provenance list from the agent's source
+      material audit. Approved renders require every item used by a scene to identify
+      an existing local asset, reconstructed_card=false, a provenance class, and a
+      concrete capture or generation method. At least one used item must be a real
+      browser capture of the repository/README or Factory-rendered locked repository
+      page with actual_source=true. Allowed asset
+      types are browser_evidence_screenshot, repository_image,
+      readme_embedded_image, project_discussion_image,
+      external_project_related_image, documentation_screenshot,
+      source_file_screenshot, demo_output_screenshot, video_or_gif_frame,
+      simulated_project_output, and explanatory_svg_diagram.
+      browser_evidence_screenshot means a real browser GitHub/README key-area
+      capture suitable for the first frame or another evidence beat. For approved source scenes,
+      browser_evidence_screenshot, readme_embedded_image,
+      project_discussion_image, and external_project_related_image are accepted
+      only when captured from an actual browser-opened page. repository_image,
+      demo_output_screenshot, video_or_gif_frame, documentation_screenshot, and
+      source_file_screenshot are diagnostic/compatibility records only. If original
+      visuals are too weak, simulated_project_output may use
+      generated_project_style_simulation and explanatory_svg_diagram may use
+      authored_svg_explainer_png_preview. Generated items must set actual_source=false,
+      synthetic=true, provide disclosure_label, evidence_basis, and style_basis, and
+      must never be presented as a real project run. SVG explainers also provide an
+      existing editable_source_path to the .svg while path points to the PNG preview.
+      Generic
+      README/documentation screenshots used for diagnostic records must be actual
+      browser content-area captures from the source page, not locally simulated
+      Markdown/HTML/PIL renders, except the Factory-owned locked-repository page
+      fallback captured through the real browser and labeled truthfully. Capture
+      scope, core-region description/occupancy and core_focus are optional
+      diagnostics or motion hints, not release blockers.
+    required: false
+    type: array
+  source_asset_manifest_path:
+    description: Local JSON manifest path when source_asset_manifest is stored outside
+      the profile.
+    required: false
+    type: string
+  target_audience:
+    required: false
+    type: string
+  target_duration:
+    default: 15
+    maximum: 15
+    minimum: 15
+    required: false
+    type: integer
+  target_platform:
+    default: wechat_channels
+    required: false
+    type: string
+  trust_click_proof:
+    required: false
+    type: string
+  unique_mechanism:
+    required: false
+    type: string
+  use_reason:
+    required: false
+    type: string
+  user_language:
+    required: false
+    type: string
+  user_pain:
+    required: false
+    type: string
+  user_prompt_emphasis:
+    description: Optional user-provided audience or propagation phrase. Treat it as
+      an internal targeting signal; public copy should translate it into concrete
+      utility, install/use steps, and safe boundaries instead of echoing audience-bait
+      phrasing.
+    required: false
+    type: string
+  viewer_takeaway:
+    required: false
+    type: string
+  wrong_audience:
+    required: false
+    type: array

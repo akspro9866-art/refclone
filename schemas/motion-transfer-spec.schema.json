@@ -334,6 +334,16 @@
             "$ref": "#/definitions/alphaPlateDescriptor"
           }
         },
+        "morphPaths": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "type": "string", "minLength": 1 },
+            "to": { "type": "string", "minLength": 1 }
+          },
+          "description": "Optional measured SVG path pair for the shape_morph_loop preset. When present the compiler equalizes segment counts (src/design/morph-equalize.mjs) before emission; when absent the emission is unchanged."
+        },
         "strippedLiterals": {
           "$ref": "#/definitions/strippedLiterals"
         }

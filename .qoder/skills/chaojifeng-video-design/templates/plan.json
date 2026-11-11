@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "project_id": "example-project",
+  "revision": 1,
+  "goal": "明确一个有依据的变化",
+  "audience": "目标观众",
+  "scenario_id": "knowledge-explainer",
+  "mode": "recipe",
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "duration_seconds": 8,
+    "language": "zh-CN",
+    "audio": "silent"
+  },
+  "design": {
+    "style_id": "paper-editorial",
+    "rationale": "稳定对象和关系逐步揭示",
+    "preserve": []
+  },
+  "runtime": {
+    "adapter": "unresolved",
+    "status": "unresolved",
+    "capabilities": [],
+    "required_capabilities": [
+      "time-control",
+      "opacity",
+      "position"
+    ]
+  },
+  "assets": [],
+  "scenes": [
+    {
+      "id": "scene-01",
+      "purpose": "看清主体与变化",
+      "start": 0,
+      "end": 8,
+      "layout": "relation-diagram",
+      "elements": [
+        {
+          "id": "object-01",
+          "role": "subject",
+          "content": "替换为真实内容"
+        }
+      ],
+      "beats": [
+        {
+          "id": "beat-01",
+          "time": 1,
+          "meaning": "主体出现"
+        }
+      ],
+      "motions": [
+        {
+          "id": "motion-01",
+          "pattern_id": "reveal",
+          "target_id": "object-01",
+          "start": 1,
+          "end": 2,
+          "parameters": {},
+          "beat_id": "beat-01"
+        }
+      ],
+      "narration": [],
+      "audio_cues": [],
+      "hold_seconds": 2
+    }
+  ]
+}

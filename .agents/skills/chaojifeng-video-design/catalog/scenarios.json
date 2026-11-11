@@ -1,0 +1,1009 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "product-demo",
+      "name": "产品演示",
+      "intent": "看懂一次真实任务的输入、操作和结果。",
+      "applicable_inputs": [
+        "目标用户与任务",
+        "平台和版本范围",
+        "真实截图/录屏/组件入口之一",
+        "功能和结果依据"
+      ],
+      "counterexamples": [
+        "只有口号没有真实界面或结果依据。",
+        "用假DOM演出原产品不存在的状态。"
+      ],
+      "constraints": [
+        "先确认版本范围和覆盖平台，功能主张关联来源。",
+        "工程与交付记录区分截图、录屏和重建，fixture不冒充线上结果；观众侧说明按误认风险、用户与实际渠道要求决定。"
+      ],
+      "fallback": "组件不可运行时用已授权录屏或截图聚焦；缺依据则先交分镜。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "目标用户与任务",
+        "平台和版本范围",
+        "真实截图/录屏/组件入口之一",
+        "功能和结果依据"
+      ],
+      "narrative_options": [
+        "完整任务",
+        "问题到解决",
+        "前后对比"
+      ],
+      "layouts": [
+        "task-workspace",
+        "detail-focus",
+        "before-after"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "dark-tech",
+        "paper-editorial",
+        "dual-ground-launch"
+      ],
+      "motion_ids": [
+        "highlight",
+        "camera-focus",
+        "state-swap",
+        "reveal",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "输入、动作与结果对应",
+        "界面与依据一致",
+        "步骤可读且无裁切"
+      ],
+      "support_boundary": "支持已有素材和可控制界面；不保证任意业务仓库自动接通。",
+      "source_refs": [
+        "https://github.com/op7418/guizang-product-video-skill/blob/18842e0f49a9eb2b8c00cc065ec37b314e235aaa/references/component-pipeline.md"
+      ],
+      "recipe_ids": [
+        "ui-continuity",
+        "signal-journey",
+        "image-to-hero",
+        "data-comparison",
+        "brand-motif-film",
+        "product-task-proof",
+        "sensory-before-after",
+        "launch-film-arc",
+        "feature-chapter-reel",
+        "product-music-story",
+        "product-split-explainer",
+        "product-source-explainer"
+      ],
+      "expression_ids": [
+        "narrative.shared-subject",
+        "transition.shared-morph",
+        "animation.split-edge",
+        "interaction.direct-manip",
+        "text.read-then-move",
+        "production.loop-seam",
+        "narrative.follow-unit",
+        "animation.path-reveal",
+        "visual.quantity-progress",
+        "visual.media-ring",
+        "camera.focus-frame",
+        "transition.match-cut",
+        "transition.frame-breakout",
+        "animation.fill-transfer",
+        "narrative.energy-arc",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback",
+        "visual.target-callout",
+        "visual.scan-resolve",
+        "narrative.pain-to-verdict",
+        "text.typed-voice",
+        "text.verdict-card",
+        "visual.magnitude-whip",
+        "style.two-ground-world",
+        "sound.pivot-drop",
+        "camera.pull-back-reveal",
+        "visual.replica-ui",
+        "transition.action-seam",
+        "narrative.output-as-proof",
+        "narrative.parallel-promise",
+        "production.compressed-inner-clock",
+        "narrative.cta-as-action",
+        "production.dwell-budget"
+      ]
+    },
+    {
+      "id": "knowledge-explainer",
+      "name": "知识讲解",
+      "intent": "能复述一个关系、机制或步骤，并知道成立条件。",
+      "applicable_inputs": [
+        "可检验的学习目标",
+        "受众已知与未知",
+        "概念依据或内部示意用途记录",
+        "旁白要求"
+      ],
+      "counterexamples": [
+        "用复杂转场代替因果条件解释。",
+        "为追求节奏让观众来不及读完关系。"
+      ],
+      "constraints": [
+        "先定义要解释的关系，布局匹配因果/对比/步骤。",
+        "示意数据明确虚构，不用箭头直接断言因果。",
+        "涉及专业领域时先找行业标准与共识并登记状态，再统一术语与表达（knowledge.controlled-register）。",
+        "每个数字先进真值账本；示意用途与依据留内部，不生成制作标签。"
+      ],
+      "fallback": "关系过密则拆镜或静态图逐段聚焦；无音频时保留估时未验状态。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "可检验的学习目标",
+        "受众已知与未知",
+        "概念依据或内部示意用途记录",
+        "旁白要求"
+      ],
+      "narrative_options": [
+        "问题到关系解释",
+        "对比与边界",
+        "步骤演进",
+        "例子与反例"
+      ],
+      "layouts": [
+        "relation-diagram",
+        "paired-comparison",
+        "step-sequence",
+        "single-concept"
+      ],
+      "style_ids": [
+        "mono-diagram",
+        "paper-editorial",
+        "product-minimal"
+      ],
+      "motion_ids": [
+        "connect",
+        "trace",
+        "highlight",
+        "state-swap",
+        "reveal",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "术语与关系明确",
+        "图示不造成因果误读",
+        "留复述或判断问题但不伪造测试结果",
+        "术语全片统一并有来源状态",
+        "数字可在账本中追溯",
+        "一层只加一个新负荷并交代模型边界"
+      ],
+      "support_boundary": "支持结构化图解；不承诺科学实验、复杂模型和理解收益自动验证。知识包与受控表达检查只做结构与机械规则，不核实事实，也不证明观众理解。",
+      "source_refs": [
+        "https://github.com/op7418/guizang-product-video-skill/blob/18842e0f49a9eb2b8c00cc065ec37b314e235aaa/references/component-pipeline.md",
+        "https://github.com/wheresryan22/anatomy/blob/1482e8469b0a9e0d8cc18ea2740a01423d29ae80/SKILL.md"
+      ],
+      "recipe_ids": [
+        "signal-journey",
+        "scale-journey",
+        "semantic-type",
+        "data-comparison",
+        "object-explainer",
+        "layered-concept-reveal",
+        "knowledge-music-explainer",
+        "knowledge-rap-explainer",
+        "interview-commentary-explainer"
+      ],
+      "expression_ids": [
+        "narrative.follow-unit",
+        "animation.path-reveal",
+        "visual.quantity-progress",
+        "text.read-then-move",
+        "narrative.scale-ladder",
+        "camera.focus-frame",
+        "camera.waypoint-travel",
+        "visual.structure-separate",
+        "text.semantic-emphasis",
+        "text.path-baseline",
+        "text.counter-rotate",
+        "transition.tangent-depart",
+        "animation.fill-transfer",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback",
+        "visual.target-callout",
+        "visual.scan-resolve",
+        "knowledge.object-is-explanation",
+        "knowledge.layered-reveal",
+        "knowledge.layer-bridge",
+        "knowledge.part-cast",
+        "knowledge.one-full-run",
+        "knowledge.counterfactual-probe",
+        "knowledge.landed-label",
+        "knowledge.truth-ledger",
+        "knowledge.controlled-register",
+        "knowledge.model-boundary"
+      ]
+    },
+    {
+      "id": "news-brief",
+      "name": "资讯呈现",
+      "intent": "分清事件、依据、变化和未确认信息。",
+      "applicable_inputs": [
+        "事件与发生时间",
+        "原始来源",
+        "已核实与未知划分",
+        "渠道/时长/旁白要求"
+      ],
+      "counterexamples": [
+        "用样例数据生成真实新闻图表。",
+        "把未确认来源的观点显示为事实结论。"
+      ],
+      "constraints": [
+        "核实事件时间、版本与原始来源；不比较不同口径裸数。",
+        "事实、评论与推测分开；图形几何和标签匹配真实数据。",
+        "旁白改变后重新量时长并更新mark及混音。",
+        "资讯包（relation_type=event）要求每条已核实事实有as_of，并列出未确认内容。"
+      ],
+      "fallback": "无法核实则删去或标未确认；缺数据时用有来源的文字说明。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "事件与发生时间",
+        "原始来源",
+        "已核实与未知划分",
+        "渠道/时长/旁白要求"
+      ],
+      "narrative_options": [
+        "事件到变化与影响",
+        "主题分组简报",
+        "数据对比与口径"
+      ],
+      "layouts": [
+        "headline-source",
+        "data-comparison",
+        "quote-evidence",
+        "brief-list"
+      ],
+      "style_ids": [
+        "paper-editorial",
+        "mono-diagram",
+        "dark-tech"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "count",
+        "stagger",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "事实可追溯",
+        "数字与图形一致",
+        "未知不伪装成结论",
+        "未确认与争议被说出，空槽写明原因"
+      ],
+      "support_boundary": "支持来源已整理的简报；不承诺自动事实核查或实时完整覆盖。",
+      "source_refs": [
+        "https://github.com/op7418/guizang-product-video-skill/blob/18842e0f49a9eb2b8c00cc065ec37b314e235aaa/extras/news-video/README.md",
+        "https://github.com/wheresryan22/anatomy/blob/1482e8469b0a9e0d8cc18ea2740a01423d29ae80/SKILL.md"
+      ],
+      "recipe_ids": [
+        "data-comparison",
+        "evidence-board-brief",
+        "layered-concept-reveal",
+        "knowledge-rap-explainer",
+        "interview-commentary-explainer"
+      ],
+      "expression_ids": [
+        "visual.quantity-progress",
+        "animation.fill-transfer",
+        "animation.path-reveal",
+        "text.read-then-move",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback",
+        "visual.target-callout",
+        "knowledge.evidence-board",
+        "knowledge.truth-ledger",
+        "knowledge.controlled-register",
+        "knowledge.layered-reveal",
+        "knowledge.model-boundary"
+      ]
+    },
+    {
+      "id": "image-story",
+      "name": "图片成片",
+      "intent": "让给定图片形成顺序、重点与节奏。",
+      "applicable_inputs": [
+        "图片及使用权",
+        "顺序或主题目标",
+        "必须保留的主体/文字",
+        "画幅与允许处理"
+      ],
+      "counterexamples": [
+        "单图推近被当成真实人物动作。",
+        "重裁切删掉原图证据文字或主体。"
+      ],
+      "constraints": [
+        "先确认裁切/重构许可，保持主体与关键信息。",
+        "视差仅用已有或获准分离的层，不宣称真实深度。"
+      ],
+      "fallback": "素材不足交顺序与裁切预览；不能分层则轻推近或静态停留。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "图片及使用权",
+        "顺序或主题目标",
+        "必须保留的主体/文字",
+        "画幅与允许处理"
+      ],
+      "narrative_options": [
+        "时间顺序",
+        "主题分组",
+        "细节到整体",
+        "对比与回顾"
+      ],
+      "layouts": [
+        "full-image",
+        "image-caption",
+        "image-pair",
+        "image-sequence"
+      ],
+      "style_ids": [
+        "cinematic-photo",
+        "vivid-collage",
+        "paper-editorial"
+      ],
+      "motion_ids": [
+        "camera-focus",
+        "parallax",
+        "mask-wipe",
+        "reveal",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "主体不误裁",
+        "图序与说明不虚构事件",
+        "关键信息有停留"
+      ],
+      "support_boundary": "支持编排与轻运动；不保证照片自动生成真实动作或表演。",
+      "source_refs": [],
+      "recipe_ids": [
+        "image-to-hero",
+        "sensory-before-after"
+      ],
+      "expression_ids": [
+        "visual.media-ring",
+        "camera.focus-frame",
+        "transition.match-cut",
+        "transition.frame-breakout",
+        "text.read-then-move",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback",
+        "visual.target-callout"
+      ]
+    },
+    {
+      "id": "story-video",
+      "name": "故事视频",
+      "intent": "让人物目标、事件和转折保持连续。",
+      "applicable_inputs": [
+        "事实/虚构边界",
+        "人物或核心对象",
+        "目标、阻碍与转折",
+        "可用素材与结尾"
+      ],
+      "counterexamples": [
+        "只有独立漂亮镜头，没有可解释的目标与转折。",
+        "缺连续素材却声称角色和空间已经一致。"
+      ],
+      "constraints": [
+        "标清真实记录或虚构故事。",
+        "角色和场景连续性须由素材支持，未验证不声称一致。"
+      ],
+      "fallback": "缺连续素材时用旁白、符号或静态分镜，不承诺自动连续表演。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "事实/虚构边界",
+        "人物或核心对象",
+        "目标、阻碍与转折",
+        "可用素材与结尾"
+      ],
+      "narrative_options": [
+        "情境到目标到转折",
+        "倒叙与揭示",
+        "完整经过"
+      ],
+      "layouts": [
+        "character-context",
+        "scene-action",
+        "object-continuity",
+        "closing-image"
+      ],
+      "style_ids": [
+        "cinematic-photo",
+        "vivid-collage",
+        "paper-editorial"
+      ],
+      "motion_ids": [
+        "state-swap",
+        "camera-focus",
+        "mask-wipe",
+        "parallax",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "身份与时序明确",
+        "转折有内容依据",
+        "生成画面不当真实证据"
+      ],
+      "support_boundary": "支持已有素材叙事；复杂角色生成、表演与空间连续不作首版保证。",
+      "source_refs": [],
+      "recipe_ids": [
+        "semantic-type"
+      ],
+      "expression_ids": [
+        "text.semantic-emphasis",
+        "text.path-baseline",
+        "text.counter-rotate",
+        "text.read-then-move",
+        "transition.tangent-depart",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback"
+      ]
+    },
+    {
+      "id": "feature-motion",
+      "name": "功能动效",
+      "intent": "准确呈现触发怎样改变界面或对象状态。",
+      "applicable_inputs": [
+        "初态和终态",
+        "真实触发与反馈依据",
+        "界面/对象素材",
+        "循环/交互/导出用途"
+      ],
+      "counterexamples": [
+        "只有弹跳入场，没有初态到终态的功能变化。",
+        "重播或倒退时残留上一状态。"
+      ],
+      "constraints": [
+        "定义初态、触发、反馈和终态，对应真实功能。",
+        "同目标同属性运动冲突需分层；循环须明确重置。"
+      ],
+      "fallback": "组件不能seek时用受控录屏或状态静帧；交互未验标概念演示。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "初态和终态",
+        "真实触发与反馈依据",
+        "界面/对象素材",
+        "循环/交互/导出用途"
+      ],
+      "narrative_options": [
+        "单次状态变化",
+        "操作反馈链",
+        "错误恢复",
+        "状态对照"
+      ],
+      "layouts": [
+        "component-stage",
+        "state-pair",
+        "detail-focus"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "dark-tech",
+        "mono-diagram",
+        "dual-ground-launch"
+      ],
+      "motion_ids": [
+        "state-swap",
+        "highlight",
+        "reveal",
+        "exit",
+        "camera-focus",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "触发反馈顺序正确",
+        "状态可暂停检查",
+        "倒退和循环无残留"
+      ],
+      "support_boundary": "支持可控状态与既有录屏；不保证任意原生UI实时交互。",
+      "source_refs": [
+        "https://github.com/op7418/guizang-product-video-skill/blob/18842e0f49a9eb2b8c00cc065ec37b314e235aaa/references/component-pipeline.md"
+      ],
+      "recipe_ids": [
+        "ui-continuity",
+        "scale-journey",
+        "product-task-proof",
+        "sensory-before-after",
+        "launch-film-arc",
+        "feature-chapter-reel"
+      ],
+      "expression_ids": [
+        "narrative.shared-subject",
+        "transition.shared-morph",
+        "animation.split-edge",
+        "interaction.direct-manip",
+        "text.read-then-move",
+        "production.loop-seam",
+        "narrative.scale-ladder",
+        "camera.focus-frame",
+        "camera.waypoint-travel",
+        "visual.structure-separate",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback",
+        "visual.target-callout",
+        "visual.scan-resolve",
+        "narrative.parallel-promise",
+        "text.typed-voice",
+        "narrative.output-as-proof",
+        "production.compressed-inner-clock",
+        "transition.action-seam",
+        "visual.replica-ui",
+        "production.dwell-budget",
+        "narrative.cta-as-action",
+        "sound.pivot-drop"
+      ]
+    },
+    {
+      "id": "brand-film",
+      "name": "品牌形象短片",
+      "intent": "围绕真实品牌建立明确感受、承诺与记忆。",
+      "required_inputs": [
+        "品牌表达目标与受众",
+        "品牌规则、授权素材及真实主张依据",
+        "渠道、画幅、时长和制作上限",
+        "声音要求与允许虚构/象征的边界"
+      ],
+      "narrative_options": [
+        "视觉母题到品牌记忆",
+        "有依据的愿景与感受",
+        "真实产品时刻与情绪推进"
+      ],
+      "layouts": [
+        "brand-motif-stage",
+        "hero-surface",
+        "image-sequence",
+        "closing-brand"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "cinematic-photo",
+        "paper-editorial",
+        "vivid-collage"
+      ],
+      "motion_ids": [
+        "reveal",
+        "state-swap",
+        "camera-focus",
+        "highlight",
+        "parallax",
+        "hold"
+      ],
+      "constraints": [
+        "先定义品牌希望观众获得的感受，再选择母题、素材与镜头。",
+        "真实功能、用户与经营结果须有依据；艺术象征不冒充事实。",
+        "品牌可覆盖风格；不默认科技蓝、高速弹跳或长标志开场。"
+      ],
+      "fallback": "用少量真实素材与稳定构图；表达或素材未定时交母题与分镜候选。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "minimum_acceptance": [
+        "品牌与核心表达可辨",
+        "镜头有明确目的且不编造实绩",
+        "实际画幅与声画节奏经过对应检查"
+      ],
+      "support_boundary": "提供品牌表达与镜头编排指导；不保证品牌研究、角色生成、复杂表演或广告效果自动完成。",
+      "counterexamples": [
+        "用无关炫技遮盖没有表达目标。",
+        "为表现成功捏造客户数字、功能界面或真实经历。"
+      ],
+      "source_refs": [
+        "https://www.ifanr.com/1660654",
+        "https://www.nfpeople.com/index.php/article/14095"
+      ],
+      "applicable_inputs": [
+        "品牌表达目标与受众",
+        "品牌规则、授权素材及真实主张依据",
+        "渠道、画幅、时长和制作上限",
+        "声音要求与允许虚构/象征的边界"
+      ],
+      "recipe_ids": [
+        "image-to-hero",
+        "brand-motif-film",
+        "product-music-story"
+      ],
+      "expression_ids": [
+        "visual.media-ring",
+        "camera.focus-frame",
+        "transition.match-cut",
+        "transition.frame-breakout",
+        "text.read-then-move",
+        "narrative.shared-subject",
+        "narrative.energy-arc",
+        "transition.shared-morph",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback",
+        "visual.target-callout"
+      ]
+    },
+    {
+      "id": "music-visual",
+      "name": "音乐与视觉表演",
+      "intent": "用声音结构、歌词或视觉母题形成可辨的视听体验。",
+      "required_inputs": [
+        "音乐/音效授权或原创生成范围",
+        "表演目标与视觉母题",
+        "拍点、歌词、事件或氛围段落的实际依据",
+        "声音要求、资源上限与是否循环"
+      ],
+      "narrative_options": [
+        "音乐驱动画面",
+        "可见动作触发声音",
+        "歌词与语义表演",
+        "环境氛围与段落起落"
+      ],
+      "layouts": [
+        "performance-stage",
+        "lyric-field",
+        "audio-reactive-object",
+        "ambient-scene"
+      ],
+      "style_ids": [
+        "vivid-collage",
+        "dark-tech",
+        "cinematic-photo",
+        "paper-editorial"
+      ],
+      "motion_ids": [
+        "reveal",
+        "state-swap",
+        "highlight",
+        "stagger",
+        "parallax",
+        "hold"
+      ],
+      "constraints": [
+        "先区分音频驱动画面与动作触发声音，再定义事件和时间。",
+        "音乐表演无需强加产品证明或人物故事；歌词涉及事实时仍需核实。",
+        "音色合成、作曲与物理乐器是独立能力，不因标记拍点就视为具备。",
+        "检查闪光强度、主体可辨、声音峰值与段落密度；需要减弱动态时保留表达。"
+      ],
+      "fallback": "减少声部或响应目标，用人工标记的关键事件或稳定画面；必需声音缺失则先交设计并说明阻塞。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "minimum_acceptance": [
+        "声画触发方向及事件锚点明确",
+        "段落与母题关系可辨",
+        "最终导出经实际播放与试听，循环另核首尾"
+      ],
+      "support_boundary": "支持视听设计与可执行模式选择；不保证任意歌曲分析、复杂角色演奏或高拟真物理自动完成。",
+      "counterexamples": [
+        "只有背景音乐却声称每次动作已贴拍。",
+        "截图漂亮就声明声画同步、混音与循环通过。"
+      ],
+      "source_refs": [
+        "https://www.xiaoyuzhoufm.com/episode/6abe4228e742e36efcbd7eaa"
+      ],
+      "applicable_inputs": [
+        "音乐/音效授权或原创生成范围",
+        "表演目标与视觉母题",
+        "拍点、歌词、事件或氛围段落的实际依据",
+        "声音要求、资源上限与是否循环"
+      ],
+      "recipe_ids": [
+        "music-event-performance",
+        "semantic-type",
+        "sensory-before-after",
+        "product-music-story",
+        "knowledge-rap-explainer"
+      ],
+      "expression_ids": [
+        "sound.beat-map",
+        "sound.event-collision",
+        "sound.band-response",
+        "sound.attention-mix",
+        "narrative.energy-arc",
+        "production.loop-seam",
+        "text.semantic-emphasis",
+        "text.path-baseline",
+        "text.counter-rotate",
+        "text.read-then-move",
+        "transition.tangent-depart",
+        "style.token-contract",
+        "production.time-function",
+        "production.capability-fallback"
+      ]
+    },
+    {
+      "id": "product-promo",
+      "name": "产品宣传视频",
+      "intent": "让目标用户看见产品带来的结果、理解关键价值并记住产品。",
+      "applicable_inputs": [
+        "产品入口、平台版本和目标用户",
+        "可核实的核心价值及实际功能",
+        "已有真实界面、操作与结果素材；参考模式另给可读参考",
+        "发布用途、画幅与声音要求，可从项目补齐",
+        "产品源码目录与选题侧重点（源码入口，由 Agent 调研事实、取证并映射章节）"
+      ],
+      "required_inputs": [
+        "产品入口、平台版本和目标用户",
+        "可核实的核心价值及实际功能",
+        "已有真实界面、操作与结果素材；参考模式另给可读参考",
+        "发布用途、画幅与声音要求，可从项目补齐"
+      ],
+      "counterexamples": [
+        "只有功能名称和宣传口号，没有真实可见结果。",
+        "把同一左右版式重复到底，遮蔽需要放大的证据。"
+      ],
+      "constraints": [
+        "参考素材、模板名称与产品源码是三种输入入口，不替代 recipe/compose/free 编排方式。",
+        "首幕建立具体所得，主体证明主张，尾幕回到成果与产品；按实际音频安排时间。",
+        "保持产品事实，制作和来源说明留内部，不添加无依据业绩或制作身份标签。"
+      ],
+      "fallback": "缩小到已有证据支持的价值；缺少必要事实或制作能力时保留已完成工作并报告具体缺口，不把方案当成成片。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "narrative_options": [
+        "结果先行—价值讲解—品牌收束",
+        "品牌承诺—实际证明—成果回收"
+      ],
+      "layouts": [
+        "split-explainer",
+        "full-frame-result",
+        "detail-focus",
+        "before-after",
+        "multi-image"
+      ],
+      "style_ids": [
+        "product-minimal",
+        "paper-editorial",
+        "dual-ground-launch"
+      ],
+      "motion_ids": [
+        "reveal",
+        "highlight",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "三种入口可独立开始",
+        "首尾两幕与主体承诺呼应",
+        "每项主张有真实画面证据",
+        "按真实音频完成字幕与混音，观看听审分别记录",
+        "源码入口的口播主张来自已核实事实，并有当前版本的同一件事证据"
+      ],
+      "support_boundary": "支持由项目、源码和素材提炼宣传片；模板为指导，不附带通用渲染器，不保证任意产品自动构建或运行取证。",
+      "recipe_ids": [
+        "product-split-explainer",
+        "product-source-explainer"
+      ],
+      "expression_ids": [
+        "narrative.output-as-proof",
+        "narrative.goal-proof",
+        "camera.focus-frame",
+        "visual.target-callout",
+        "text.read-then-move",
+        "sound.attention-mix",
+        "production.dwell-budget"
+      ],
+      "source_refs": [
+        "references/product-promo-direction.md",
+        "references/product-source-explainer.md",
+        "references/sources.md"
+      ]
+    },
+    {
+      "id": "interview-commentary",
+      "name": "访谈解读",
+      "intent": "听懂一段外文访谈里的关键判断，知道它对自己意味着什么，并带走一个可以马上对照自己的问题。",
+      "applicable_inputs": [
+        "已取得原声的访谈、演讲、播客或发布会素材",
+        "转写与可引用片段的时间",
+        "解读者自己的判断与证据等级",
+        "目标受众与对照问题"
+      ],
+      "counterexamples": [
+        "把几段引语拼成合集，没有解读者自己的判断。",
+        "引语占比过高，或剪出与原意相反的意思。",
+        "用没有证据的个人经历、客户案例和业绩数字撑场面。",
+        "没有人耳听过，却写音色已还原、自然度已验证。"
+      ],
+      "constraints": [
+        "引语是评论依据，总量不超过原片的三分之一，每段后面都有解读；保留否定、条件与语境，译文不扩大原话。",
+        "来源、日期与数据截止日期写在画面上；第一人称事实先登记证据等级，没有证据不写。",
+        "字幕中文为主、英文为辅；英文引语字幕是净化后的原话；英文行不使用破折号、冒号与分号；每条字幕句末不带标点。",
+        "画面默认用图表与图形，少用文字卡；屏幕上不放评论邀请与行动号召，署名格式为“频道名 访谈 · 年.月”。",
+        "本人音色只用于授权的本人讲解；回听转写只证明读对，听感没有人耳验证时保持 not_checked。",
+        "对外文本不带制作身份标签；来源署名属于事实标注，保留。"
+      ],
+      "fallback": "素材下载受限时改用用户提供或已授权的片段；配音能力缺失时交稿件与字幕时间并说明缺口；未听审不写像本人。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "required_inputs": [
+        "访谈来源、发布日期与可用的原声音轨",
+        "受众与他们的真实问题",
+        "解读者已有的相关判断与证据等级",
+        "画幅、时长与发布用途，可从项目补齐"
+      ],
+      "narrative_options": [
+        "冷开场引语，揭示人物与来源，三段解读，自检收尾",
+        "单一主张深读：一段引语配多层解读",
+        "两位嘉宾观点对照"
+      ],
+      "layouts": [
+        "quote-clip",
+        "portrait-card",
+        "solid-card",
+        "closing-checklist"
+      ],
+      "style_ids": [
+        "dark-tech",
+        "opuscar-dark-keynote",
+        "paper-editorial",
+        "mono-diagram"
+      ],
+      "motion_ids": [
+        "reveal",
+        "stagger",
+        "highlight",
+        "count",
+        "state-swap",
+        "camera-focus",
+        "hold"
+      ],
+      "minimum_acceptance": [
+        "每段引语后面都有解读，引语总量与来源标注清楚",
+        "人名、头衔、日期、数据口径与来源一致",
+        "第一人称事实有证据等级，没有编造的经历与案例",
+        "字幕中文为主英文为辅，句末不带标点，图表或卡片跟随口播",
+        "回听、响度与画面抽帧有实际证据，听感单列",
+        "收尾给每类受众一个可对照自己的问题"
+      ],
+      "support_boundary": "支持有素材的访谈解读与图表、卡片化呈现；不承诺观众理解收益，不证明音色相似度，不替代对原话语境的人工核对。单期样片只证明该期与实际检查范围。",
+      "source_refs": [
+        "references/interview-commentary-direction.md",
+        "templates/interview-commentary.md"
+      ],
+      "recipe_ids": [
+        "interview-commentary-explainer"
+      ],
+      "expression_ids": [
+        "knowledge.truth-ledger",
+        "knowledge.controlled-register",
+        "knowledge.evidence-board",
+        "narrative.output-as-proof",
+        "text.semantic-emphasis",
+        "text.read-then-move",
+        "sound.attention-mix",
+        "production.time-function",
+        "production.dwell-budget",
+        "production.capability-fallback"
+      ]
+    }
+  ]
+}

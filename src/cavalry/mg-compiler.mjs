@@ -21,6 +21,7 @@ import {
   validateMgPurity,
   selfCorrectMgPurity
 } from '../validation/validate-mg-purity.mjs';
+import { equalizeMorphPaths } from '../design/morph-equalize.mjs';
 
 export { validateMgPurity, selfCorrectMgPurity };
 
@@ -1009,9 +1010,20 @@ export function compileMotionTransferScene(motionTransferSpec, options = {}) {
   });
 
   // 5. Weighted Parent Blend (_rb.buildWeightedParentBlend) + shape_morph_loop
+  // When the spec carries morphPaths, equalize segment counts up front so the
+  // Cavalry Shape Morph interpolates segment-by-segment without tearing. Specs
+  // without morphPaths keep the exact pre-existing emission (byte-identical).
+  let morphEqualization = null;
+  let morphPayloadSuffix = '';
+  if (motionDna.morphPaths && typeof motionDna.morphPaths === 'object') {
+    morphEqualization = equalizeMorphPaths(motionDna.morphPaths.from, motionDna.morphPaths.to, {
+      roundValues: options.morphRoundValues ?? 4
+    });
+    morphPayloadSuffix = `, pathA: ${JSON.stringify(morphEqualization.from)}, pathB: ${JSON.stringify(morphEqualization.to)}`;
+  }
   expressions.push(
     `const parentBlendRig = _rb.buildWeightedParentBlend({ name: "SaaS_Card_Blend_Constraint", childId: statusPill.id, parentA: masterCtrl.id, parentB: heroCard.id, weight: 0.75 });`,
-    `_mg.preset("shape_morph_loop", { targetId: parentBlendRig.id, bezier: ${JSON.stringify(primaryBezier)}, fill: _mg.theme.accentSecondary });`
+    `_mg.preset("shape_morph_loop", { targetId: parentBlendRig.id, bezier: ${JSON.stringify(primaryBezier)}, fill: _mg.theme.accentSecondary${morphPayloadSuffix} });`
   );
   rigBuildersUsed.push('_rb.buildWeightedParentBlend');
   cat15PresetsUsed.push('shape_morph_loop');
@@ -1115,6 +1127,7 @@ export function compileMotionTransferScene(motionTransferSpec, options = {}) {
     cat15PresetsUsed,
     gradientCallsUsed,
     alphaPlatesAttached,
+    morphEqualization,
     purity,
     compiled,
     validation: {

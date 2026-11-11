@@ -1,0 +1,639 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "reveal",
+      "name": "出现",
+      "intent": "带入当前需要理解的对象",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "先确定完成态布局。",
+        "不与同目标exit/position运动重叠，除非写合成理由。"
+      ],
+      "fallback": "直接显示并保留阅读时间。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "opacity",
+        "position"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "opacity",
+        "position"
+      ],
+      "parameters": {
+        "distance": {
+          "default": 24,
+          "min": 0,
+          "max": 160,
+          "unit": "px"
+        },
+        "opacity_from": {
+          "default": 0,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "exit",
+      "name": "离场",
+      "intent": "结束对象职责，释放画面",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "离场不早于必要阅读与反馈。",
+        "跨镜主体不要无理由消失。"
+      ],
+      "fallback": "直接隐藏或硬切。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "opacity",
+        "position"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "opacity",
+        "position"
+      ],
+      "parameters": {
+        "distance": {
+          "default": 16,
+          "min": 0,
+          "max": 160,
+          "unit": "px"
+        },
+        "opacity_to": {
+          "default": 0,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "highlight",
+      "name": "强调",
+      "intent": "指出当前解释或操作焦点",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "颜色外保留文字/形状提示。",
+        "不能暗化必读信息至不可读。"
+      ],
+      "fallback": "静态边框或焦点标签。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "color",
+        "opacity"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "color",
+        "opacity"
+      ],
+      "parameters": {
+        "strength": {
+          "default": 0.85,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        },
+        "dim_others_to": {
+          "default": 0.45,
+          "min": 0.2,
+          "max": 1,
+          "unit": "ratio"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "trace",
+      "name": "路径描绘",
+      "intent": "按顺序说明已有路线",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "先确定路径几何和方向含义。",
+        "描线不代表真实测量或因果。"
+      ],
+      "fallback": "完整路径加逐段标注。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "stroke"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "stroke"
+      ],
+      "parameters": {
+        "progress_from": {
+          "default": 0,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        },
+        "progress_to": {
+          "default": 1,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        },
+        "line_width": {
+          "default": 3,
+          "min": 1,
+          "max": 12,
+          "unit": "px"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "connect",
+      "name": "建立关系",
+      "intent": "显示已说明的对象关系",
+      "applicable_inputs": [
+        "两个具名端点与关系含义",
+        "已确定的端点布局和时间"
+      ],
+      "constraints": [
+        "关系与箭头方向明确。",
+        "端点布局改变后重查连线。"
+      ],
+      "fallback": "静态线和关系标签，过密拆镜。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "stroke",
+        "opacity"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "stroke",
+        "opacity"
+      ],
+      "parameters": {
+        "line_width": {
+          "default": 2.5,
+          "min": 1,
+          "max": 10,
+          "unit": "px"
+        },
+        "progress_from": {
+          "default": 0,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "count",
+      "name": "数值变化",
+      "intent": "呈现同指标起终值变化",
+      "applicable_inputs": [
+        "有依据的起终值和同一单位",
+        "明确数字格式与落定时间"
+      ],
+      "constraints": [
+        "起终值和单位有依据，不暗示不存在的测量过程。",
+        "几何和数字一致，落定后留读数时间。"
+      ],
+      "fallback": "直接展示最终值与起点。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "value"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "value"
+      ],
+      "parameters": {
+        "from_value": {
+          "default": 0,
+          "min": -1000000000,
+          "max": 1000000000,
+          "unit": "data-unit"
+        },
+        "to_value": {
+          "default": 100,
+          "min": -1000000000,
+          "max": 1000000000,
+          "unit": "data-unit"
+        },
+        "decimals": {
+          "default": 0,
+          "min": 0,
+          "max": 6,
+          "unit": "digits"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "state-swap",
+      "name": "状态替换",
+      "intent": "表达同对象可解释的状态改变",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "倒退seek恢复状态，逻辑不只靠顺播回调。",
+        "内部变化动稳定外层。"
+      ],
+      "fallback": "状态静帧并列或硬切。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "opacity"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "opacity"
+      ],
+      "parameters": {
+        "crossfade_ratio": {
+          "default": 0.15,
+          "min": 0,
+          "max": 0.5,
+          "unit": "ratio"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "camera-focus",
+      "name": "镜头聚焦",
+      "intent": "把视线带到具名细节",
+      "applicable_inputs": [
+        "显式相机或镜头容器",
+        "具体焦点与可用清晰度"
+      ],
+      "constraints": [
+        "相机是显式element，焦点具体。",
+        "检查变换后裁切和安全区；同相机不能另有冲突运动。"
+      ],
+      "fallback": "全景加静态放大框。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "camera"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "camera"
+      ],
+      "parameters": {
+        "zoom": {
+          "default": 1.5,
+          "min": 1,
+          "max": 3,
+          "unit": "ratio"
+        },
+        "focus_x": {
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "unit": "normalized-canvas"
+        },
+        "focus_y": {
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "unit": "normalized-canvas"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "mask-wipe",
+      "name": "遮罩切换",
+      "intent": "通过边界切换画面状态",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "明确遮罩容器，不在读取中切掉结论。",
+        "跨镜重叠须计划允许或在单镜容器切换。"
+      ],
+      "fallback": "硬切或短淡入。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "mask"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "mask"
+      ],
+      "parameters": {
+        "direction": {
+          "default": "left-to-right",
+          "type": "string",
+          "unit": "enum",
+          "values": [
+            "left-to-right",
+            "right-to-left",
+            "top-to-bottom",
+            "bottom-to-top"
+          ]
+        },
+        "softness": {
+          "default": 0,
+          "min": 0,
+          "max": 40,
+          "unit": "px"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "stagger",
+      "name": "逐项呈现",
+      "intent": "按语义顺序揭示同组条目",
+      "applicable_inputs": [
+        "已命名的目标对象或有序对象组",
+        "完成态布局与镜头绝对时间"
+      ],
+      "constraints": [
+        "有序组顺序显式记录。",
+        "不挤占阅读预算；组内同属性运动分层。"
+      ],
+      "fallback": "全部显示，静态标记当前项。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "opacity",
+        "position"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "opacity",
+        "position"
+      ],
+      "parameters": {
+        "interval": {
+          "default": 0.18,
+          "min": 0.05,
+          "max": 1,
+          "unit": "seconds"
+        },
+        "distance": {
+          "default": 16,
+          "min": 0,
+          "max": 120,
+          "unit": "px"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "parallax",
+      "name": "层间视差",
+      "intent": "用已有层关系辅助空间感",
+      "applicable_inputs": [
+        "已存在或获准分离的前后图层",
+        "层级、遮挡与运动范围"
+      ],
+      "constraints": [
+        "层已有或获准分离，不宣称单图真实深度。",
+        "少量层且检查露边遮挡和证据文字。"
+      ],
+      "fallback": "取消视差，轻推近或静态。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [
+        "position"
+      ],
+      "required_capabilities": [
+        "time-control",
+        "position"
+      ],
+      "parameters": {
+        "travel": {
+          "default": 36,
+          "min": 0,
+          "max": 120,
+          "unit": "px"
+        },
+        "foreground_ratio": {
+          "default": 1,
+          "min": 0,
+          "max": 2,
+          "unit": "ratio"
+        },
+        "background_ratio": {
+          "default": 0.35,
+          "min": 0,
+          "max": 1,
+          "unit": "ratio"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    },
+    {
+      "id": "hold",
+      "name": "稳定停留",
+      "intent": "供阅读、观察或消化关系",
+      "applicable_inputs": [
+        "需观察的稳定对象",
+        "镜头内可用阅读时间"
+      ],
+      "constraints": [
+        "停留不是缺动画，依内容受众给预算。",
+        "参数不独立延长镜头与总时长。"
+      ],
+      "fallback": "减内容或延镜头并更新声音。",
+      "verification": {
+        "design": {
+          "status": "authored",
+          "evidence": []
+        },
+        "preview": {
+          "status": "not_run",
+          "evidence": []
+        },
+        "exported": {
+          "status": "not_run",
+          "evidence": []
+        }
+      },
+      "channels": [],
+      "required_capabilities": [],
+      "parameters": {
+        "minimum_reading": {
+          "default": 1,
+          "min": 0.2,
+          "max": 20,
+          "unit": "seconds"
+        }
+      },
+      "source_refs": [],
+      "implementation_notes": "DOM/SVG are illustrative implementations only; any adapter may implement this pattern when it supports the declared semantic channels and deterministic time control."
+    }
+  ]
+}

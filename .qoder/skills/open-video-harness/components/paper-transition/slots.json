@@ -1,0 +1,23 @@
+{
+ "version": 1,
+ "name": "paper-transition",
+ "summary": "Two seams that read as paper: fold, the current picture swings away about its left edge like a panel; blot, ink spreads from scattered points and opens onto the next picture with soft edges.",
+ "tags": ["纸面", "纸张", "折页", "晕染", "墨迹", "转场", "paper", "fold", "ink"],
+ "painters": ["canvas"],
+ "use": "st = state(params, u) for u 0 → 1 over the seam; canvas(ctx, st, A, B, params) with A and B full-frame canvases. The book page is components/page-turn.",
+ "slots": [
+  {"name": "variant", "type": "string", "default": "fold", "enum": ["fold", "blot"], "text": "fold: a panel swinging away (about 0.85 s reads well); blot: ink opening onto the next (about 1.2 s)"},
+  {"name": "ease", "type": "string|array", "default": "inOutCubic", "text": "fold: how the panel swings over u"},
+  {"name": "shade", "type": "number", "default": 0.45, "min": 0, "max": 1, "text": "fold: the shade on the next picture at the start"},
+  {"name": "dark", "type": "number", "default": 0.7, "min": 0, "max": 1, "text": "fold: the panel's shade when edge-on"},
+  {"name": "blots", "type": "number", "default": 26, "min": 1, "text": "blot: how many blots; from u = 0.55 a last one from the centre covers the frame"},
+  {"name": "seed", "type": "number", "default": 905, "text": "blot: where the blots are and how big (a new seed, a new pattern)"},
+  {"name": "ink", "type": "string", "default": "13,17,23", "text": "blot: the ink edge's colour, r,g,b"},
+  {"name": "edge", "type": "number", "default": 26, "unit": "px", "text": "blot: the ink edge's width"},
+  {"name": "soft", "type": "number", "default": 12, "unit": "px", "text": "blot: the softness of the opening's edge"}
+ ],
+ "sample": {"at": [0.3, 1.05, 1.2, 1.35, 1.5, 2.3, 3.0, 3.2, 3.4, 4.5], "text": "the contact sheet's moments: the middle of each seam"},
+ "provenance": [
+  {"repo": "this repository", "path": "engines/canvas-film/template/src/30-transitions.js", "license": "MIT", "note": "canvas-film's fold and blot transitions, made engine-free"}
+ ]
+}

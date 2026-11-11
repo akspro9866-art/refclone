@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/split-logo-report.schema.json",
+  "title": "Logo split report",
+  "description": "Wrapper report for the vendored xiaoma-studio split-logo.py. sourceHash is the SHA-256 of the input page SVG (or, when that file is absent, the hash of its canonical path, recorded in notes). output is the published cropped SVG; null means nothing was produced (blocked), never an assumed success.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "status", "tool", "source", "rect", "options", "output", "reason", "notes"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "status": { "type": "string", "enum": ["complete", "blocked"] },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "python", "scriptPath", "scriptSha256"],
+      "properties": {
+        "name": { "type": "string", "const": "split-logo.py" },
+        "python": { "type": ["string", "null"], "description": "Python executable that ran, or null when unavailable." },
+        "scriptPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "scriptSha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+      }
+    },
+    "source": {
+      "anyOf": [
+        { "$ref": "common.schema.json#/definitions/file" },
+        { "type": "null" }
+      ],
+      "description": "The input page SVG record; null when it could not be read."
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keepBg", "twoStop"],
+      "properties": {
+        "keepBg": { "type": "boolean" },
+        "twoStop": { "type": "boolean" }
+      }
+    },
+    "output": {
+      "anyOf": [
+        { "$ref": "common.schema.json#/definitions/file" },
+        { "type": "null" }
+      ],
+      "description": "The published cropped SVG record; null when blocked."
+    },
+    "reason": { "type": ["string", "null"], "description": "Blocked reason (INPUT_MISSING, PYTHON_MISSING, PROCESS_FAILED, OUTPUT_EXISTS, OUTPUT_INVALID); null when complete." },
+    "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+  }
+}

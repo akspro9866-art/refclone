@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/photo-trace-report.schema.json",
+  "title": "Photo trace report",
+  "description": "Wrapper report for the vendored framewright trace.py. sourceHash is the SHA-256 of the input photo (or, when that file is absent, the hash of its canonical path, recorded in notes). trace summarizes the parsed PORTRAIT payload (coordinate counts only, no pixels); null means nothing was measured (blocked), never an assumed success.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "status", "tool", "source", "settings", "trace", "preview", "reason", "notes"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "status": { "type": "string", "enum": ["complete", "blocked"] },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "python", "scriptPath", "scriptSha256"],
+      "properties": {
+        "name": { "type": "string", "const": "trace.py" },
+        "python": { "type": ["string", "null"], "description": "Python executable that ran, or null when unavailable." },
+        "scriptPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "scriptSha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+      }
+    },
+    "source": {
+      "anyOf": [
+        { "$ref": "common.schema.json#/definitions/file" },
+        { "type": "null" }
+      ],
+      "description": "The input photo record; null when it could not be read."
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "blur", "levels", "tol", "minarea", "bgthr", "crop", "removeBackground", "autocontrast", "preview"],
+      "properties": {
+        "height": { "type": "integer", "minimum": 1 },
+        "blur": { "type": "number", "minimum": 0 },
+        "levels": { "type": "array", "minItems": 1, "items": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 } },
+        "tol": { "type": "number", "exclusiveMinimum": 0 },
+        "minarea": { "type": "number", "minimum": 0 },
+        "bgthr": { "type": "number", "minimum": 0, "maximum": 1 },
+        "crop": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "integer", "minimum": 0 } }
+          ]
+        },
+        "removeBackground": { "type": "boolean" },
+        "autocontrast": { "type": "boolean" },
+        "preview": { "type": "boolean" }
+      }
+    },
+    "trace": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "width", "height", "totalPoints", "levels"],
+          "properties": {
+            "path": { "$ref": "common.schema.json#/definitions/absolutePath" },
+            "sha256": { "$ref": "common.schema.json#/definitions/sourceHash" },
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "totalPoints": { "type": "integer", "minimum": 0 },
+            "levels": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["t", "polygons", "points"],
+                "properties": {
+                  "t": { "type": "number" },
+                  "polygons": { "type": "integer", "minimum": 0 },
+                  "points": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        { "type": "null" }
+      ],
+      "description": "Parsed PORTRAIT summary; null when blocked."
+    },
+    "preview": {
+      "anyOf": [
+        { "$ref": "common.schema.json#/definitions/file" },
+        { "type": "null" }
+      ],
+      "description": "Optional raster preview record (eyes only, not evidence); null when not requested or blocked."
+    },
+    "reason": { "type": ["string", "null"], "description": "Blocked reason (INPUT_MISSING, PYTHON_MISSING, DEPENDENCY_MISSING, PROCESS_FAILED, OUTPUT_INVALID); null when complete." },
+    "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+  }
+}

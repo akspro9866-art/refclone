@@ -5,9 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import {
   WorkflowError, absolutePath, fileRecord, hashFile, hashObject, readJson, runProcess,
-  validateArtifact, withJobLock, writeJsonState
+  validateArtifact, withJobLock, writeJsonNew, writeJsonState
 } from '../core.mjs';
 import { deriveJobDirectory } from '../design/assets.mjs';
+import { buildPatchPlan, editListKey, resolveEditListFile } from '../design/edit-list.mjs';
 import { CavalryAdapter } from '../cavalry/cavalry.mjs';
 
 export const RENDER_VERSION = '1.0.0';
@@ -126,13 +127,39 @@ export async function renderVideo(planPath, options = {}) {
   if (renderedShots.length === 0) {
     throw new WorkflowError('RENDER_SHOT_NOT_FOUND', `No planned shot with id ${options.shot}.`, { shot: options.shot });
   }
-  const frames = options.frames ?? renderedShots.flatMap(shot =>
+  // Optional edit-list layer: resolving it binds the render to the film's entries. A
+  // changed-entry list yields the keyframe window a single-shot patch has to redraw;
+  // a multi-window patch needs segment splicing and is refused here rather than
+  // silently re-encoded as one contiguous clip.
+  const resolvedEdit = options.editListPath
+    ? await resolveEditListFile(options.editListPath, { sourceDurations: options.editSourceDurations })
+    : null;
+  const patchPlan = resolvedEdit && options.changedEntryIds?.length
+    ? await buildPatchPlan(resolvedEdit, options.changedEntryIds, { keyframes: options.keyframes })
+    : null;
+  if (patchPlan?.refused) {
+    throw new WorkflowError('RENDER_PATCH_REFUSED', `The single-shot patch was refused: ${patchPlan.refused.reason}.`, {
+      entryIds: options.changedEntryIds
+    });
+  }
+  if (patchPlan && patchPlan.windows.length > 1) {
+    throw new WorkflowError('RENDER_PATCH_MULTI_WINDOW',
+      'A single-shot patch must fall inside one keyframe window; patch one changed entry at a time.', {
+      windows: patchPlan.windows
+    });
+  }
+  let frames;
+  if (options.frames) frames = options.frames;
+  else if (patchPlan) frames = Array.from({ length: patchPlan.windows[0].B - patchPlan.windows[0].A }, (_, index) => patchPlan.windows[0].A + index);
+  else frames = renderedShots.flatMap(shot =>
     Array.from({ length: shot.endFrameExclusive - shot.startFrame }, (_, index) => shot.startFrame + index));
   const scalePercent = options.scalePercent ?? renderConfig.scalePercent ?? 100;
   const key = hashObject({
     version: RENDER_VERSION, planSha256: await hashFile(resolvedPlanPath), projectSha256: project.sha256,
     frames: frames.length, scalePercent, encoder: { ffmpeg, crf: renderConfig.crf ?? 18, preset: renderConfig.preset ?? 'medium' },
-    fps: plan.project.fps, resolution: { width: plan.project.width, height: plan.project.height }
+    fps: plan.project.fps, resolution: { width: plan.project.width, height: plan.project.height },
+    edit: resolvedEdit ? editListKey(resolvedEdit) : null,
+    patch: patchPlan ? hashObject(patchPlan) : null
   });
   const directory = path.join(jobDirectory, 'render', key);
   return withJobLock(jobDirectory, async () => {
@@ -147,6 +174,18 @@ export async function renderVideo(planPath, options = {}) {
     const outputDirectory = prior?.runDirectory ? absolutePath(prior.runDirectory) : runDirectory;
     const framesDirectory = path.join(outputDirectory, 'frames');
     await fs.mkdir(framesDirectory, { recursive: true });
+    // The resolved edit list and the patch window are evidence for this run: written
+    // once per run directory, never replacing an existing record.
+    let editResolvedPath = null;
+    let patchPlanPath = null;
+    if (resolvedEdit) {
+      editResolvedPath = absolutePath(path.join(outputDirectory, 'edit.resolved.json'));
+      await writeJsonNew(editResolvedPath, resolvedEdit).catch(error => { if (error.code !== 'FILE_EXISTS') throw error; });
+    }
+    if (patchPlan) {
+      patchPlanPath = absolutePath(path.join(outputDirectory, 'patch-plan.json'));
+      await writeJsonNew(patchPlanPath, patchPlan).catch(error => { if (error.code !== 'FILE_EXISTS') throw error; });
+    }
     if (!prior) {
       // Reserve this directory in the cache before the first frame is written, so
       // a crash mid-sequence resumes here instead of leaving orphaned frames.
@@ -199,7 +238,9 @@ export async function renderVideo(planPath, options = {}) {
         const videoErrors = validateVideoAgainstPlan(probe, plan, encoded.path, frames.length);
         for (const message of videoErrors) errors.push({ code: 'VIDEO_VALIDATION_FAILED', message });
       }
-      const manifestStatus = errors.length ? 'failed' : 'verified';
+      // A patch window is verified evidence for those frames only: the manifest is
+      // marked partial so QA never mistakes it for a full, spliced final.
+      const manifestStatus = errors.length ? 'failed' : patchPlan ? 'partial' : 'verified';
       const manifest = {
         schemaVersion: 1, sourceHash: plan.sourceHash, projectPath, projectSha256: project.sha256,
         fps: { num: plan.project.fps.num, den: plan.project.fps.den },
@@ -217,6 +258,8 @@ export async function renderVideo(planPath, options = {}) {
       const state = {
         key, version: RENDER_VERSION, runDirectory: outputDirectory, projectPath, projectSha256: project.sha256,
         status: manifestStatus, frames: rendered, video: encoded, manifestPath, markdownPath,
+        ...(resolvedEdit ? { edit: { editListPath: absolutePath(options.editListPath), resolvedPath: editResolvedPath, frames: resolvedEdit.frames, slates: resolvedEdit.slates } } : {}),
+        ...(patchPlan ? { patch: { planPath: patchPlanPath, changedEntryIds: patchPlan.changedEntryIds, windows: patchPlan.windows } } : {}),
         errors, updatedAt: new Date().toISOString()
       };
       await writeJsonState(cachePath, state);

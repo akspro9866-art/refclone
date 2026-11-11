@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/product-ledger.schema.json",
+  "title": "Product source ledger check report",
+  "description": "Wrapper report for the vendored chaojifeng-video-design product_ledger.py. sourceHash is the SHA-256 of the ledger file that was checked (the ledger's own source of truth), not a reference video. The upstream ledger JSON itself keeps its native snake_case shape and is not re-shaped here. ok/errors/warnings/issues mirror the upstream `check --json` contract; null means not measured (blocked), never a default pass.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceHash", "status", "tool", "ledger", "ok", "errors", "warnings", "issues", "reason", "notes"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceHash": { "$ref": "common.schema.json#/definitions/sourceHash" },
+    "status": { "type": "string", "enum": ["complete", "blocked"] },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "python", "scriptPath", "scriptSha256"],
+      "properties": {
+        "name": { "type": "string", "const": "product_ledger.py" },
+        "python": { "type": ["string", "null"], "description": "Python executable that ran, or null when unavailable." },
+        "scriptPath": { "$ref": "common.schema.json#/definitions/absolutePath" },
+        "scriptSha256": { "$ref": "common.schema.json#/definitions/sourceHash" }
+      }
+    },
+    "ledger": {
+      "anyOf": [
+        { "$ref": "common.schema.json#/definitions/file" },
+        { "type": "null" }
+      ],
+      "description": "The checked ledger file record; null when it could not be read."
+    },
+    "ok": { "type": ["boolean", "null"], "description": "Upstream check verdict: true when the ledger closes with zero errors. Null when blocked." },
+    "errors": { "type": ["integer", "null"], "minimum": 0 },
+    "warnings": { "type": ["integer", "null"], "minimum": 0 },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "code", "where", "message"],
+        "properties": {
+          "level": { "type": "string", "enum": ["error", "warn"] },
+          "code": { "type": "string", "minLength": 1 },
+          "where": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "reason": { "type": ["string", "null"], "description": "Blocked reason (PYTHON_MISSING, LEDGER_UNREADABLE, PROCESS_FAILED); null when complete." },
+    "notes": { "$ref": "common.schema.json#/definitions/stringList" }
+  }
+}

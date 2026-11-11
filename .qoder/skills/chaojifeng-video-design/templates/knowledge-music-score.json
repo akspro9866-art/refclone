@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "31431e1f6ca5cacfddb352142d5b9a5afad0465ed61ff53a3132e53f764c0917",
+  "delivery_mode": "direct",
+  "lead_mode": "subtitle",
+  "decision_reason": "结构模板采用直接交付；实际项目按用户指令与任务约束填写，不伪造用户确认。",
+  "reading_windows": [
+    {
+      "id": "read-01",
+      "scene_id": "scene-01",
+      "element_id": "object-01",
+      "start_beat_id": "beat-01",
+      "end_beat_id": "beat-read-end",
+      "min_read_seconds": 3,
+      "reason": "短句完整出现后的阅读与关系对照预算，实际内容替换后重核。",
+      "claim_ids": []
+    }
+  ],
+  "music_map": null,
+  "sync_points": [],
+  "notes": [
+    "配合examples/knowledge-music.plan.json作结构检查，未渲染、未听审、未做观众测试。",
+    "音乐地图接真实音源后填写；源锚点kind为beat/downbeat/phrase/section，status为candidate/verified。",
+    "sync_points用visual_beat_id、anchor_id、placement_id关联音乐；intended_offset_s正数表示声音晚于画面。",
+    "SFX使用audio_cue_id与onset_offset_s；不在任务表手工复制视觉时刻。"
+  ]
+}

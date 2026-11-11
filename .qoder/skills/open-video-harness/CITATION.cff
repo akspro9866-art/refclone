@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use OpenVideoHarness in your work, please cite it as below."
+title: "OpenVideoHarness: A Code-to-Video Harness for Coding Agents"
+type: software
+authors:
+  - name: "ZLHad and contributors"
+repository-code: "https://github.com/ZLHad/OpenVideoHarness"
+url: "https://github.com/ZLHad/OpenVideoHarness"
+license: MIT
+version: "0.5.0"
+date-released: "2026-11-10"
+abstract: >-
+  A video-as-code harness that turns coding agents such as Claude Code and Codex into a multi-genre video studio:
+  every frame is a pure function of time, the agent reviews its own rendered frames, and people approve the concept
+  and the first draft, and the storyboard of a costly film. It ships 11 video types (two experimental), 33 style presets with rendered swatches, and code-composed
+  music, voice, captions, mixing and audio QA.
+keywords:
+  - video-as-code
+  - code2video
+  - coding-agents
+  - motion-graphics
+  - text-to-speech
+  - hyperframes
+  - manim

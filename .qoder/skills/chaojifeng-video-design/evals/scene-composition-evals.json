@@ -1,0 +1,115 @@
+{
+  "skill_name": "chaojifeng-video-design",
+  "schema_version": 1,
+  "scope": "场景与工具组合",
+  "status": "authored-not-run",
+  "notes": [
+    "文档支持的路线判断与本机执行分别验收；不把作者自检当独立模型评测。"
+  ],
+  "evals": [
+    {
+      "id": "character-first",
+      "prompt": "做角色电影，先建一堆模型再想动作。",
+      "expected_output": "创建对象前写镜头、表情、起终姿势、运镜、声音与落定；再在可编辑场景实现和查连续表演。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "创建对象前写镜头、表情、起终姿势、运镜、声音与落定；再在可编辑场景实现和查连续表演。"
+        ]
+      }
+    },
+    {
+      "id": "hdr-background",
+      "prompt": "加一张HDRI背景就等于灯光反射都做好了。",
+      "expected_output": "区分背景与环境照明，核材质、主光、曝光、轮廓、接地与连续高光；Poly Haven提供资产，不替代布光。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "区分背景与环境照明，核材质、主光、曝光、轮廓、接地与连续高光；Poly Haven提供资产，不替代布光。"
+        ]
+      }
+    },
+    {
+      "id": "pre-rendered-media",
+      "prompt": "Blender出了MP4，必须先转成Three.js才能放Remotion。",
+      "expected_output": "预渲染视频直接作媒体；ThreeCanvas用于运行三维场景，不需要无意义转换。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "预渲染视频直接作媒体；ThreeCanvas用于运行三维场景，不需要无意义转换。"
+        ]
+      }
+    },
+    {
+      "id": "three-animation",
+      "prompt": "Three.js没有动画，所以任何动作都得用Blender。",
+      "expected_output": "承认动画剪辑、混合、骨骼与形变，按表达选工具；完整视频取帧与编码由工程组织。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "承认动画剪辑、混合、骨骼与形变，按表达选工具；完整视频取帧与编码由工程组织。"
+        ]
+      }
+    },
+    {
+      "id": "time-determinism",
+      "prompt": "用了EffectComposer，随机粒子和实时累积自然就能逐帧一致。",
+      "expected_output": "后期pass不保证时间确定，统一帧时间与随机源，必要时验证seek与同帧复现。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "后期pass不保证时间确定，统一帧时间与随机源，必要时验证seek与同帧复现。"
+        ]
+      }
+    },
+    {
+      "id": "mcp-existing",
+      "prompt": "已有Blender MCP，再开一套服务并自动上传全部场景遥测。",
+      "expected_output": "核归属并复用，区分社区插件、代码执行、基础匿名遥测与详细数据同意；不扩大授权。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "核归属并复用，区分社区插件、代码执行、基础匿名遥测与详细数据同意；不扩大授权。"
+        ]
+      }
+    },
+    {
+      "id": "project-skills",
+      "prompt": "在Context目录反复全局安装Remotion官方Skills。",
+      "expected_output": "已有宿主指导先复用，实际Remotion项目核缺口与安装目标，官方入口不等于已执行。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "已有宿主指导先复用，实际Remotion项目核缺口与安装目标，官方入口不等于已执行。"
+        ]
+      }
+    },
+    {
+      "id": "final-mp4",
+      "prompt": "网页预览很好看，MP4只探测有音轨就交。",
+      "expected_output": "观看真实MP4并检查声音、起止、同步和接缝，记录无法听审项，交可编辑源和资产。",
+      "files": [
+        "references/scene-tool-composition.md"
+      ],
+      "assertions": {
+        "checks": [
+          "观看真实MP4并检查声音、起止、同步和接缝，记录无法听审项，交可编辑源和资产。"
+        ]
+      }
+    }
+  ]
+}

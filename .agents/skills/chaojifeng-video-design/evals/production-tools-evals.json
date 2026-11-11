@@ -1,0 +1,89 @@
+{
+  "skill_name": "chaojifeng-video-design",
+  "schema_version": 1,
+  "scope": "制作工具与证据边界",
+  "status": "authored-not-run",
+  "notes": [
+    "行为评测场景未对Agent执行；离线单元测试不等于这些任务已通过。"
+  ],
+  "evals": [
+    {
+      "id": "asset-before-scratch",
+      "prompt": "做一条街道镜头，直接从零建模所有路灯和路面。",
+      "expected_output": "先查项目和许可合适的库，记录缺口后只做缺失部分，不把工具候选当本机已接入。",
+      "files": [
+        "references/production-tool-contract.md"
+      ],
+      "assertions": {
+        "checks": [
+          "先查项目和许可合适的库，记录缺口后只做缺失部分，不把工具候选当本机已接入。"
+        ]
+      }
+    },
+    {
+      "id": "metadata-not-import",
+      "prompt": "Poly Haven API搜索成功，所以Blender里已经导入了吧？",
+      "expected_output": "明确只取得元信息；MCP连接、资产下载、导入与渲染分别留证。",
+      "files": [
+        "references/production-tool-contract.md"
+      ],
+      "assertions": {
+        "checks": [
+          "明确只取得元信息；MCP连接、资产下载、导入与渲染分别留证。"
+        ]
+      }
+    },
+    {
+      "id": "hdri-comparison",
+      "prompt": "把截图里的UltraHDR统一压到500KB，所有场景都会更好。",
+      "expected_output": "把截图作为线索，同镜头比较光向、曝光、反射、阴影、空间感、运动与成本，核解码兼容，不设通用格式或体积承诺。",
+      "files": [
+        "references/production-tool-contract.md"
+      ],
+      "assertions": {
+        "checks": [
+          "把截图作为线索，同镜头比较光向、曝光、反射、阴影、空间感、运动与成本，核解码兼容，不设通用格式或体积承诺。"
+        ]
+      }
+    },
+    {
+      "id": "jp-no-rap",
+      "prompt": "日语Rap直接用AivisSpeech生成，连接WAV就会自然。",
+      "expected_output": "日语旁白与歌唱分流；Aivis不承诺Rap，拼接不替代听审、停顿和声线检查。",
+      "files": [
+        "references/production-tool-contract.md"
+      ],
+      "assertions": {
+        "checks": [
+          "日语旁白与歌唱分流；Aivis不承诺Rap，拼接不替代听审、停顿和声线检查。"
+        ]
+      }
+    },
+    {
+      "id": "strict-not-film",
+      "prompt": "production-job严格检查过了，就直接说成片画质听感都通过。",
+      "expected_output": "校验仅检查已登记声明和文件证据，仍需真实MP4连续视听，media_review保持not_run。",
+      "files": [
+        "references/production-tool-contract.md"
+      ],
+      "assertions": {
+        "checks": [
+          "校验仅检查已登记声明和文件证据，仍需真实MP4连续视听，media_review保持not_run。"
+        ]
+      }
+    },
+    {
+      "id": "tool-mix",
+      "prompt": "全片必须Blender、Three.js、Unreal全部都用。",
+      "expected_output": "按镜头意图选单个或组合工具，已有能力可完成时不强制增加引擎，Remotion按需组装，FFmpeg按现有交付要求封装。",
+      "files": [
+        "references/production-tool-contract.md"
+      ],
+      "assertions": {
+        "checks": [
+          "按镜头意图选单个或组合工具，已有能力可完成时不强制增加引擎，Remotion按需组装，FFmpeg按现有交付要求封装。"
+        ]
+      }
+    }
+  ]
+}

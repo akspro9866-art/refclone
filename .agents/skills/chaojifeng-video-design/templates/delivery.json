@@ -1,0 +1,9 @@
+{
+  "schema_version": 1, "project_id": "example-project", "plan_sha256": "",
+  "producer": {"tool": "unknown", "model": "unknown", "run_id": "unknown"}, "outputs": [],
+  "checks": {
+    "structure": {"status": "not_run", "evidence": []}, "semantic": {"status": "not_run", "evidence": []},
+    "visual": {"status": "not_run", "evidence": []}, "playback": {"status": "not_run", "evidence": []},
+    "audio": {"status": "not_run", "evidence": []}, "comprehension": {"status": "not_run", "evidence": []}
+  }
+}
