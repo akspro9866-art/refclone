@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://refclone.local/schemas/capsule-template.schema.json",
+  "title": "Canonical capsule recipe JSON template",
+  "description": "A compact, reviewable view of a vendored capsule-cinema package. The capsule.yaml and contracts/ remain authoritative; this template records the format, structure, palette, roles, required inputs and bans that the design stage consumes. Episode-specific values stay inputs, never defaults.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "templateId", "displayName", "sourcePackage", "format", "structure", "requiredInputs", "forbidden", "contentScope"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "templateId": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "displayName": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string" },
+    "sourcePackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory", "manifestSha256", "upstream", "recipeVersion", "executionMode", "entrypoint"],
+      "properties": {
+        "directory": { "type": "string", "minLength": 1 },
+        "manifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "upstream": { "type": "string", "minLength": 1 },
+        "recipeVersion": { "type": "integer", "minimum": 1 },
+        "executionMode": { "type": "string", "enum": ["local_script", "preset"] },
+        "entrypoint": { "type": "string", "minLength": 1 },
+        "category": { "type": "string" },
+        "primaryWorkflow": { "type": "string" },
+        "evidenceLevel": { "type": "string" },
+        "qualityGateProfile": { "type": "string" }
+      }
+    },
+    "format": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["aspectRatio"],
+      "properties": {
+        "aspectRatio": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "silent": { "type": "boolean" }
+      }
+    },
+    "structure": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["beats"],
+      "properties": {
+        "beats": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": { "type": "object", "additionalProperties": true }
+    },
+    "requiredInputs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "recommendedInputs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "defaults": { "type": "object", "additionalProperties": true },
+    "durationContracts": { "type": "object", "additionalProperties": true },
+    "sourceMaterial": { "type": "object", "additionalProperties": true },
+    "screenRecording": { "type": "object", "additionalProperties": true },
+    "forbidden": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "contentScope": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["seriesFixed", "episodeVariable", "policies"],
+      "properties": {
+        "seriesFixed": { "type": "array", "items": { "type": "string" } },
+        "episodeVariable": { "type": "array", "items": { "type": "string" } },
+        "policies": { "type": "object", "additionalProperties": { "type": "boolean" } }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

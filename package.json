@@ -25,7 +25,8 @@
     "node": ">=24"
   },
   "bin": {
-    "refclone": "src/cli.mjs"
+    "refclone": "src/cli.mjs",
+    "vh": "./bin/vh.mjs"
   },
   "scripts": {
     "build": "node .github/scripts/syntax-check.mjs",
@@ -38,10 +39,17 @@
     "prepublishOnly": "npm run verify && npm test",
     "test:zero-slop": "node --test test/pipeline/zero-slop-pipeline.test.ts",
     "e2e:zero-slop": "node scripts/e2e-zero-slop.mjs",
-    "clone:live": "node scripts/clone-live.mjs"
+    "clone:live": "node scripts/clone-live.mjs",
+    "vh:edit": "node bin/vh.mjs edit",
+    "vh:patch": "node bin/vh.mjs patch",
+    "vh:desk": "node bin/vh.mjs desk",
+    "vh:gate": "node bin/vh.mjs gate",
+    "vh:check": "node bin/vh.mjs check"
   },
   "files": [
     "src",
+    "bin",
+    "templates",
     "schemas",
     "tools",
     "integration",
@@ -56,6 +64,8 @@
     "AGENTS.md",
     "README.md",
     "CHANGELOG.md",
+    "DECISIONS.md",
+    "LESSONS.md",
     "LICENSE"
   ],
   "keywords": [
@@ -76,7 +86,7 @@
     "@modelcontextprotocol/sdk": "1.32.2",
     "ajv": "8.20.0",
     "bezier-easing": "^3.2.0",
-    "cavalry-mcp": "git+https://github.com/akspro9866-art/cavalry-mcp.git#ee225492c654c57e9276abf0b8a59bc42ee6abdb",
+    "cavalry-mcp": "git+https://github.com/akspro9866-art/cavalry-mcp.git#0bfabe4d857f2f50407650439c939f6479c31c00",
     "pngjs": "7.0.0",
     "svg-path-commander": "^2.3.3",
     "yaml": "^2.9.1"

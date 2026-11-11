@@ -8,9 +8,8 @@ import {
   validateArtifact, verifyFiles, withJobLock, writeJsonState
 } from '../core.mjs';
 import { deriveJobDirectory } from '../design/assets.mjs';
-import { resolveEditListFile } from '../design/edit-list.mjs';
-import { inspectGeometryFile } from '../vision/geometry-inspect.mjs';
-import { runStaticLint } from '../vision/static-lint.mjs';
+import { evaluateStaticGates } from './gates.mjs';
+import { runVisionFreePreRenderGates } from './stages.mjs';
 import {
   FILMSTRIP_QA_VERSION,
   buildBeatFilmstrip,
@@ -18,12 +17,8 @@ import {
   runMotionTransferFilmstripQa
 } from '../vision/filmstrip-qa.mjs';
 
-export {
-  FILMSTRIP_QA_VERSION,
-  buildBeatFilmstrip,
-  evaluateReviewLoopChecks,
-  runMotionTransferFilmstripQa
-};
+export { evaluateStaticGates };
+export { FILMSTRIP_QA_VERSION, buildBeatFilmstrip, evaluateReviewLoopChecks, runMotionTransferFilmstripQa };
 
 export const QA_VERSION = '1.0.0';
 
@@ -434,118 +429,6 @@ function reportLimitations(plan, config, referenceProbe) {
  * pair, writes comparison images for the worst frames, and emits a schema-valid
  * report. It never edits the scene, the plan or the render.
  */
-const CHECKLIST = Object.freeze({
-  path: fileURLToPath(new URL('../../vendor/wave2/OpenVideoHarness/CHECKLIST.md', import.meta.url)),
-  points: 20,
-  reviewerDimensions: 8,
-  authoritative: 'vendor/wave2/OpenVideoHarness/TASTE_CHECKLIST.md (machine-readable copy: taste-checklist.json)'
-});
-
-const GATE_STATUS = { pass: 'pass', fail: 'fail', partial: 'blocked', blocked: 'blocked', skipped: 'skipped', not_run: 'not_run' };
-const LOOPCHECK_STATUSES = new Set(['pass', 'fail']);
-
-/**
- * The vision-free gates that run before any frame comparison: static lint
- * (contrast/overlap/determinism), measured screen-space geometry, the loop seam
- * result and the edit list's slate state. Every gate is optional; a gate that could
- * not run is reported as blocked, never as a pass. The 20-point contact-sheet
- * checklist and the 8-point fresh-context reviewer stay a human/agent review — this
- * section only records which automatic gates ran and what they measured.
- */
-export async function evaluateStaticGates(staticGates = {}, { runDirectory = null } = {}) {
-  const gates = [];
-  const limitations = [];
-  if (staticGates.htmlPath) {
-    const lint = await runStaticLint(staticGates.htmlPath, {
-      python: staticGates.python, cssPath: staticGates.cssPath, chars: staticGates.chars,
-      samples: staticGates.samples, processTimeoutMs: staticGates.processTimeoutMs
-    });
-    gates.push({
-      name: 'static-lint',
-      status: GATE_STATUS[lint.status] ?? 'blocked',
-      findings: lint.findings,
-      notes: lint.notes,
-      evidence: {
-        version: lint.version, sourceHash: lint.sourceHash, lint: lint.lint, fonts: lint.fonts,
-        reportDirectory: runDirectory
-      }
-    });
-  }
-  if (staticGates.geometryPath) {
-    const geometry = await inspectGeometryFile(staticGates.geometryPath, {
-      sourceDirectory: staticGates.sourceDirectory, timeoutMs: staticGates.timeoutMs
-    });
-    gates.push({
-      name: 'geometry',
-      status: GATE_STATUS[geometry.status] ?? 'blocked',
-      findings: geometry.findings,
-      notes: geometry.notes,
-      evidence: {
-        version: geometry.version, geometryHash: geometry.geometryHash, vendorStatus: geometry.vendorStatus ?? null,
-        measuredObjects: geometry.measuredObjects, scannedFiles: geometry.scannedFiles, skipped: geometry.skipped,
-        passes: geometry.passes, warnings: geometry.warnings, reason: geometry.reason
-      }
-    });
-  }
-  if (staticGates.loopcheck) {
-    const loopcheck = staticGates.loopcheck;
-    if (!LOOPCHECK_STATUSES.has(loopcheck?.status) || typeof loopcheck.loop !== 'string') {
-      throw new WorkflowError('QA_STATIC_GATE_INVALID', 'The loopcheck gate needs a checkLoop() result ({status, loop, frames, checks}).');
-    }
-    gates.push({
-      name: 'loopcheck',
-      status: GATE_STATUS[loopcheck.status],
-      findings: loopcheck.status === 'pass' ? [] : [{
-        code: 'LOOP_SEAM_BROKEN', severity: 'error',
-        message: loopcheck.notes?.at(-1) ?? `Loop check failed for the ${loopcheck.loop} loop.`
-      }],
-      notes: loopcheck.notes ?? [],
-      evidence: {
-        version: loopcheck.version ?? null, loop: loopcheck.loop, frames: loopcheck.frames ?? null,
-        maxDiff: loopcheck.maxDiff ?? null, hold: loopcheck.hold ?? null, seam: loopcheck.seam ?? null, fstep: loopcheck.fstep ?? null
-      }
-    });
-  }
-  if (staticGates.editListPath) {
-    const resolved = await resolveEditListFile(staticGates.editListPath, { sourceDurations: staticGates.sourceDurations });
-    const slates = resolved.slates ?? [];
-    gates.push({
-      name: 'edit-list',
-      status: slates.length ? 'fail' : 'pass',
-      findings: slates.length ? [{
-        code: 'EDIT_SLATE_PRESENT', severity: 'error',
-        message: `The edit list still carries slate entries (${slates.join(', ')}); this render is an animatic, not a deliverable.`
-      }] : [],
-      notes: resolved.notes ?? [],
-      evidence: {
-        frames: resolved.frames, duration: resolved.duration, cuts: resolved.cuts, slates,
-        runs: resolved.runs.length, edit: resolved.edit ?? null
-      }
-    });
-  }
-  if (!gates.length) {
-    return {
-      status: 'not_run',
-      checklist: { ...CHECKLIST },
-      gates,
-      limitations: ['No static gate was requested; the pre-vision checks did not run for this QA pass.']
-    };
-  }
-  const anyFail = gates.some(gate => gate.status === 'fail');
-  const anyBlocked = gates.some(gate => gate.status === 'blocked' || gate.status === 'skipped' || gate.status === 'not_run');
-  const status = anyFail ? 'fail' : anyBlocked ? 'needs_review' : 'pass';
-  for (const gate of gates) {
-    if (gate.status === 'blocked') limitations.push(`Static gate ${gate.name} did not run; an unrun gate is not evidence.`);
-  }
-  limitations.push('Static gates are vision-free measurements; the 20-point contact-sheet checklist and the 8-point fresh-context reviewer remain a human/agent review.');
-  const section = { status, checklist: { ...CHECKLIST }, gates, limitations };
-  if (runDirectory) {
-    const directory = absolutePath(path.join(runDirectory, 'static-gates'));
-    await fs.mkdir(directory, { recursive: true });
-    await writeJsonState(path.join(directory, 'static-gates.json'), section);
-  }
-  return section;
-}
 
 export async function runQa(planPath, options = {}) {
   if (typeof planPath === 'object' && planPath !== null) {
@@ -614,10 +497,12 @@ export async function runQa(planPath, options = {}) {
     const metadataDirectory = path.join(runDirectory, 'metrics');
     await fs.mkdir(comparisonsDirectory, { recursive: true });
     await fs.mkdir(metadataDirectory, { recursive: true });
-    // Vision-free gates run first: a composition that fails contrast, overlaps text,
-    // leaves safe zones, breaks its loop or still holds slates is repaired before any
-    // frame comparison is paid for.
-    const staticGateSection = options.staticGates ? await evaluateStaticGates(options.staticGates, { runDirectory }) : null;
+    // Vision-free gates run first — plan lint (contrast/overlap/safe zones/font
+    // locks/determinism), optional HTML lint, measured geometry, the loop seam and
+    // edit-list slates — before any reference frame is decoded or SSIM is computed.
+    const staticGateSection = await runVisionFreePreRenderGates({
+      scenePlan: plan, ...(options.staticGates ?? {})
+    }, { runDirectory });
     const ffprobe = config.ffprobe ?? 'ffprobe';
     const referenceProbe = await probeReference(ffprobe, referencePath, { timeoutMs: config.ingestion?.processTimeoutMs ?? 300_000 });
     if (!referenceProbe) throw new WorkflowError('QA_REFERENCE_STREAM', 'The reference video has no decodable video stream.', { referencePath });

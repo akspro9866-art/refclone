@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "templateId": "dual_role_real_screen_recording",
+  "displayName": "双角色真实录屏项目科普短视频",
+  "summary": "在双角色开源项目科普骨架上，强制加入两段可核验的真实操作录屏：GitHub 仓库浏览录屏与 WorkBuddy 使用录屏；支持 12–25 秒短版和 40–50 秒 complete_45s 完整讲解；角色对白仍由 H3 原生音频与口型同步生成并逐句过 whisper ASR 验收。",
+  "sourcePackage": {
+    "directory": "vendor/wave2/capsule-cinema/dual_role_real_screen_recording.capsule",
+    "manifestSha256": "6450475b6ff43ffc2f03b33352bcc7097b0035d025023f0416986d3cd67561e1",
+    "upstream": "JuneYaooo/capsule-cinema",
+    "recipeVersion": 2,
+    "executionMode": "preset",
+    "entrypoint": "general_video",
+    "category": "douyin_dual_role_explainer",
+    "primaryWorkflow": "dual_role_project_explainer",
+    "evidenceLevel": "L3_production_capsule",
+    "qualityGateProfile": "identity_continuity_and_real_recording_proof"
+  },
+  "format": {
+    "aspectRatio": "9:16",
+    "roleCount": 2,
+    "performerIdentityCount": 1,
+    "sameFaceAcrossRoles": true,
+    "durationModes": ["compact_12s", "standard_18s", "extended_25s", "complete_45s"],
+    "defaultDurationMode": "standard_18s",
+    "topTitleRequired": true,
+    "topTitleFullDuration": true,
+    "topTitleSafeMarginPx": 120,
+    "realResultDeadlineSeconds": 5,
+    "complete45sRealResultDeadlineSeconds": 20
+  },
+  "structure": {
+    "beats": ["project_pain", "project_solution", "real_result", "advantage_points", "trust_signal", "question_delivery"],
+    "openingGate": {
+      "maxSeconds": 2,
+      "mustContainOneOf": ["concrete_pain_question", "visible_pain_scene_or_pressure_source"],
+      "rejectIfOnly": ["background_setup", "abstract_concept_explanation", "generic_advice", "soft_greeting", "metadata_only_hook"]
+    },
+    "hookVariantsRequired": 3,
+    "trueFirstLineAuditRequired": true,
+    "finalDeliveryActionRequired": true,
+    "reactionOnlyEndingForbidden": true
+  },
+  "roles": {
+    "xiaobai": {
+      "narrativeFunction": "surface_problem_and_viewer_question",
+      "expression": "curious_or_mildly_confused",
+      "posture": "relaxed_and_more_animated",
+      "styling": "casual_everyday_warm",
+      "hairstyle": "identity_locked_short_hair",
+      "eyewear": "oversized_translucent_sky_blue_cartoon_round_glasses",
+      "headwear": "none",
+      "defaultVoiceId": "Chinese_worker_female",
+      "defaultSpeed": 1.25
+    },
+    "expert": {
+      "narrativeFunction": "explain_project_prove_it_and_deliver",
+      "expression": "bright_confident_grounded",
+      "posture": "lively_stable_explanatory",
+      "styling": "mature_practical_clean_cool_neutral",
+      "hairstyle": "identity_locked_short_hair",
+      "eyewear": "identity_locked_round_metal_glasses",
+      "headwear": "fitted_dark_charcoal_wool_newsboy_cap",
+      "defaultVoiceId": "moss_audio_aaa1346a-7ce7-11f0-8e61-2e6e3c7ee85d",
+      "defaultSpeed": 1.25
+    }
+  },
+  "requiredInputs": [
+    "project_url",
+    "project_pain",
+    "core_capability",
+    "advantage_points",
+    "result_evidence",
+    "trust_evidence",
+    "source_asset_manifest",
+    "delivery",
+    "h3_shot_prompts",
+    "h3_generation_records",
+    "tool_chain_confirmed"
+  ],
+  "recommendedInputs": [
+    "project_name",
+    "external_constraint",
+    "mechanism_steps",
+    "audience_fit",
+    "project_boundary",
+    "github_recording",
+    "workbuddy_recording",
+    "recording_privacy_review",
+    "screen_recording_manifest",
+    "duration_mode",
+    "title",
+    "cover_copy"
+  ],
+  "defaults": {
+    "duration_mode": "standard_18s",
+    "target_duration_seconds": 18,
+    "chinese_character_count_range": [85, 115],
+    "platform": "douyin",
+    "tts_provider": "minimax",
+    "character_audio_mode": "h3_native",
+    "evidence_media_mode": "official_capture_first",
+    "real_asset_strategy": "official_capture_first",
+    "h3_workflow": "minimax_h3_lightx2v_v5",
+    "subtitle_mode": "none_unless_requested",
+    "bgm_mode": "none_unless_requested",
+    "screen_recording_mode": "github_and_workbuddy",
+    "screen_recording_segments_required": true,
+    "recording_privacy_review_required": true
+  },
+  "durationContracts": {
+    "compact_12s": { "chineseCharacterCountRange": [55, 78] },
+    "standard_18s": { "chineseCharacterCountRange": [85, 115] },
+    "extended_25s": { "chineseCharacterCountRange": [120, 165] },
+    "complete_45s": { "chineseCharacterCountRange": [190, 280] }
+  },
+  "screenRecording": {
+    "modes": ["github_only", "workbuddy_only", "github_and_workbuddy"],
+    "required": true,
+    "github": {
+      "provider": "real_browser",
+      "requires": ["real_browser_recording", "source_url", "capture_timestamp", "local_video_path", "sha256"],
+      "prefers": ["github_repository_page", "github_readme", "github_actions_or_demo"],
+      "capture": "Record only the browser content viewport at a 9:16-friendly portrait size; no browser chrome, address bar, URL, QR code, login state, or unrelated tabs.",
+      "missingRecording": "blocker"
+    },
+    "workbuddy": {
+      "provider": "native_obs_window_capture",
+      "requires": ["workbuddy_window_recording", "raw_recording_preserved", "capture_timestamp", "local_video_path", "sha256"],
+      "prefers": ["workbuddy_chat", "artifact_preview", "result_tour"],
+      "capture": "Capture the WorkBuddy main window only through OBS, history sidebar collapsed, center chat visible, right artifact/preview panel visible; preserve the raw recording.",
+      "missingRecording": "blocker"
+    },
+    "privacy": {
+      "required": true,
+      "checks": ["address_bar", "url", "qr_code", "account", "token", "private_messages", "other_windows"]
+    }
+  },
+  "forbidden": [
+    "source_creator_face",
+    "source_creator_role_styling",
+    "source_account_watermark",
+    "source_account_scene_replica",
+    "claim_without_visible_result",
+    "generated_chinese_text",
+    "beauty_influencer_face",
+    "porcelain_skin",
+    "luxury_fashion_styling",
+    "reaction_only_ending",
+    "synthetic_ui_presented_as_real_source",
+    "visible_browser_address_bar",
+    "visible_url_or_qr_code",
+    "unverified_project_claim"
+  ],
+  "contentScope": {
+    "seriesFixed": [
+      "dual_role_identity",
+      "six_beat_structure",
+      "role_functions",
+      "pacing_rules",
+      "real_result_deadline",
+      "project_evidence_sequence",
+      "visual_state_machine"
+    ],
+    "episodeVariable": [
+      "project_name",
+      "project_url",
+      "project_pain",
+      "external_constraint",
+      "core_capability",
+      "advantage_points",
+      "result_evidence",
+      "trust_evidence",
+      "mechanism_steps",
+      "audience_fit",
+      "project_boundary",
+      "source_asset_manifest",
+      "screen_recording_manifest",
+      "github_recording",
+      "workbuddy_recording",
+      "recording_privacy_review",
+      "delivery",
+      "episode_script",
+      "h3_shot_prompts",
+      "h3_generation_records",
+      "title",
+      "cover_copy",
+      "claims",
+      "evidence"
+    ],
+    "policies": {
+      "allow_series_fixed_defaults": true,
+      "forbid_episode_specific_defaults": true,
+      "active_recipe_examples_must_use_placeholders": true,
+      "current_run_input_may_reuse_literal": true,
+      "project_identity_must_be_supplied_per_episode": true,
+      "project_claims_and_assets_must_be_episode_scoped": true,
+      "h3_outputs_must_be_episode_scoped": true,
+      "h3_generation_must_run_per_episode": true
+    }
+  },
+  "notes": [
+    "Ported from the vendored capsule package; capsule.yaml plus contracts/ remain authoritative.",
+    "Every episode regenerates its own H3 dialogue and records; no prior episode output is reused as a template default.",
+    "Real GitHub and WorkBuddy screen recordings are mandatory evidence, not optional B-roll."
+  ]
+}

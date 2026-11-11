@@ -421,6 +421,9 @@ export { captureLiveUrl, extractElementTrajectories } from './capture.ts';
 export { traceWebGlShaders } from './gl.ts';
 export { fitMotionCurve, fitCubicBezier, fitSpringParameters, computeVelocityCurve } from './easing.ts';
 export { renderProRes4444AlphaPlate, buildProRes4444FfmpegArgs, buildCavalryAlphaPlateDescriptor } from './alpha-plate.mjs';
+// Stage 1 also owns raster-to-vector tracing for product screenshots; the
+// implementation is the vendored trace.py wrapper, re-exported through vision.
+export { ingestTrace, tracePhoto, photoTrace, parsePortrait, PHOTO_TRACE_VERSION, DEFAULT_PHOTO_TRACE } from './trace.mjs';
 
 export function isLiveUrl(input) {
   return typeof input === 'string' && /^https?:\/\//i.test(input.trim());

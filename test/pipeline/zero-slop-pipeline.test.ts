@@ -94,7 +94,8 @@ test('cavalry-mcp/lib compiles _mg manifests and resolves presets without MCP st
 
   const search = lib.searchPresets('counter', undefined);
   assert.ok(search.matched > 0);
-  assert.ok(search.total === 120, `full library size: ${search.total}`);
+  // The pin moved to the cat16 commit: 125 presets before the 21 card-world additions.
+  assert.ok(search.total === 146, `full library size: ${search.total}`);
 });
 
 // ---------------------------------------------------------------------------

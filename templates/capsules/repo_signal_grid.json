@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "templateId": "repo_signal_grid",
+  "displayName": "Repo Signal Grid",
+  "summary": "通用 GitHub/AI Skills 价值证据展示 + 6:7 白底橙网格视觉模板；保留原仓库截图，并在原图表现力不足时补充可披露的模拟产出图或 SVG 结构图。",
+  "sourcePackage": {
+    "directory": "vendor/wave2/capsule-cinema/repo_signal_grid.capsule",
+    "manifestSha256": "daf70f09e7ba29778b122ae0cbe1f660aeaf0e4fbfae6f5a9d69e7112fb75b4f",
+    "upstream": "JuneYaooo/capsule-cinema",
+    "recipeVersion": 12,
+    "executionMode": "local_script",
+    "entrypoint": "scripts/render_repo_signal_grid_video.py",
+    "category": "repo_showcase",
+    "primaryWorkflow": "repo_signal_grid_video"
+  },
+  "format": {
+    "aspectRatio": "6:7",
+    "width": 1080,
+    "height": 1260,
+    "safeTopPx": 30,
+    "safeBottomPx": 30,
+    "safeContentBoundsPx": [30, 1230],
+    "durationSeconds": 15,
+    "durationFixed": true,
+    "sceneCount": { "min": 4, "max": 5 },
+    "silent": true,
+    "visibleBottomTitle": false
+  },
+  "structure": {
+    "pages": { "min": 4, "max": 5 },
+    "beats": ["user_value", "accurate_project_type", "mechanism", "real_evidence", "boundary"],
+    "titleCopyProfile": "structured_evidence_grid",
+    "middleVisuals": "provenance_manifest_mixed_evidence_and_generated_explainers",
+    "middleVisualFocusContract": "core_capture_or_focus_zoom"
+  },
+  "palette": {
+    "background": "#FFFDF8",
+    "surface": "#FFFFFF",
+    "card": "#FFF1E5",
+    "shadow": "#F2D5C2",
+    "title": "#2B1A12",
+    "body": "#493228",
+    "muted": "#806252",
+    "accent": "#F26B2B",
+    "safeZoneBackgroundMode": "continuous_full_canvas_grid"
+  },
+  "requiredInputs": ["repo_slug"],
+  "recommendedInputs": [
+    "project_name",
+    "proof_metrics",
+    "evidence_source",
+    "risk_boundary",
+    "source_asset_manifest",
+    "source_asset_manifest_path",
+    "proof_asset_paths",
+    "bgm_path",
+    "target_platform"
+  ],
+  "defaults": {
+    "production_mode": "short_silent_repo_signal_grid",
+    "scene_count": 5,
+    "scene_duration_seconds": 3,
+    "target_duration": 15,
+    "target_platform": "wechat_channels",
+    "add_background_music": false,
+    "bgm_volume": 0.85,
+    "subtitle_max_chars": 14,
+    "core_region_capture_policy": "core_capture_or_focus_zoom",
+    "browser_capture_profile": "responsive_landscape_core",
+    "core_region_occupancy_min": 0.65,
+    "default_core_zoom_amount": 0.12
+  },
+  "sourceMaterial": {
+    "approvedReleaseSourceMode": "original_repo_screenshot_plus_source_grounded_visuals",
+    "approvedMiddleVisualSource": "provenance_manifest_only",
+    "minimumOriginalRepositoryScreenshots": 1,
+    "requiredRichMiddleVisualCount": 4,
+    "generatedVisualDisclosureRequired": true,
+    "approvedCaptureMethodPrefix": "actual_browser_",
+    "allowedSourceAssetTypes": [
+      "browser_evidence_screenshot",
+      "repository_image",
+      "readme_embedded_image",
+      "project_discussion_image",
+      "external_project_related_image",
+      "documentation_screenshot",
+      "source_file_screenshot",
+      "demo_output_screenshot",
+      "video_or_gif_frame",
+      "simulated_project_output",
+      "explanatory_svg_diagram"
+    ],
+    "onNoOriginalRepositoryScreenshot": "fail_approved_render",
+    "onWeakOriginalVisuals": "generate_disclosed_source_grounded_visual",
+    "broadOrFullPageCaptureDefault": "forbidden"
+  },
+  "forbidden": [
+    "visible_bottom_title",
+    "reconstructed_source_cards",
+    "self_made_summary_cards_as_real_sources"
+  ],
+  "contentScope": {
+    "seriesFixed": [
+      "variant_visual_skin",
+      "structured_card_layout",
+      "silent_video_contract",
+      "actual_source_evidence_method",
+      "optional_user_supplied_licensed_bgm"
+    ],
+    "episodeVariable": [
+      "repo_slug",
+      "project_name",
+      "project_facts",
+      "proof_metrics",
+      "title",
+      "bottom_copy",
+      "source_assets",
+      "simulated_output_visuals",
+      "explanatory_svg_diagrams",
+      "social_discussion_evidence"
+    ],
+    "policies": {
+      "allow_series_fixed_defaults": true,
+      "forbid_episode_specific_defaults": true,
+      "active_recipe_examples_must_use_placeholders": true,
+      "current_run_input_may_reuse_literal": true
+    }
+  },
+  "notes": [
+    "Ported from the vendored capsule package; capsule.yaml plus contracts/ remain authoritative.",
+    "Only short_silent_repo_signal_grid is exposed: no voiceover, 4-5 pages, fixed 15-second output.",
+    "Episode-specific literals and metrics are inputs, never template defaults."
+  ]
+}
