@@ -75,7 +75,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "ajv": "8.20.0",
-    "cavalry-mcp": "git+https://github.com/akspro9866-art/cavalry-mcp.git#e411d779abff3728b4108da670f54394ff2c95d7",
+    "cavalry-mcp": "git+https://github.com/akspro9866-art/cavalry-mcp.git#ee225492c654c57e9276abf0b8a59bc42ee6abdb",
     "pngjs": "7.0.0"
   }
 }
