@@ -36,3 +36,8 @@ scripts/output/
 # Python bytecode from local validation runs.
 __pycache__/
 *.pyc
+
+# Stale test frame directories and diff output
+.tmp_frames/
+diff_output/
+test/artifacts/

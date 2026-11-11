@@ -130,7 +130,7 @@ jobs:
     # whole expression rather than returning false.
     # Opt in per commit: `git commit -m "qa: exercise live bridge [live-cavalry]"`.
     runs-on: self-hosted
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[live-cavalry]'))
+    if: env.CAVALRY_LIVE == '1' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[live-cavalry]'))
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
