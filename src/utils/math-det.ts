@@ -6,7 +6,10 @@
 
 export function roundDet(n: number, decimals = 4): number {
   if (!Number.isFinite(n)) return 0;
-  const res = Number(Math.round(Number(n + "e" + decimals)) + "e-" + decimals);
+  const [mantissa, expStr] = n.toExponential().split("e");
+  const shifted = Number(`${mantissa}e${Number(expStr) + decimals}`);
+  const rounded = Math.round(shifted);
+  const res = Number(`${rounded}e-${decimals}`);
   return Object.is(res, -0) ? 0 : res;
 }
 

@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { runFfmpegSafe, safeRm } from "../utils/ffmpeg-safe.ts";
+import { roundDet } from "../utils/math-det.ts";
 
 export interface Stage1ExtractOptions {
   videoPath: string;
@@ -56,7 +57,7 @@ export async function extractSparseFrames(options: Stage1ExtractOptions): Promis
   const frames: ExtractedFrame[] = files.map((fileName, idx) => ({
     frameNumber: idx * sampleStride,
     filePath: path.join(outputDir, fileName),
-    timestampSec: (idx * sampleStride) / fps,
+    timestampSec: roundDet((idx * sampleStride) / fps, 4),
   }));
 
   return {

@@ -29,7 +29,11 @@ export function compileSceneSpecV2ToDsl(
   }
 
   const script = `(function() {
-  const _mg = globalThis.__mg_init ? globalThis.__mg_init() : createMgRuntime();
+  const _mg = globalThis.__mg_init
+    ? globalThis.__mg_init()
+    : (typeof createMgRuntime === "function"
+        ? createMgRuntime()
+        : (globalThis._mg || { patch: function() { return null; } }));
   cavalry.beginUndoGroup(${JSON.stringify(groupName)});
   try {
 ${patchLines.join("\n")}

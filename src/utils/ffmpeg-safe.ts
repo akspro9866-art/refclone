@@ -25,6 +25,7 @@ export function runFfmpegSafe(
       cp = spawn("ffmpeg", args, {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: options.cwd,
+        windowsHide: true,
       });
     } catch (err) {
       return reject(err);
@@ -43,6 +44,8 @@ export function runFfmpegSafe(
     let timeoutTimer: NodeJS.Timeout | null = null;
     if (options.timeoutMs && options.timeoutMs > 0) {
       timeoutTimer = setTimeout(() => {
+        cp.stdout?.destroy();
+        cp.stderr?.destroy();
         cp.kill("SIGKILL");
         reject(new Error(`ffmpeg execution timed out after ${options.timeoutMs}ms`));
       }, options.timeoutMs);

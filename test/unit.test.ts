@@ -10,9 +10,11 @@ import { refineCoordinatesLocally } from "../src/pipeline/stage4_5-refine.ts";
 import { computeBoxIoU, evaluateDiffGate } from "../src/pipeline/stage5-diff.ts";
 
 describe("refclone: unit tests for math, stages, and compiler", () => {
-  test("roundDet handles float precision, rounding, and normalizes -0 to 0", () => {
+  test("roundDet handles float precision, rounding, scientific notation, and normalizes -0 to 0", () => {
     assert.equal(roundDet(0.123456, 4), 0.1235);
     assert.equal(roundDet(0.12344, 4), 0.1234);
+    assert.equal(roundDet(1e-7, 4), 0);
+    assert.equal(roundDet(-1e-7, 4), 0);
     assert.equal(Object.is(roundDet(-0.00001, 2), 0), true);
     assert.equal(roundDet(NaN), 0);
 
