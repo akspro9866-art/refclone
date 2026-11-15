@@ -1,0 +1,14 @@
+# refclone media toolkit — Python side of the pipeline (tools/py/media_toolkit.py)
+# Install: python -m pip install -r tools/py/requirements.txt
+#
+# Faster-whisper note: on Python 3.15 the pinned-by-faster-whisper PyAV has no
+# wheel; av 19 installs cleanly and the toolkit never calls av.open() anyway
+# (audio is decoded via ffmpeg subprocess and passed as arrays).
+numpy==2.5.4
+scipy==1.18.1
+opencv-python==5.0.0.93
+pillow==13.0.0
+pedalboard==0.9.26
+pyloudnorm==0.2.0
+faster-whisper==1.2.1
+av==19.0.2
