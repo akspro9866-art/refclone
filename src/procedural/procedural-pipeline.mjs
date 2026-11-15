@@ -23,6 +23,7 @@ import {
 import { analyzeElementPerceptual, analyzeShotPerceptual, generateRefinementReport, PERCEPTUAL_VERSION } from '../vision/perceptual.mjs';
 import { matchPromotionPresetsIfAvailable } from '../cavalry/preset-index.mjs';
 import { loadAtomicConvergenceConfig } from '../vision/atomic-convergence.mjs';
+import { buildSurgicalPatchFromFrame, buildSurgicalPatchScript as buildSurgicalPatchScriptFromFailures } from '../vision/surgical-diff.mjs';
 
 export const PROCEDURAL_PIPELINE_VERSION = '1.0.0';
 
@@ -706,7 +707,8 @@ export async function applyCorrectionDeltas(promotionArtifact, correctionDeltas)
  */
 export async function runClosedLoopProceduralPipeline({
   shotId, observations, metadata, capabilities, config,
-  frameComparisons, renderEvaluator, maxIterations = 2
+  frameComparisons, renderEvaluator, maxIterations = 2,
+  surgicalPatching = false, surgicalLayerBoxes = null, onSurgicalPatch = null
 }) {
   if (!shotId) fail('PROCEDURAL_INVALID', 'shotId is required.');
   if (!observations) fail('PROCEDURAL_INVALID', 'observations are required.');
@@ -822,6 +824,43 @@ export async function runClosedLoopProceduralPipeline({
       opacity: acc.opacity + (item.deltas?.opacity ?? 0)
     }), { position: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, timing: 0, opacity: 0 });
 
+    // Surgical Stage 5 -> Stage 4 delta patching (opt-in via params.surgicalPatching):
+    // segment the failing pixel regions of the diff, map them against the
+    // projected Stage 4 layer boxes, and emit a minimal single-shot _mg.patch()
+    // IIFE for ONLY the divergent layers instead of recompiling the whole
+    // Stage 4 DSL scene script. Without a mapping the loop falls through to the
+    // full recompile below.
+    let surgical = null;
+    if (surgicalPatching && typeof surgicalLayerBoxes === 'function' && currentComparisons.length > 0) {
+      const surgicalFailures = [];
+      const surgicalRegions = [];
+      for (const comparison of currentComparisons.slice(0, 4)) {
+        if (!comparison?.reference?.data || !comparison?.render?.data) continue;
+        const boxes = surgicalLayerBoxes(comparison.frame ?? comparison.index ?? 0, iteration) ?? [];
+        const surgicalResult = buildSurgicalPatchFromFrame(comparison.reference, comparison.render, boxes, {
+          changedPixelDelta: 24,
+          cellSize: 32,
+          iteration,
+          shotId
+        });
+        if (surgicalResult) {
+          surgicalFailures.push(...surgicalResult.failures);
+          surgicalRegions.push(...surgicalResult.regions);
+        }
+      }
+      if (surgicalFailures.length > 0) {
+        surgical = {
+          failures: surgicalFailures,
+          regions: surgicalRegions,
+          script: buildSurgicalPatchScriptFromFailures(surgicalFailures, { iteration, shotId }),
+          applied: false
+        };
+        if (typeof onSurgicalPatch === 'function' && surgical.script) {
+          surgical.applied = await onSurgicalPatch(surgical.script, iteration) !== false;
+        }
+      }
+    }
+
     // Tier damping before anything is applied: the correction a metric implies
     // is a linear-response guess, so each tier keeps a fraction of it and the
     // fraction shrinks while the score has been going backwards.
@@ -844,12 +883,17 @@ export async function runClosedLoopProceduralPipeline({
       if (evaluation?.renderedTrajectory) currentRenderedTrajectory = evaluation.renderedTrajectory;
     }
 
-    // Stage 4: re-compile with refined promotion (and re-pass the contract gate)
-    currentCompilation = compileProceduralScript({
-      promotionAnalysis: currentPromotion,
-      trackingAnalysis: currentTracking,
-      shotId, capabilities, config: proceduralConfig
-    });
+    // Stage 4: re-compile with refined promotion (and re-pass the contract gate).
+    // When the surgical patch replaced this round's correction, the full DSL
+    // scene script is NOT recompiled or re-executed — only the divergent
+    // layers were mutated by the single-shot _mg.patch IIFE.
+    if (!surgical?.applied) {
+      currentCompilation = compileProceduralScript({
+        promotionAnalysis: currentPromotion,
+        trackingAnalysis: currentTracking,
+        shotId, capabilities, config: proceduralConfig
+      });
+    }
 
     // Stage 5: re-run perceptual gate
     if (currentComparisons.length > 0) {
@@ -897,7 +941,8 @@ export async function runClosedLoopProceduralPipeline({
       measured: score.measured && measuredFresh,
       damping: { factor: damping.factor, tiers: damping.tiers },
       appliedDeltas: aggregate,
-      rawDeltas: rawAggregate
+      rawDeltas: rawAggregate,
+      surgicalPatch: surgical ? { failures: surgical.failures, script: surgical.script, applied: surgical.applied } : null
     });
   }
 

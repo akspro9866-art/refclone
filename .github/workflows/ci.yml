@@ -1,12 +1,20 @@
 name: CI
 
 # The engine is plain Node ESM with no native dependencies, so the suite runs
-# on Windows (the supported, evidence-gated platform) AND Ubuntu (the headless
-# CI leg). Cavalry 2.8.0 itself never runs in either job: every synthetic
-# pipeline test speaks to the MockStallionServer fixture (tests/fixtures/) or
-# the sibling stallion --mock bridge, so 100% of the suite runs without
-# skipping on both operating systems. Live-Cavalry evidence remains the
-# separate self-hosted job below.
+# on Windows (the supported, evidence-gated platform), Ubuntu (the headless
+# CI leg) AND macOS. Cavalry 2.8.0 itself never runs in any headless job:
+# every synthetic pipeline test speaks to the MockStallionServer fixture
+# (tests/fixtures/) or the sibling stallion --mock bridge, so 100% of the
+# headless suite runs without skipping on all operating systems. Live-Cavalry
+# evidence remains the separate self-hosted job below.
+#
+# Trigger hygiene: the headless `test` job runs unconditionally on EVERY push
+# (no branch filter — a push to any branch must never yield a zero-job run)
+# and on every pull request. The live-integration job is workflow_dispatch
+# only and additionally requires the explicit CAVALRY_LIVE=true environment
+# gate, mirrored by process.env.CAVALRY_LIVE === 'true' inside
+# integration/cavalry.integration.mjs, so hosted runners can never hang or
+# fail on connection refused against port 8080.
 #
 # cavalry-mcp arrives as a pinned git dependency through npm ci — no sibling
 # checkout is needed for it. The stallion sibling is still checked out and
@@ -16,12 +24,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  # Opt-in gate for live-Cavalry work, sourced from a repository variable so
+  # forks stay headless by default. live-integration re-asserts it explicitly.
+  CAVALRY_LIVE: ${{ vars.CAVALRY_LIVE || 'false' }}
 
 jobs:
   test:
@@ -31,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +65,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
+      - name: Install FFmpeg (macos)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install ffmpeg
           ffmpeg -version | head -1
           ffprobe -version | head -1
 
@@ -122,15 +142,18 @@ jobs:
 
   live-integration:
     name: Cavalry integration (manual, needs a real app)
-    # Runs on dispatch, on a push whose message asks for it, and never on an ordinary push or a
-    # pull request. A self-hosted runner is a Windows machine with Cavalry 2.8 open and Scripts ->
-    # Stallion enabled; GitHub-hosted runners have no Cavalry, so this job can never be made green
-    # by a push — it is evidence, not a gate. The `push` guard is explicit because
-    # github.event.head_commit is absent on pull_request events and contains() over null fails the
-    # whole expression rather than returning false.
-    # Opt in per commit: `git commit -m "qa: exercise live bridge [live-cavalry]"`.
+    # Runs ONLY on workflow_dispatch and only when the explicit CAVALRY_LIVE=true
+    # environment gate is set (repository variable). A self-hosted runner is a
+    # Windows machine with Cavalry 2.8 open and Scripts -> Stallion enabled;
+    # GitHub-hosted runners have no Cavalry, so this job can never be made green
+    # by a push — it is evidence, not a gate. integration/cavalry.integration.mjs
+    # independently re-checks process.env.CAVALRY_LIVE === 'true' and exits 0
+    # with a skip message when the gate is absent, so an accidental dispatch can
+    # never hang on connection refused.
     runs-on: self-hosted
-    if: env.CAVALRY_LIVE == '1' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[live-cavalry]'))
+    if: github.event_name == 'workflow_dispatch' && env.CAVALRY_LIVE == 'true'
+    env:
+      CAVALRY_LIVE: 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

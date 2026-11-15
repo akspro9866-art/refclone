@@ -11,6 +11,13 @@
  *
  * Usage: node integration/cavalry.integration.mjs [--out <directory>]
  */
+// Explicit live-Cavalry opt-in gate (mirrors the CI live-integration job):
+// process.env.CAVALRY_LIVE must be exactly 'true'. Headless runs exit 0 with
+// a skip message instead of hanging on connection refused against port 8080.
+if (process.env.CAVALRY_LIVE !== 'true') {
+  console.log('Live integration skipped: CAVALRY_LIVE !== "true" (set the env var, or run the workflow_dispatch live-integration job).');
+  process.exit(0);
+}
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
