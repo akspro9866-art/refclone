@@ -401,7 +401,16 @@ export async function runProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawn(command, args, { shell: false, windowsHide: true, cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(command, args, {
+        shell: false,
+        windowsHide: true,
+        cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        // The vendored Python tools print non-ASCII (Korean) output; inherit a
+        // UTF-8 stdio encoding so Windows consoles (cp1252/949) cannot crash
+        // them with UnicodeEncodeError or misdecode the pipe for the caller.
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+      });
     } catch (error) {
       reject(new WorkflowError(error.code === 'ENOENT' ? 'TOOL_MISSING' : 'PROCESS_FAILED',
         'Cannot start process.', { command, reason: error.code }));

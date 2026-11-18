@@ -1034,7 +1034,13 @@ export function checkFontIntegrity(scenePlan, options = {}) {
       } else {
         const args = [binPath, targetCss];
         if (uniqueChars) args.push('--chars', uniqueChars);
-        const proc = spawnSync(python, args, { encoding: 'utf8', timeout: processTimeoutMs });
+        const proc = spawnSync(python, args, {
+  encoding: 'utf8',
+  timeout: processTimeoutMs,
+  // The vendored fontcheck.py prints non-ASCII (Korean) output; force UTF-8 so
+  // Windows consoles cannot crash it with UnicodeEncodeError.
+  env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+});
         if (proc.error) {
           pythonFontcheck = {
             enabled: true, status: 'blocked', bin: binPath, reason: proc.error.code ?? 'SPAWN_ERROR',
