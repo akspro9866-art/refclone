@@ -30,11 +30,6 @@ on:
 permissions:
   contents: read
 
-env:
-  # Opt-in gate for live-Cavalry work, sourced from a repository variable so
-  # forks stay headless by default. live-integration re-asserts it explicitly.
-  CAVALRY_LIVE: ${{ vars.CAVALRY_LIVE || 'false' }}
-
 jobs:
   test:
     name: Unit and synthetic-pipeline tests (${{ matrix.os }})
@@ -151,7 +146,7 @@ jobs:
     # with a skip message when the gate is absent, so an accidental dispatch can
     # never hang on connection refused.
     runs-on: self-hosted
-    if: github.event_name == 'workflow_dispatch' && env.CAVALRY_LIVE == 'true'
+    if: github.event_name == 'workflow_dispatch'
     env:
       CAVALRY_LIVE: 'true'
     timeout-minutes: 30
