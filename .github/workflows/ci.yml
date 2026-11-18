@@ -77,6 +77,16 @@ jobs:
           node-version: '24'
           cache: npm
 
+      # The vendored wave2 scripts (trace.py, fontcheck.py) need a real
+      # interpreter plus numpy, scipy, Pillow and fontTools; the ingest
+      # and font-lint tests probe them and fail when they are missing.
+      - name: Set up Python and vendored-script dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Python dependencies (trace.py / fontcheck.py)
+        run: python -m pip install --disable-pip-version-check --no-input numpy scipy pillow fonttools brotli
+
       - name: npm ci
         run: npm ci
 
