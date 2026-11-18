@@ -2,7 +2,7 @@
  * Resolver for cavalry-mcp's direct-import library (`cavalry-mcp/lib`).
  *
  * refclone depends on cavalry-mcp through a pinned git dependency
- * (`git+https://github.com/akspro9866-art/cavalry-mcp.git#<commit>`), so
+ * (`git+https://github.com/akspro9866-art/ultra-cavalry-mcp.git#<commit>`), so
  * `import('cavalry-mcp/lib')` normally resolves through node_modules. For
  * local co-development `npm link ../cavalry-mcp` (or `npm install
  * ../cavalry-mcp`) replaces that copy with the sibling checkout. The resolver

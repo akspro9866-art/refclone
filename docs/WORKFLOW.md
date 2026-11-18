@@ -37,7 +37,7 @@ npm ci
 npm test                        # 793 tests green before you trust anything downstream
 ```
 
-Open `config.json` and set `mcp.args` to your own `cavalry-mcp/dist/index.js` (the shipped
+Open `config.json` and set `mcp.args` to your own `ultra-cavalry-mcp/dist/index.js` (the shipped
 `REPLACE_ME` placeholder is rejected on purpose). If you want a job cache somewhere other than
 `./jobs`, add `--jobs <directory>` to every `run` invocation.
 

@@ -25,8 +25,8 @@ Do this once, before touching any editor.
 2. **Get the MCP server** that sits between the agent and that bridge:
 
    ```powershell
-   git clone https://github.com/akspro9866-art/cavalry-mcp.git
-   cd cavalry-mcp
+   git clone https://github.com/akspro9866-art/ultra-cavalry-mcp.git
+   cd ultra-cavalry-mcp
    npm install
    npm run build        # produces dist\index.js — this is <CAVALRY_MCP>\dist\index.js
    ```
@@ -39,7 +39,7 @@ Do this once, before touching any editor.
    wrong" from "my editor is misconfigured"):
 
    ```powershell
-   node C:\Users\<you>\tools\cavalry-mcp\dist\index.js
+   node C:\Users\<you>\tools\ultra-cavalry-mcp\dist\index.js
    ```
 
    A stdio MCP server starts silently and waits on stdin. That is correct behaviour — press
@@ -59,7 +59,7 @@ Then, in this repository only, edit `config.json`:
 ```jsonc
 "mcp": {
   "command": "node",
-  "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"]
+  "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"]
 }
 ```
 
@@ -78,7 +78,7 @@ placeholder in place.
   "mcpServers": {
     "cavalry": {
       "command": "node",
-      "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"],
+      "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"],
       "env": {}
     }
   }
@@ -149,7 +149,7 @@ Either file uses the same shape ([`examples/mcp/antigravity.mcp_config.json`](..
   "mcpServers": {
     "cavalry": {
       "command": "node",
-      "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"],
+      "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"],
       "env": {}
     }
   }
@@ -193,7 +193,7 @@ Skills activate from context or by name. Reference:
     "servers": {
       "cavalry": {
         "command": "node",
-        "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"],
+        "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"],
         "env": {}
       }
     }
@@ -227,14 +227,14 @@ which works because the agent can read files. Reference: [zcode.z.ai — Skills]
 ## Claude Code
 
 ```powershell
-claude mcp add --transport stdio cavalry -- node C:\Users\<you>\tools\cavalry-mcp\dist\index.js
+claude mcp add --transport stdio cavalry -- node C:\Users\<you>\tools\ultra-cavalry-mcp\dist\index.js
 ```
 
 or commit a project-scoped `.mcp.json` at the repository root
 ([`examples/mcp/cursor-or-claude.mcp.json`](../examples/mcp/cursor-or-claude.mcp.json) has the shape):
 
 ```json
-{ "mcpServers": { "cavalry": { "command": "node", "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"], "env": {} } } }
+{ "mcpServers": { "cavalry": { "command": "node", "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"], "env": {} } } }
 ```
 
 `AGENTS.md` is read as project context. For skills, copy `.agents\skills\*` into
@@ -249,7 +249,7 @@ Append to `%USERPROFILE%\.codex\config.toml`
 ```toml
 [mcp_servers.cavalry]
 command = "node"
-args = ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"]
+args = ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"]
 env = {}
 ```
 
@@ -275,7 +275,7 @@ Add to `settings.json` (Command Palette → *Edit settings*), or a project's `.z
   "context_servers": {
     "cavalry": {
       "command": "node",
-      "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"],
+      "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"],
       "env": {}
     }
   }

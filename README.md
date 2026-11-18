@@ -215,7 +215,7 @@ Windows path written with forward slashes, because JSON treats a backslash as an
 ```jsonc
 "mcp": {
   "command": "node",
-  "args": ["C:/Users/<you>/tools/cavalry-mcp/dist/index.js"]   // was "REPLACE_ME/cavalry-mcp/dist/index.js"
+  "args": ["C:/Users/<you>/tools/ultra-cavalry-mcp/dist/index.js"]   // was "REPLACE_ME/cavalry-mcp/dist/index.js"
 }
 ```
 

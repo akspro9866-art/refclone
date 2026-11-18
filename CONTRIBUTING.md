@@ -54,8 +54,8 @@ imported by suites, not executed as their own entries.
 
 `cavalry-mcp` is installed from a pinned git commit, not from a sibling folder, so a
 fresh clone needs no second checkout. When you are changing both repositories together,
-replace the installed copy with your working tree — either `npm link ../cavalry-mcp`
-after `npm run build` there, or `npm install ../cavalry-mcp` for a one-off — and restore
+replace the installed copy with your working tree — either `npm link ../ultra-cavalry-mcp`
+after `npm run build` there, or `npm install ../ultra-cavalry-mcp` for a one-off — and restore
 the pin with `npm ci` before committing. Do not commit a `file:` specifier: the lockfile
 must resolve the pinned git commit. The library loader in
 `src/cavalry/cavalry-lib.mjs` also falls back to a built sibling checkout (or
@@ -113,7 +113,7 @@ or network folder, where rename-over-open-file semantics are not dependable.
   CI checks the two are byte-identical. Shared stack skills have one canonical
   home, `cavalry-mcp/.qoder/skills/`: the copies here stay in the repo for local
   agents, and when a cavalry-mcp checkout is available (a sibling
-  `../cavalry-mcp`, or `CAVALRY_MCP_PATH` / `CAVALRY_MCP_DIR`) `npm run verify`
+  `../ultra-cavalry-mcp`, or `CAVALRY_MCP_PATH` / `CAVALRY_MCP_DIR`) `npm run verify`
   also compares every shared skill directory byte-for-byte against canonical.
   Local-only skills are reported, not failed; without the checkout the sibling
   comparison is skipped rather than guessed.

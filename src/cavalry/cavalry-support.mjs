@@ -153,7 +153,7 @@ export function validateAdapterConfig(config) {
   // placeholder. Failing here names the fix instead of surfacing a spawn error far from it.
   if ([config.command, ...args].some(value => value.includes('REPLACE_ME'))) {
     throw new WorkflowError('ADAPTER_CONFIG_INVALID',
-      'mcp.command/mcp.args still hold the shipped REPLACE_ME placeholder. Point them at your own cavalry-mcp entry point, for example command "node" with args ["<your checkout>/cavalry-mcp/dist/index.js"] — see docs/IDE_SETUP.md.',
+      'mcp.command/mcp.args still hold the shipped REPLACE_ME placeholder. Point them at your own cavalry-mcp entry point, for example command "node" with args ["<your checkout>/ultra-cavalry-mcp/dist/index.js"] — see docs/IDE_SETUP.md.',
       { placeholder: 'REPLACE_ME' });
   }
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;

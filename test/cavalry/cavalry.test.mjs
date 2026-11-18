@@ -116,10 +116,10 @@ test('adapter config: validates defaults, env passthrough and unsupported execut
   assert.throws(() => validateAdapterConfig({ command: 'node', timeoutMs: 10 }), error => error.code === 'ADAPTER_CONFIG_INVALID');
   assert.throws(() => validateAdapterConfig({ command: 'node', args: ['x\0y'] }), error => error.code === 'ADAPTER_CONFIG_INVALID');
   // A fresh clone must be told to fill the shipped placeholder, not left with a spawn error.
-  assert.throws(() => validateAdapterConfig({ command: 'node', args: ['REPLACE_ME/cavalry-mcp/dist/index.js'] }),
+  assert.throws(() => validateAdapterConfig({ command: 'node', args: ['REPLACE_ME/ultra-cavalry-mcp/dist/index.js'] }),
     error => error.code === 'ADAPTER_CONFIG_INVALID' && /placeholder/.test(error.message));
-  assert.equal(validateAdapterConfig({ command: 'node', args: ['/home/me/cavalry-mcp/dist/index.js'] }).args[0],
-    '/home/me/cavalry-mcp/dist/index.js');
+  assert.equal(validateAdapterConfig({ command: 'node', args: ['/home/me/ultra-cavalry-mcp/dist/index.js'] }).args[0],
+    '/home/me/ultra-cavalry-mcp/dist/index.js');
 });
 
 test('discovery preserves real tool schemas, presets and capability statuses', async () => {

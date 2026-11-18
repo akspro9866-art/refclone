@@ -8,7 +8,7 @@
   "ffprobe": "ffprobe",
   "mcp": {
     "command": "node",
-    "args": ["REPLACE_ME/cavalry-mcp/dist/index.js"],
+    "args": ["REPLACE_ME/ultra-cavalry-mcp/dist/index.js"],
     "timeoutMs": 60000,
     "concurrency": 1,
     "env": {

@@ -18,7 +18,7 @@ The MCP server and Stallion checkouts used to build and verify this pipeline
 report these upstream remotes (verify before trusting them, and pin the commit
 you install):
 
-- `https://github.com/akspro9866-art/cavalry-mcp.git` — version 3.0.0, MIT,
+- `https://github.com/akspro9866-art/ultra-cavalry-mcp.git` — version 3.0.0, MIT,
   commit `3333afa6846a5a8d6262bd7a5fc731f7d22c2199` at discovery.
 - `https://github.com/akspro9866-art/stallion.git` — package `cavalry-bridge`
   0.9.0, MIT, commit `7a17ce6c59041b3af3c318e34fc1d1f768bb4a65` at discovery.

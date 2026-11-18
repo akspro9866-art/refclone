@@ -11,7 +11,7 @@ that your video is bad. Most reports of "it won't run" are one of the four in th
 
 | Code | What actually happened | Fix |
 |---|---|---|
-| `ADAPTER_CONFIG_INVALID` with "still hold the shipped `REPLACE_ME` placeholder" | you have not pointed `config.json` at your own `cavalry-mcp/dist/index.js` | edit `mcp.args`; see [`IDE_SETUP.md`](IDE_SETUP.md) Step 0 |
+| `ADAPTER_CONFIG_INVALID` with "still hold the shipped `REPLACE_ME` placeholder" | you have not pointed `config.json` at your own `ultra-cavalry-mcp/dist/index.js` | edit `mcp.args`; see [`IDE_SETUP.md`](IDE_SETUP.md) Step 0 |
 | `RUN_PROFILE_MISMATCH` | `--profile generic-clone` was used with a config whose `profile` is something else (or the legacy config with the generic one) | keep `--profile` and the config's own `profile` identical; the generic route is selected by `cloneMode: "generic"` in the file |
 | `SPEC_REVIEW_PENDING` | a downstream stage was asked to run against a shot-spec nobody confirmed | pass `--analysis-review <shot-spec-review.json>`, or set `review.status: "confirmed"` inside the spec you hand to a standalone command |
 | `TOOL_MISSING` | an external executable is not on `PATH` — `ffmpeg`, `ffprobe`, or `node` for the MCP | put it on `PATH` (see below), or set `ffmpeg`/`ffprobe` in the config to absolute paths |
